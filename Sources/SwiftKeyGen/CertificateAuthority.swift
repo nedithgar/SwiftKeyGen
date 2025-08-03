@@ -187,13 +187,8 @@ public struct CertificateAuthority {
             return Data(signature)
             
         case let rsaKey as RSAKey:
-            // For RSA, we need to use SHA-512 for rsa-sha2-512
-            let digest = SHA512.hash(data: data)
-            let sig = try rsaKey.privateKey.signature(
-                for: digest,
-                padding: .insecurePKCS1v1_5
-            )
-            return sig.rawRepresentation
+            // For RSA certificate signing, OpenSSH uses rsa-sha2-512
+            return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha512)
             
         case let ecdsaKey as ECDSAKey:
             // For ECDSA, get raw signature

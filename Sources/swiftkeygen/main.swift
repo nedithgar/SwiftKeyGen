@@ -129,8 +129,11 @@ struct SwiftKeyGenCLI {
                 // Use the file directly
                 try KeyConversionManager.convertKey(options: options)
             }
+        } catch let error as SSHKeyError {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
         } catch {
-            print("Error: \(error)")
+            print("Error: \(error.localizedDescription)")
             exit(1)
         }
     }
@@ -151,18 +154,22 @@ struct SwiftKeyGenCLI {
             }
             
             FileHandle.standardOutput.write(keyData)
+        } catch let error as SSHKeyError {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
         } catch {
-            print("Error: \(error)")
+            print("Error: \(error.localizedDescription)")
             exit(1)
         }
     }
     
     static func handleGenerate(_ args: [String]) {
         var keyType = "rsa"
-        var keySize = 2048
+        var keySize = 3072  // Default to 3072 for RSA to match OpenSSH
         var outputFile: String?
         var passphrase: String?
         var comment: String?
+        var cipher: String?
         
         var i = 0
         while i < args.count {
@@ -191,6 +198,11 @@ struct SwiftKeyGenCLI {
                 i += 1
                 if i < args.count {
                     comment = args[i]
+                }
+            case "-Z", "--cipher":
+                i += 1
+                if i < args.count {
+                    cipher = args[i]
                 }
             case "--help", "-h":
                 printGenerateHelp()
@@ -226,7 +238,8 @@ struct SwiftKeyGenCLI {
             let privateKeyData = try OpenSSHPrivateKey.serialize(
                 key: key,
                 passphrase: passphrase,
-                comment: key.comment
+                comment: key.comment,
+                cipher: cipher
             )
             
             try privateKeyData.write(to: URL(fileURLWithPath: output))
@@ -252,8 +265,11 @@ struct SwiftKeyGenCLI {
             print(fingerprint)
             print("The key's randomart image is:")
             print(randomArt)
+        } catch let error as SSHKeyError {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
         } catch {
-            print("Error: \(error)")
+            print("Error: \(error.localizedDescription)")
             exit(1)
         }
     }
@@ -321,10 +337,11 @@ struct SwiftKeyGenCLI {
         
         Options:
             -t, --type <type>       Key type (rsa, ed25519, ecdsa)
-            -b, --bits <size>       Key size in bits (RSA only, default: 2048)
+            -b, --bits <size>       Key size in bits (RSA: 1024-16384, default: 3072)
             -f, --file <path>       Output file path
             -N, --passphrase <pass> Passphrase for key encryption
             -C, --comment <text>    Key comment
+            -Z, --cipher <cipher>   Cipher for private key encryption
             
         Examples:
             # Generate RSA key
@@ -332,6 +349,15 @@ struct SwiftKeyGenCLI {
             
             # Generate Ed25519 key with passphrase
             swiftkeygen generate -t ed25519 -f ~/.ssh/id_ed25519 -N "mypassphrase"
+            
+            # Generate key with specific cipher
+            swiftkeygen generate -t ed25519 -f ~/.ssh/id_ed25519 -N pass -Z aes128-ctr
+        
+        Supported ciphers:
+            aes128-ctr, aes192-ctr, aes256-ctr (default)
+            aes128-cbc, aes192-cbc, aes256-cbc
+            3des-cbc
+            chacha20-poly1305@openssh.com
         """)
     }
 }

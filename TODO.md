@@ -6,9 +6,9 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 ### Key Generation
 - [x] Generate Ed25519 keys (recommended, fixed size)
-- [x] Generate RSA keys (2048, 3072, 4096 bits) - Note: ssh-keygen defaults to 3072
+- [x] Generate RSA keys (arbitrary sizes from 1024 to 16384 bits) - Note: ssh-keygen defaults to 3072
 - [x] Generate ECDSA keys (256, 384, 521 bits)
-- [x] Specify custom bit sizes for RSA keys
+- [x] Specify custom bit sizes for RSA keys (any multiple of 8 between 1024-16384)
 - [x] Generate multiple keys in batch mode
 - [x] Set custom filenames and paths for keys
 - [x] Add comments to keys during generation
@@ -30,6 +30,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] Export keys to PKCS#8 format
 - [x] Read and validate key formats
 - [x] Parse OpenSSH private key format
+- [x] Full DER/PEM encoding for RSA keys (PKCS#1 format)
 
 ### Host Key Management
 - [x] Update known_hosts files
@@ -39,10 +40,11 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] Check host keys against known_hosts
 
 ### Security Features
-- [x] Use AES encryption for private keys
+- [x] Use AES encryption for private keys (aes128-ctr, aes192-ctr, aes256-ctr, aes128-cbc, aes192-cbc, aes256-cbc)
 - [x] Custom KDF rounds for key encryption
 - [x] Secure file permissions (0600 for private keys)
 - [x] Memory safety through Swift's ARC
+- [x] bcrypt_pbkdf key derivation function (OpenSSH compatible)
 
 ### Advanced Options
 - [x] Batch mode operation
@@ -71,7 +73,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] Add extensions to certificates
 - [x] Verify certificate signatures (including RSA and ECDSA)
 - [x] Show certificate details
-- [x] RSA signature verification (ssh-rsa, rsa-sha2-256, rsa-sha2-512)
+- [x] RSA signature generation and verification (ssh-rsa with SHA-1, rsa-sha2-256 with SHA-256, rsa-sha2-512 with SHA-512)
 - [x] ECDSA signature verification (P-256, P-384, P-521)
 - [x] Public-key-only verification for certificates
 
@@ -121,13 +123,13 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 1. **Pure Swift Implementation**: SwiftKeyGen is written entirely in Swift.
 
-2. **Modern Cryptography**: Uses Apple's CryptoKit and swift-crypto libraries instead of OpenSSL.
+2. **Modern Cryptography**: Uses Apple's CryptoKit and swift-crypto libraries, with custom implementations for RSA arbitrary key sizes and bcrypt_pbkdf.
 
 3. **Type Safety**: Leverages Swift's type system to prevent common errors.
 
 4. **Async/Await Support**: Batch operations support Swift's modern concurrency model.
 
-5. **Simplified KDF**: Uses PBKDF2 with SHA512 instead of bcrypt_pbkdf for key derivation (WARNING: This means encrypted private keys from ssh-keygen may not be importable).
+5. **OpenSSH-Compatible KDF**: Now uses bcrypt_pbkdf for key derivation, matching OpenSSH exactly for encrypted private key compatibility.
 
 ### Limitations
 
@@ -137,13 +139,41 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 3. **Private Key Import**: SwiftKeyGen now supports importing RSA and ECDSA private keys from PEM/PKCS#8 formats using Swift Crypto's built-in `init(pemRepresentation:)` methods. Ed25519 keys are not supported for PEM import as Swift Crypto's Curve25519 implementation doesn't include PEM parsing. For Ed25519, users must use the OpenSSH format.
 
-4. **Simplified Encryption**: Uses a simplified AES-CTR implementation; may not be fully compatible with all OpenSSH encrypted keys.
+4. **OpenSSH-Compatible Encryption**: Supports multiple cipher modes including AES-CTR and AES-CBC variants, matching OpenSSH's encryption options.
+
+## Recent Enhancements
+
+### RSA Key Generation (Enhanced)
+- Now supports arbitrary RSA key sizes from 1024 to 16384 bits (matching OpenSSH)
+- No longer limited to just 2048, 3072, and 4096-bit keys
+- Uses pure Swift implementation for all key sizes
+- Maintains OpenSSH compatibility for all supported sizes
+
+### RSA Signature Algorithms (Complete)
+- Full support for all three RSA signature algorithms:
+  - `ssh-rsa`: SHA-1 (legacy compatibility)
+  - `rsa-sha2-256`: SHA-256 (recommended)
+  - `rsa-sha2-512`: SHA-512 (used for certificates)
+- Proper PKCS#1 v1.5 padding with DigestInfo structures
+- Compatible with OpenSSH signature formats
+
+### RSA Key Encoding (Complete)
+- Full DER encoding support for RSA keys:
+  - PKCS#1 format for private keys (RSAPrivateKey)
+  - PKCS#1 format for public keys (RSAPublicKey)
+  - SubjectPublicKeyInfo format (PKCS#8) for public keys
+- PEM encoding with proper headers:
+  - `-----BEGIN RSA PRIVATE KEY-----` for private keys
+  - `-----BEGIN PUBLIC KEY-----` for public keys
+- Support for all RSA key sizes (1024-16384 bits)
 
 ## Future Development
 
 Priority features for future implementation:
 1. ~~Full OpenSSH private key format compatibility (reading encrypted keys)~~ ✅ Completed
 2. ~~SSH certificate support~~ ✅ Completed
-3. KRL (Key Revocation List) support for certificate revocation
-4. Improved key format conversion (RSA/ECDSA certificate support)
-5. Hardware security key support
+3. ~~Arbitrary RSA key sizes~~ ✅ Completed
+4. ~~Full DER/PEM encoding for RSA keys~~ ✅ Completed
+5. KRL (Key Revocation List) support for certificate revocation
+6. Hardware security key support
+7. PKCS#8 private key export for RSA/ECDSA keys

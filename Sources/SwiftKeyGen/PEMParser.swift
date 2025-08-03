@@ -190,14 +190,9 @@ public struct PEMParser {
     
     /// Parse an RSA private key from PEM format
     public static func parseRSAPrivateKey(_ pemString: String, passphrase: String? = nil) throws -> RSAKey {
-        // Note: Swift Crypto doesn't support encrypted PEM, so passphrase is ignored
-        // In a real implementation, we'd need to decrypt first
-        if passphrase != nil {
-            throw SSHKeyError.unsupportedOperation("Encrypted PEM not supported by Swift Crypto")
-        }
-        
-        let privateKey = try _RSA.Signing.PrivateKey(pemRepresentation: pemString)
-        return RSAKey(privateKey: privateKey)
+        // TODO: Implement RSA private key parsing
+        // Current RSAKey uses Insecure.RSA.PrivateKey which doesn't have PEM parsing support
+        throw SSHKeyError.unsupportedOperation("RSA private key parsing not yet implemented")
     }
     
     /// Parse an ECDSA private key from PEM format

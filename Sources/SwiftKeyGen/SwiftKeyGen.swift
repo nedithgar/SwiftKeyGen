@@ -1,8 +1,17 @@
 import Foundation
 import Crypto
-import _CryptoExtras
 
 public struct SwiftKeyGen {
+    
+    /// Convert RSA key to PEM format
+    public static func rsaToPEM(_ key: RSAKey) throws -> String {
+        return try key.privateKey.pkcs1PEMRepresentation()
+    }
+    
+    /// Convert RSA public key to PEM format
+    public static func rsaPublicKeyToPEM(_ key: RSAKey) throws -> String {
+        return try key.privateKey.publicKey.pkcs1PEMRepresentation()
+    }
     
     public static func generateKey(type: KeyType, bits: Int? = nil, comment: String? = nil) throws -> any SSHKey {
         switch type {
@@ -11,23 +20,7 @@ public struct SwiftKeyGen {
             return Ed25519Key(privateKey: privateKey, comment: comment)
             
         case .rsa:
-            let keySize = bits ?? type.defaultBits
-            guard [2048, 3072, 4096].contains(keySize) else {
-                throw SSHKeyError.invalidKeySize(keySize)
-            }
-            
-            let privateKey: _RSA.Signing.PrivateKey
-            switch keySize {
-            case 2048:
-                privateKey = try _RSA.Signing.PrivateKey(keySize: .bits2048)
-            case 3072:
-                privateKey = try _RSA.Signing.PrivateKey(keySize: .bits3072)
-            case 4096:
-                privateKey = try _RSA.Signing.PrivateKey(keySize: .bits4096)
-            default:
-                throw SSHKeyError.invalidKeySize(keySize)
-            }
-            return RSAKey(privateKey: privateKey, comment: comment)
+            return try RSAKeyGenerator.generate(bits: bits, comment: comment)
             
         case .ecdsa256:
             let privateKey = P256.Signing.PrivateKey()

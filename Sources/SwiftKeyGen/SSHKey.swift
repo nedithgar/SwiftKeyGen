@@ -19,7 +19,7 @@ public protocol SSHKeyGenerator {
 
 public enum SSHKeyError: Error, LocalizedError, Equatable {
     case unsupportedKeyType
-    case invalidKeySize(Int)
+    case invalidKeySize(Int, String? = nil)
     case generationFailed(String)
     case serializationFailed(String)
     case invalidKeyData
@@ -29,12 +29,16 @@ public enum SSHKeyError: Error, LocalizedError, Equatable {
     case invalidPassphrase
     case unsupportedSignatureAlgorithm
     case unsupportedOperation(String)
+    case unsupportedCipher
     
     public var errorDescription: String? {
         switch self {
         case .unsupportedKeyType:
             return "Unsupported key type"
-        case .invalidKeySize(let size):
+        case .invalidKeySize(let size, let message):
+            if let message = message {
+                return message
+            }
             return "Invalid key size: \(size)"
         case .generationFailed(let reason):
             return "Key generation failed: \(reason)"
@@ -54,6 +58,8 @@ public enum SSHKeyError: Error, LocalizedError, Equatable {
             return "Unsupported signature algorithm"
         case .unsupportedOperation(let reason):
             return "Unsupported operation: \(reason)"
+        case .unsupportedCipher:
+            return "Unsupported cipher"
         }
     }
 }

@@ -172,15 +172,29 @@ extension Insecure {
         
         // MARK: - Signing/Verification
         
-        /// Sign data using RSA private key (PKCS#1 v1.5 with SHA256)
-        public static func sign(_ message: Data, with privateKey: PrivateKey) throws -> Data {
+        /// Sign data using RSA private key with specified hash algorithm
+        public static func sign(_ message: Data, with privateKey: PrivateKey, hashAlgorithm: HashAlgorithm = .sha256) throws -> Data {
             let keyByteSize = (privateKey.bitSize + 7) / 8
             
-            // Calculate SHA256 hash
-            let hash = SHA256.hash(data: message)
+            // Calculate hash based on algorithm
+            let hash: Data
+            switch hashAlgorithm {
+            case .sha1:
+                let digest = Insecure.SHA1.hash(data: message)
+                hash = Data(digest)
+            case .sha256:
+                let digest = SHA256.hash(data: message)
+                hash = Data(digest)
+            case .sha384:
+                let digest = SHA384.hash(data: message)
+                hash = Data(digest)
+            case .sha512:
+                let digest = SHA512.hash(data: message)
+                hash = Data(digest)
+            }
             
-            // Create DigestInfo structure for SHA256
-            let digestInfo = createDigestInfo(hash: Data(hash), algorithm: .sha256)
+            // Create DigestInfo structure
+            let digestInfo = createDigestInfo(hash: hash, algorithm: hashAlgorithm)
             
             // Apply PKCS#1 v1.5 padding for signing
             let paddedMessage = try pkcs1v15Pad(digestInfo, keyByteSize: keyByteSize, forEncryption: false)
@@ -192,16 +206,35 @@ extension Insecure {
             return s.serialize().leftPadded(to: keyByteSize)
         }
         
-        /// Verify RSA signature (PKCS#1 v1.5 with SHA256)
-        public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey) throws -> Bool {
+        /// Sign data using RSA private key (PKCS#1 v1.5 with SHA256) - convenience method
+        public static func sign(_ message: Data, with privateKey: PrivateKey) throws -> Data {
+            return try sign(message, with: privateKey, hashAlgorithm: .sha256)
+        }
+        
+        /// Verify RSA signature with specified hash algorithm
+        public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey, hashAlgorithm: HashAlgorithm = .sha256) throws -> Bool {
             let keyByteSize = (publicKey.bitSize + 7) / 8
             
             guard signature.count == keyByteSize else {
                 return false
             }
             
-            // Calculate expected hash
-            let expectedHash = SHA256.hash(data: message)
+            // Calculate expected hash based on algorithm
+            let expectedHash: Data
+            switch hashAlgorithm {
+            case .sha1:
+                let digest = Insecure.SHA1.hash(data: message)
+                expectedHash = Data(digest)
+            case .sha256:
+                let digest = SHA256.hash(data: message)
+                expectedHash = Data(digest)
+            case .sha384:
+                let digest = SHA384.hash(data: message)
+                expectedHash = Data(digest)
+            case .sha512:
+                let digest = SHA512.hash(data: message)
+                expectedHash = Data(digest)
+            }
             
             // Verify: m = s^e mod n
             let s = BigUInt(signature)
@@ -214,11 +247,16 @@ extension Insecure {
             }
             
             // Extract hash from DigestInfo and compare
-            guard let extractedHash = extractHashFromDigestInfo(digestInfo, algorithm: .sha256) else {
+            guard let extractedHash = extractHashFromDigestInfo(digestInfo, algorithm: hashAlgorithm) else {
                 return false
             }
             
-            return extractedHash == Data(expectedHash)
+            return extractedHash == expectedHash
+        }
+        
+        /// Verify RSA signature (PKCS#1 v1.5 with SHA256) - convenience method
+        public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey) throws -> Bool {
+            return try verify(signature, for: message, with: publicKey, hashAlgorithm: .sha256)
         }
         
         // MARK: - Raw Operations
@@ -578,7 +616,7 @@ extension Insecure {
         
         // MARK: - DigestInfo
         
-        enum HashAlgorithm {
+        public enum HashAlgorithm {
             case sha1
             case sha256
             case sha384
@@ -639,11 +677,25 @@ extension Data {
     }
 }
 
-// MARK: - SHA256 (using CryptoKit)
+// MARK: - Hash Functions (using CryptoKit)
 
 fileprivate enum SHA256 {
     static func hash(data: Data) -> Data {
         let digest = Crypto.SHA256.hash(data: data)
+        return Data(digest)
+    }
+}
+
+fileprivate enum SHA384 {
+    static func hash(data: Data) -> Data {
+        let digest = Crypto.SHA384.hash(data: data)
+        return Data(digest)
+    }
+}
+
+fileprivate enum SHA512 {
+    static func hash(data: Data) -> Data {
+        let digest = Crypto.SHA512.hash(data: data)
         return Data(digest)
     }
 }

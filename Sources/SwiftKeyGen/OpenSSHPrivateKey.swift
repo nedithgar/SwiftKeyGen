@@ -8,7 +8,7 @@ public struct OpenSSHPrivateKey {
     private static let MARK_END = "-----END OPENSSH PRIVATE KEY-----"
     private static let AUTH_MAGIC = "openssh-key-v1\0"
     private static let SALT_LEN = 16
-    private static let DEFAULT_CIPHER = "aes256-ctr"
+    private static let DEFAULT_CIPHER = Cipher.defaultCipher
     public static let DEFAULT_ROUNDS = 24
     private static let KDFNAME = "bcrypt"
     
@@ -17,17 +17,23 @@ public struct OpenSSHPrivateKey {
         key: any SSHKey,
         passphrase: String? = nil,
         comment: String? = nil,
+        cipher: String? = nil,
         rounds: Int = DEFAULT_ROUNDS
     ) throws -> Data {
         let cipherName: String
         let kdfName: String
         
         if let passphrase = passphrase, !passphrase.isEmpty {
-            cipherName = DEFAULT_CIPHER
+            cipherName = cipher ?? DEFAULT_CIPHER
             kdfName = KDFNAME
         } else {
             cipherName = "none"
             kdfName = "none"
+        }
+        
+        // Validate cipher
+        guard let cipherInfo = Cipher.cipherByName(cipherName) else {
+            throw SSHKeyError.unsupportedCipher
         }
         
         var encoded = SSHEncoder()
@@ -57,10 +63,10 @@ public struct OpenSSHPrivateKey {
             kdf.encodeData(salt)
             kdf.encodeUInt32(UInt32(rounds))
             
-            // Derive key using PBKDF2 (as bcrypt_pbkdf is not available in Swift Crypto)
-            // Note: This is a simplification - OpenSSH uses bcrypt_pbkdf
-            let keySize = 32 // AES-256 key size
-            let ivSize = 16  // AES CTR IV size
+            // Derive key using bcrypt_pbkdf for OpenSSH compatibility
+            guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
+                throw SSHKeyError.unsupportedCipher
+            }
             
             derivedKey = try deriveKey(
                 password: passphrase!,
@@ -94,7 +100,7 @@ public struct OpenSSHPrivateKey {
         encrypted.encodeString(finalComment)
         
         // Add padding to block size
-        let blockSize = cipherName == "none" ? 8 : 16
+        let blockSize = cipherInfo.blockSize
         var encryptedData = encrypted.encode()
         let currentLength = encryptedData.count
         let remainder = currentLength % blockSize
@@ -108,18 +114,27 @@ public struct OpenSSHPrivateKey {
         // Encrypt if passphrase is provided
         let finalData: Data
         if kdfName == KDFNAME && !derivedKey.isEmpty {
-            // Extract key and IV
-            let key = derivedKey.prefix(32)
-            let iv = derivedKey.suffix(16)
+            // Get key and IV sizes
+            guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
+                throw SSHKeyError.unsupportedCipher
+            }
             
-            // Encrypt using AES-256-CTR
-            finalData = try encryptAESCTR(data: encryptedData, key: key, iv: iv)
+            // Extract key and IV
+            let key = derivedKey.prefix(keySize)
+            let iv = derivedKey.suffix(ivSize)
+            
+            // Encrypt using selected cipher
+            finalData = try Cipher.encrypt(data: encryptedData, cipher: cipherName, key: key, iv: iv)
         } else {
             finalData = encryptedData
         }
         
         // Write encrypted data length and data
-        encoded.encodeUInt32(UInt32(finalData.count))
+        // For authenticated ciphers (ChaCha20-Poly1305), the length field contains
+        // the size of encrypted data WITHOUT the auth tag
+        let authLen = cipherInfo.authLen
+        let encryptedDataLength = authLen > 0 ? finalData.count - authLen : finalData.count
+        encoded.encodeUInt32(UInt32(encryptedDataLength))
         var encodedData = encoded.encode()
         encodedData.append(finalData)
         
@@ -181,9 +196,6 @@ public struct OpenSSHPrivateKey {
         }
     }
     
-    private static func encryptAESCTR(data: Data, key: Data, iv: Data) throws -> Data {
-        return try AESCTR.encrypt(data: data, key: key, iv: iv)
-    }
     
     private static func deriveKey(
         password: String,
@@ -299,8 +311,9 @@ public struct OpenSSHPrivateKey {
         let decryptedData: Data
         if kdfName == KDFNAME {
             // Derive key
-            let keySize = 32 // AES-256 key size
-            let ivSize = 16  // AES CTR IV size
+            guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
+                throw SSHKeyError.unsupportedCipher
+            }
             
             let derivedKey = try deriveKey(
                 password: passphrase!,
@@ -310,11 +323,11 @@ public struct OpenSSHPrivateKey {
             )
             
             // Extract key and IV
-            let key = derivedKey.prefix(32)
-            let iv = derivedKey.suffix(16)
+            let key = derivedKey.prefix(keySize)
+            let iv = derivedKey.suffix(ivSize)
             
-            // Decrypt using AES-256-CTR
-            decryptedData = try decryptAESCTR(data: Data(encryptedData), key: key, iv: iv)
+            // Decrypt using selected cipher
+            decryptedData = try Cipher.decrypt(data: Data(encryptedData), cipher: cipherName, key: key, iv: iv)
         } else {
             decryptedData = Data(encryptedData)
         }
@@ -400,7 +413,4 @@ public struct OpenSSHPrivateKey {
         throw SSHKeyError.unsupportedKeyType
     }
     
-    private static func decryptAESCTR(data: Data, key: Data, iv: Data) throws -> Data {
-        return try AESCTR.decrypt(data: data, key: key, iv: iv)
-    }
 }

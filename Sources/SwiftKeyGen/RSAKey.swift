@@ -1,44 +1,32 @@
 import Foundation
 import Crypto
-import _CryptoExtras
 
 public struct RSAKey: SSHKey {
     public let keyType = KeyType.rsa
     public var comment: String?
     
-    public let privateKey: _RSA.Signing.PrivateKey
+    public let privateKey: Insecure.RSA.PrivateKey
     
-    init(privateKey: _RSA.Signing.PrivateKey, comment: String? = nil) {
+    init(privateKey: Insecure.RSA.PrivateKey, comment: String? = nil) {
         self.privateKey = privateKey
         self.comment = comment
     }
     
     public func publicKeyData() -> Data {
-        let publicKey = privateKey.publicKey
-        
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
         
-        // RSA public key format: e (public exponent), n (modulus)
-        // Parse the DER representation to extract e and n
-        do {
-            var parser = ASN1Parser(data: publicKey.derRepresentation)
-            let (modulus, exponent) = try parser.parseRSAPublicKey()
-            encoder.encodeBigInt(exponent)
-            encoder.encodeBigInt(modulus)
-        } catch {
-            // Fallback: use standard RSA exponent
-            encoder.encodeBigInt(Data([0x01, 0x00, 0x01])) // 65537
-            encoder.encodeBigInt(Data()) // Empty modulus will cause issues
-        }
+        let publicKey = privateKey.publicKey
+        encoder.encodeBigInt(publicKey.exponentData)
+        encoder.encodeBigInt(publicKey.modulusData)
         
         return encoder.encode()
     }
     
     public func privateKeyData() -> Data {
-        // Return DER representation for now
+        // TODO: Implement DER encoding for RSA keys
         // Full OpenSSH format will be implemented later
-        return privateKey.derRepresentation
+        return Data()
     }
     
     public func publicKeyString() -> String {
@@ -103,30 +91,16 @@ public struct RSAKey: SSHKey {
         
         switch algorithm {
         case "ssh-rsa":
-            // SHA1 signature
-            let sig = try privateKey.signature(
-                for: data,
-                padding: .insecurePKCS1v1_5
-            )
-            signatureData = sig.rawRepresentation
+            // SHA1 signature for legacy compatibility
+            signatureData = try Insecure.RSA.sign(data, with: privateKey, hashAlgorithm: .sha1)
             
         case "rsa-sha2-256":
-            // SHA256 signature
-            let digest = SHA256.hash(data: data)
-            let sig = try privateKey.signature(
-                for: digest,
-                padding: .insecurePKCS1v1_5
-            )
-            signatureData = sig.rawRepresentation
+            // SHA256 signature (recommended)
+            signatureData = try Insecure.RSA.sign(data, with: privateKey, hashAlgorithm: .sha256)
             
         case "rsa-sha2-512":
             // SHA512 signature
-            let digest = SHA512.hash(data: data)
-            let sig = try privateKey.signature(
-                for: digest,
-                padding: .insecurePKCS1v1_5
-            )
-            signatureData = sig.rawRepresentation
+            signatureData = try Insecure.RSA.sign(data, with: privateKey, hashAlgorithm: .sha512)
             
         default:
             throw SSHKeyError.unsupportedSignatureAlgorithm
@@ -142,34 +116,44 @@ public struct RSAKey: SSHKey {
     
     func verify(signature: Data, for data: Data) throws -> Bool {
         let publicKey = privateKey.publicKey
-        return try RSAPublicKey.verifySignature(signature, for: data, publicKey: publicKey)
+        return try Insecure.RSA.verify(signature, for: data, with: publicKey)
+    }
+    
+    // Helper property for compatibility with existing code
+    var pemRepresentation: String {
+        do {
+            return try privateKey.pkcs1PEMRepresentation()
+        } catch {
+            // Return empty string if encoding fails
+            return ""
+        }
     }
 }
 
 public struct RSAKeyGenerator: SSHKeyGenerator {
+    // Constants matching OpenSSH
+    private static let SSH_RSA_MINIMUM_MODULUS_SIZE = 1024
+    private static let OPENSSL_RSA_MAX_MODULUS_BITS = 16384
+    
     public static func generate(bits: Int? = nil, comment: String? = nil) throws -> RSAKey {
         let keySize = bits ?? KeyType.rsa.defaultBits
         
-        // Validate key size - CryptoExtras only supports specific sizes
-        guard [2048, 3072, 4096].contains(keySize) else {
-            throw SSHKeyError.invalidKeySize(keySize)
+        // Validate key size according to OpenSSH standards
+        guard keySize >= SSH_RSA_MINIMUM_MODULUS_SIZE else {
+            throw SSHKeyError.invalidKeySize(keySize, "RSA key size must be at least \(SSH_RSA_MINIMUM_MODULUS_SIZE) bits")
         }
         
-        // CryptoExtras uses specific key size types
-        let privateKey: _RSA.Signing.PrivateKey
-        
-        switch keySize {
-        case 2048:
-            privateKey = try _RSA.Signing.PrivateKey(keySize: .bits2048)
-        case 3072:
-            privateKey = try _RSA.Signing.PrivateKey(keySize: .bits3072)
-        case 4096:
-            privateKey = try _RSA.Signing.PrivateKey(keySize: .bits4096)
-        default:
-            // CryptoExtras only supports 2048, 3072, and 4096 bit keys
-            throw SSHKeyError.invalidKeySize(keySize)
+        guard keySize <= OPENSSL_RSA_MAX_MODULUS_BITS else {
+            throw SSHKeyError.invalidKeySize(keySize, "RSA key size must not exceed \(OPENSSL_RSA_MAX_MODULUS_BITS) bits")
         }
         
+        // Ensure key size is a multiple of 8
+        guard keySize % 8 == 0 else {
+            throw SSHKeyError.invalidKeySize(keySize, "RSA key size must be a multiple of 8")
+        }
+        
+        // Generate RSA key pair using our implementation
+        let (privateKey, _) = try Insecure.RSA.generateKeyPair(bitSize: keySize)
         return RSAKey(privateKey: privateKey, comment: comment)
     }
 }

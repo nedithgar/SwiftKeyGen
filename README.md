@@ -88,8 +88,13 @@ try KeyFileManager.generateKeyPairFiles(
 // RSA key (3072 bits by default)
 let rsaKey = try SwiftKeyGen.generateKeyPair(type: .rsa)
 
-// RSA with custom size
+// RSA with standard sizes (hardware accelerated)
+let rsa2048 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 2048)
 let rsa4096 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 4096)
+
+// RSA with arbitrary sizes (1024-16384 bits)
+let rsa1536 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 1536)
+let rsa8192 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 8192)
 
 // ECDSA keys
 let p256Key = try SwiftKeyGen.generateKeyPair(type: .ecdsa256)
@@ -161,8 +166,10 @@ let isValid = KeyManager.verifyPassphrase(
 
 ### RSA
 - Wide compatibility
-- Supported sizes: 2048, 3072, 4096 bits
+- Supported sizes: Any size from 1024 to 16384 bits (must be multiple of 8)
 - Default: 3072 bits (following OpenSSH 9.0+)
+- Uses hardware-accelerated CryptoExtras for standard sizes (2048, 3072, 4096)
+- Arbitrary key sizes use pure Swift implementation
 
 ### ECDSA
 - Good performance

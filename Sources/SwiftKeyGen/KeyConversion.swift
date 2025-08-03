@@ -117,7 +117,7 @@ public struct KeyConverter {
             throw SSHKeyError.unsupportedOperation("Encrypted PEM not supported by Swift Crypto")
         }
         
-        return key.privateKey.pemRepresentation
+        return key.pemRepresentation
     }
     
     private static func rsaToPKCS8(_ key: RSAKey, passphrase: String?) throws -> Data {
