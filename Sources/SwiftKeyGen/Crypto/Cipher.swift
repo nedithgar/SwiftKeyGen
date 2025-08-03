@@ -139,21 +139,7 @@ enum Cipher {
 
 // MARK: - AES CBC Implementation is in AESCBC.swift
 
-// MARK: - AES GCM Implementation
-
-struct AESGCM {
-    static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        // Note: OpenSSH uses a specific GCM implementation
-        // For now, throw unsupported
-        throw SSHKeyError.unsupportedCipher
-    }
-    
-    static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        // Note: OpenSSH uses a specific GCM implementation
-        // For now, throw unsupported
-        throw SSHKeyError.unsupportedCipher
-    }
-}
+// MARK: - AES GCM Implementation is in AESGCM.swift
 
 // MARK: - Triple DES CBC Implementation is in TripleDES.swift
 

@@ -129,19 +129,27 @@ public struct KeyConverter {
     // MARK: - ECDSA Conversion
     
     private static func ecdsaToPEM(_ key: ECDSAKey, passphrase: String?) throws -> String {
-        // ECDSA PEM conversion
-        let privateKeyData = key.privateKeyData()
-        
-        var pem = "-----BEGIN EC PRIVATE KEY-----\n"
-        let base64 = privateKeyData.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-        pem += base64
-        pem += "\n-----END EC PRIVATE KEY-----"
-        
-        return pem
+        // PEM format for ECDSA should output SEC1/RFC5915 format to match ssh-keygen
+        if let passphrase = passphrase {
+            // Use encrypted PEM format
+            return try key.sec1PEMRepresentation(passphrase: passphrase)
+        } else {
+            // Use plain PEM format
+            return key.sec1PEMRepresentation
+        }
     }
     
     private static func ecdsaToPKCS8(_ key: ECDSAKey, passphrase: String?) throws -> Data {
-        let pem = try ecdsaToPEM(key, passphrase: passphrase)
+        // PKCS#8 format - use encrypted version if passphrase provided
+        let pem: String
+        if let passphrase = passphrase {
+            // Use encrypted PKCS#8 format
+            pem = try key.pkcs8PEMRepresentation(passphrase: passphrase)
+        } else {
+            // Use plain PKCS#8 format
+            pem = key.pkcs8PEMRepresentation
+        }
+        
         return Data(pem.utf8)
     }
     

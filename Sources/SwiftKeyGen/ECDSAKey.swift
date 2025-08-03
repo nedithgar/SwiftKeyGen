@@ -5,13 +5,13 @@ public struct ECDSAKey: SSHKey {
     public let keyType: KeyType
     public var comment: String?
     
-    private enum PrivateKeyStorage {
+    internal enum PrivateKeyStorage {
         case p256(P256.Signing.PrivateKey)
         case p384(P384.Signing.PrivateKey)
         case p521(P521.Signing.PrivateKey)
     }
     
-    private let privateKeyStorage: PrivateKeyStorage
+    internal let privateKeyStorage: PrivateKeyStorage
     
     init(p256Key: P256.Signing.PrivateKey, comment: String? = nil) {
         self.keyType = .ecdsa256
@@ -228,6 +228,18 @@ public struct ECDSAKey: SSHKey {
         sigEncoder.encodeBigInt(s)
         
         return sigEncoder.encode()
+    }
+    
+    /// PEM representation of the private key in PKCS#8 format
+    public var pemRepresentation: String {
+        switch privateKeyStorage {
+        case .p256(let key):
+            return key.pemRepresentation
+        case .p384(let key):
+            return key.pemRepresentation
+        case .p521(let key):
+            return key.pemRepresentation
+        }
     }
 }
 

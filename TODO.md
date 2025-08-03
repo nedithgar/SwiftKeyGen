@@ -28,6 +28,8 @@ This document compares the features implemented in SwiftKeyGen with the original
 ### Key Conversion
 - [x] Convert between OpenSSH and PEM formats
 - [x] Export keys to PKCS#8 format
+- [x] Export ECDSA keys with encrypted PEM (SEC1/RFC5915 format)
+- [x] Export ECDSA keys with encrypted PKCS#8 (PBES2)
 - [x] Read and validate key formats
 - [x] Parse OpenSSH private key format
 - [x] Full DER/PEM encoding for RSA keys (PKCS#1 format)
@@ -41,6 +43,8 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 ### Security Features
 - [x] Use AES encryption for private keys (aes128-ctr, aes192-ctr, aes256-ctr, aes128-cbc, aes192-cbc, aes256-cbc)
+- [x] Traditional PEM encryption (AES-128/192/256-CBC, DES-EDE3-CBC) with EVP_BytesToKey
+- [x] PKCS#8 encryption with PBES2/PBKDF2
 - [x] Custom KDF rounds for key encryption
 - [x] Secure file permissions (0600 for private keys)
 - [x] Memory safety through Swift's ARC
@@ -177,3 +181,10 @@ Priority features for future implementation:
 5. KRL (Key Revocation List) support for certificate revocation
 6. Hardware security key support
 7. PKCS#8 private key export for RSA/ECDSA keys
+   - ✅ ECDSA fully implemented:
+     - SEC1/RFC5915 format (PEM) with encrypted export
+     - PKCS#8 format with PBES2 encryption
+     - Traditional PEM encryption with EVP_BytesToKey
+     - Multiple cipher support (AES-128/192/256-CBC, DES-EDE3-CBC)
+     - Full compatibility with ssh-keygen and OpenSSL
+   - ⏳ RSA still needs implementation

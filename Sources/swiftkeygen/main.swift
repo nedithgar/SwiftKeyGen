@@ -356,6 +356,7 @@ struct SwiftKeyGenCLI {
         Supported ciphers:
             aes128-ctr, aes192-ctr, aes256-ctr (default)
             aes128-cbc, aes192-cbc, aes256-cbc
+            aes128-gcm@openssh.com, aes256-gcm@openssh.com
             3des-cbc
             chacha20-poly1305@openssh.com
         """)
