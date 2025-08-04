@@ -14,6 +14,16 @@ swift build
 swift test
 ```
 
+### Run CLI Tool
+```bash
+swift run swiftkeygen [command] [options]
+```
+
+### Run HMAC Verification Tool
+```bash
+swift run HMACVerifyTool
+```
+
 ### Generate Xcode Project (if needed)
 ```bash
 swift package generate-xcodeproj
@@ -21,18 +31,41 @@ swift package generate-xcodeproj
 
 ## Project Architecture
 
-SwiftKeyGen is a Swift library for cryptographic key generation. The project follows standard Swift Package Manager conventions:
+SwiftKeyGen is a comprehensive Swift package for SSH key generation, management, and certificate operations. The project provides both a library and command-line tools:
 
-- **Sources/SwiftKeyGen/**: Main library implementation
-- **Tests/SwiftKeyGenTests/**: Test suite using Swift Testing framework (not XCTest)
-- **Package.swift**: Package configuration with Swift tools version 6.1
+### Products
+- **SwiftKeyGen**: Main library for programmatic key operations
+- **swiftkeygen**: Command-line tool matching ssh-keygen functionality
+- **HMACVerifyTool**: Utility for HMAC verification testing
+
+### Directory Structure
+- **Sources/SwiftKeyGen/**: Core library implementation
+  - **Certificates/**: SSH certificate creation, parsing, and verification
+  - **Conversion/**: Key format conversion utilities
+  - **Core/**: Key generation and management fundamentals
+  - **Cryptography/**: Cipher implementations (AES, ChaCha20, BCrypt, etc.)
+  - **Extensions/**: Additional cryptographic functionality
+  - **Formats/**: Support for various key formats (ASN.1, DER, OpenSSH, PEM, PKCS)
+  - **Keys/**: Key type implementations (RSA, ECDSA, Ed25519)
+  - **SSH/**: SSH-specific functionality (known hosts, certificates)
+  - **Utilities/**: Helper functions (BubbleBabble, RandomArt, batch operations)
+- **Sources/SwiftKeyGenCLI/**: Command-line interface implementation
+- **Sources/HMACVerifyTool/**: HMAC verification utility
+- **Tests/SwiftKeyGenTests/**: Comprehensive test suite using Swift Testing framework
+- **Examples/**: Usage examples for common scenarios
+
+### Dependencies
+- **swift-crypto** (3.0.0+): Core cryptographic operations
+- **BigInt** (5.3.0+): Large number operations for RSA
 
 ## Key Development Notes
 
 1. The project uses the modern Swift Testing framework instead of XCTest
-2. No external dependencies are currently declared - add crypto dependencies to Package.swift when implementing key generation
-3. The library target is named "SwiftKeyGen" - maintain this naming convention for new files
+2. Supports Swift 6.1 with platform requirements:
+   - macOS 13+, iOS 16+, tvOS 16+, watchOS 9+, visionOS 1+
+3. The library target is named "SwiftKeyGen" - maintain this naming convention
 4. Follow Swift API Design Guidelines for public interfaces
+5. Cryptographic operations leverage Apple's swift-crypto and _CryptoExtras
 
 ## Key Conversion Features
 
