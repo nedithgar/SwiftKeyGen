@@ -251,17 +251,14 @@ public struct CertificateAuthority {
             return Data(signature)
             
         case let rsaKey as RSAKey:
-            // Sign based on the specified algorithm
-            switch algorithm {
-            case "ssh-rsa":
-                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha1)
-            case "rsa-sha2-256":
-                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha256)
-            case "rsa-sha2-512":
-                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha512)
-            default:
-                throw SSHKeyError.unsupportedSignatureAlgorithm
-            }
+            // For RSA, we need to get just the raw signature blob
+            // RSAKey.signWithAlgorithm returns SSH-formatted signature, but we need just the raw part
+            let sshSignature = try rsaKey.signWithAlgorithm(data: data, algorithm: algorithm)
+            
+            // Extract the raw signature from the SSH format
+            var decoder = SSHDecoder(data: sshSignature)
+            _ = try decoder.decodeString() // Skip signature type
+            return try decoder.decodeData() // Return just the raw signature
             
         case let ecdsaKey as ECDSAKey:
             // For ECDSA, get raw signature

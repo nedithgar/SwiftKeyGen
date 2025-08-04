@@ -190,18 +190,12 @@ public struct CertificateVerifier {
             return try ed25519PublicKey.verify(signature: signature, for: signedData)
             
         case let rsaKey as RSAKey:
-            // RSA needs to verify based on signature type
-            let publicKey = rsaKey.privateKey.publicKey
-            switch sigType {
-            case "ssh-rsa":
-                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha1)
-            case "rsa-sha2-256":
-                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha256)
-            case "rsa-sha2-512":
-                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha512)
-            default:
-                throw SSHKeyError.unsupportedSignatureAlgorithm
-            }
+            // RSA expects SSH formatted signature
+            var sigEncoder = SSHEncoder()
+            sigEncoder.encodeString(sigType)
+            sigEncoder.encodeData(signature)
+            let sshSignature = sigEncoder.encode()
+            return try rsaKey.verify(signature: sshSignature, for: signedData)
             
         case let rsaPublicKey as RSAPublicKey:
             // Public-only RSA key needs SSH formatted signature
