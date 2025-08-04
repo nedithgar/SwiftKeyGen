@@ -146,16 +146,40 @@ public struct CertificateAuthority {
         
         var encoder = SSHEncoder()
         
+        // Add certificate type string first
+        encoder.encodeString(certifiedKey.certifiedKeyType)
+        
         // Add nonce
         encoder.encodeData(Data(nonce))
         
         // Add public key data (without the type prefix)
+        // We need to extract the raw components from the public key data
         let publicKeyData = publicKey.publicKeyData()
         var decoder = SSHDecoder(data: publicKeyData)
         _ = try decoder.decodeString() // Skip the key type
-        let remainingData = try decoder.decodeBytes(count: decoder.remaining)
-        let keyData = Data(remainingData)
-        encoder.data.append(keyData)
+        
+        // Now encode the remaining public key components based on key type
+        switch publicKey.keyType {
+        case .ed25519:
+            // Ed25519: just the public key bytes (32 bytes)
+            let publicKeyBytes = try decoder.decodeData()
+            encoder.encodeData(publicKeyBytes)
+            
+        case .rsa:
+            // RSA: e then n (exponent then modulus) 
+            // Note: publicKeyData() encodes as e, n but we already read those
+            let exponent = try decoder.decodeData()
+            let modulus = try decoder.decodeData()
+            encoder.encodeData(exponent)
+            encoder.encodeData(modulus)
+            
+        case .ecdsa256, .ecdsa384, .ecdsa521:
+            // ECDSA: curve name then public key point
+            let curveName = try decoder.decodeString()
+            let publicKeyPoint = try decoder.decodeData()
+            encoder.encodeString(curveName)
+            encoder.encodeData(publicKeyPoint)
+        }
         
         // Add certificate fields
         encoder.encodeUInt64(certificate.serial)
@@ -195,9 +219,15 @@ public struct CertificateAuthority {
             algorithm: signatureAlgorithm
         )
         
-        // Create final certificate blob
+        // Create final certificate blob (without the type string for storage)
         var finalEncoder = SSHEncoder()
-        finalEncoder.data = dataToSign
+        
+        // Extract the blob data without the type string
+        var blobDecoder = SSHDecoder(data: dataToSign)
+        _ = try blobDecoder.decodeString() // Skip the type string
+        let blobWithoutType = Data(try blobDecoder.decodeBytes(count: blobDecoder.remaining))
+        
+        finalEncoder.data = blobWithoutType
         
         // Add signature blob
         var sigEncoder = SSHEncoder()

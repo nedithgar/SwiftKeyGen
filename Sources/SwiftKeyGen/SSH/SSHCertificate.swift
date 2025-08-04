@@ -181,6 +181,30 @@ public class CertifiedKey {
         return encoder.encode()
     }
     
+    /// Get the certificate as a public key string (for .pub files)
+    public func publicKeyString() -> String {
+        guard let certBlob = certificate.certBlob else {
+            return ""
+        }
+        
+        // For .pub files, we need the certificate type string IN the blob
+        // So we create a new blob with the type string prepended
+        var encoder = SSHEncoder()
+        encoder.encodeString(certifiedKeyType)
+        encoder.data.append(certBlob)
+        
+        let base64 = encoder.encode().base64EncodedString()
+        var result = "\(certifiedKeyType) \(base64)"
+        
+        if !certificate.keyId.isEmpty {
+            result += " \(certificate.keyId)"
+        } else if let comment = originalKey.comment {
+            result += " \(comment)"
+        }
+        
+        return result
+    }
+    
     /// Get the certificate info as a string
     public func certificateInfo() -> String {
         var info = "Type: \(certifiedKeyType) \(certificate.type.description) certificate\n"

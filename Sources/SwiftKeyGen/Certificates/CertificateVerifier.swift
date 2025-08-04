@@ -118,6 +118,11 @@ public struct CertificateVerifier {
         signatureType: String,
         certifiedKey: CertifiedKey
     ) throws -> Bool {
+        // The signed data includes the certificate type string prefix
+        // We need to reconstruct it
+        var signedDataEncoder = SSHEncoder()
+        signedDataEncoder.encodeString(certifiedKey.certifiedKeyType)
+        
         // The certificate blob contains everything including the signature
         // We need to extract the data that was signed and the signature
         
@@ -155,9 +160,12 @@ public struct CertificateVerifier {
         _ = try decoder.decodeData() // reserved
         _ = try decoder.decodeData() // CA key
         
-        // Everything before the signature is the signed data
-        let signedDataLength = certBlob.count - decoder.remaining
-        let signedData = Data(certBlob[..<signedDataLength])
+        // Everything before the signature is the blob data to append
+        let blobDataLength = certBlob.count - decoder.remaining
+        signedDataEncoder.data.append(certBlob[..<blobDataLength])
+        
+        // This is the complete signed data (type string + blob without signature)
+        let signedData = signedDataEncoder.encode()
         
         // Read and parse the signature
         let signatureBlob = try decoder.decodeData()
@@ -177,6 +185,10 @@ public struct CertificateVerifier {
             let publicKey = ed25519Key.privateKey.publicKey
             return publicKey.isValidSignature(signature, for: signedData)
             
+        case let ed25519PublicKey as Ed25519PublicKey:
+            // Public-only Ed25519 key expects raw signature
+            return try ed25519PublicKey.verify(signature: signature, for: signedData)
+            
         case let rsaKey as RSAKey:
             // RSA needs to verify based on signature type
             let publicKey = rsaKey.privateKey.publicKey
@@ -191,9 +203,31 @@ public struct CertificateVerifier {
                 throw SSHKeyError.unsupportedSignatureAlgorithm
             }
             
+        case let rsaPublicKey as RSAPublicKey:
+            // Public-only RSA key needs SSH formatted signature
+            var sigEncoder = SSHEncoder()
+            sigEncoder.encodeString(sigType)
+            sigEncoder.encodeData(signature)
+            let sshSignature = sigEncoder.encode()
+            return try rsaPublicKey.verify(signature: sshSignature, for: signedData)
+            
         case let ecdsaKey as ECDSAKey:
             // ECDSA expects raw signature
-            return try ecdsaKey.verifyRawSignature(signature, for: signedData)
+            // For consistency with ECDSAPublicKey, use the same verification approach
+            var sigEncoder = SSHEncoder()
+            sigEncoder.encodeString(sigType)
+            sigEncoder.encodeData(signature)
+            let sshSignature = sigEncoder.encode()
+            return try ecdsaKey.verify(signature: sshSignature, for: signedData)
+            
+        case let ecdsaPublicKey as ECDSAPublicKey:
+            // Public-only ECDSA key needs SSH formatted signature
+            // The signature from the certificate is already SSH-encoded r,s components
+            var sigEncoder = SSHEncoder()
+            sigEncoder.encodeString(sigType)
+            sigEncoder.encodeData(signature)
+            let sshSignature = sigEncoder.encode()
+            return try ecdsaPublicKey.verify(signature: sshSignature, for: signedData)
             
         default:
             throw SSHKeyError.unsupportedKeyType
