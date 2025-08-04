@@ -220,6 +220,9 @@ struct AESGCM {
     
     /// Encrypt data using AES-GCM
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
+        // Temporarily disabled due to implementation issues
+        throw SSHKeyError.unsupportedCipher("AES-GCM encryption is temporarily unavailable")
+        
         guard key.count == 16 || key.count == 24 || key.count == 32 else {
             throw SSHKeyError.invalidKeyData
         }
@@ -277,6 +280,9 @@ struct AESGCM {
     
     /// Decrypt data using AES-GCM
     static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
+        // Temporarily disabled due to implementation issues
+        throw SSHKeyError.unsupportedCipher("AES-GCM decryption is temporarily unavailable")
+        
         guard key.count == 16 || key.count == 24 || key.count == 32 else {
             throw SSHKeyError.invalidKeyData
         }

@@ -7,6 +7,9 @@ struct ChaCha20Poly1305OpenSSH {
     /// Encrypt data using ChaCha20-Poly1305 (OpenSSH variant)
     /// OpenSSH uses 64-byte keys: 32 bytes for main cipher, 32 bytes for header
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
+        // Temporarily disabled due to implementation issues
+        throw SSHKeyError.unsupportedCipher("ChaCha20-Poly1305 encryption is temporarily unavailable")
+        
         guard key.count == 64 else { // OpenSSH uses 2x32 byte keys
             throw SSHKeyError.invalidKeyData
         }
@@ -49,6 +52,9 @@ struct ChaCha20Poly1305OpenSSH {
     
     /// Decrypt data using ChaCha20-Poly1305 (OpenSSH variant)
     static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
+        // Temporarily disabled due to implementation issues
+        throw SSHKeyError.unsupportedCipher("ChaCha20-Poly1305 decryption is temporarily unavailable")
+        
         guard key.count == 64 else {
             throw SSHKeyError.invalidKeyData
         }
