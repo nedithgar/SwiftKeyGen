@@ -217,7 +217,7 @@ public struct PEMParser {
     /// Parse encrypted ECDSA private key
     private static func parseEncryptedECDSAPrivateKey(_ pemString: String, passphrase: String) throws -> ECDSAKey {
         // Extract headers and encrypted data
-        let lines = pemString.split(separator: "\n").map { String($0) }
+        let lines = pemString.components(separatedBy: "\n")
         
         var dekInfo: String?
         var base64Lines: [String] = []
@@ -471,7 +471,7 @@ public struct PEMParser {
     /// Parse encrypted Ed25519 private key
     private static func parseEncryptedEd25519PrivateKey(_ pemString: String, passphrase: String) throws -> Ed25519Key {
         // Extract headers and encrypted data
-        let lines = pemString.split(separator: "\n").map { String($0) }
+        let lines = pemString.components(separatedBy: "\n")
         
         var dekInfo: String?
         var base64Lines: [String] = []
@@ -588,7 +588,7 @@ public struct PEMParser {
     
     /// Detect PEM type from string
     public static func detectPEMType(_ pemString: String) -> String? {
-        let lines = pemString.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        let lines = pemString.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         
         for line in lines {
             if line.hasPrefix("-----BEGIN") && line.hasSuffix("-----") {

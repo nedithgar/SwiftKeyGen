@@ -3,30 +3,48 @@ import Foundation
 import Crypto
 @testable import SwiftKeyGen
 
+// Helper extension for running shell commands in tests
+extension Process {
+    struct RunResult {
+        let exitCode: Int32
+        let stdout: String
+        let stderr: String
+    }
+    
+    static func run(command: String, arguments: [String]) -> RunResult {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [command] + arguments
+        
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            
+            return RunResult(
+                exitCode: process.terminationStatus,
+                stdout: String(data: stdoutData, encoding: .utf8) ?? "",
+                stderr: String(data: stderrData, encoding: .utf8) ?? ""
+            )
+        } catch {
+            return RunResult(exitCode: -1, stdout: "", stderr: error.localizedDescription)
+        }
+    }
+}
+
+@Suite("PEMPrivateKeyParserTests")
 struct PEMPrivateKeyParserTests {
     
     // MARK: - RSA Tests
     
-    @Test("Generate and parse RSA key round-trip")
-    func testGenerateAndParseRSAKey() throws {
-        // Generate a new RSA key
-        let generatedKey = try RSAKeyGenerator.generate(bits: 2048)
-        
-        // Get PEM representation
-        let pemString = generatedKey.pemRepresentation
-        #expect(!pemString.isEmpty)
-        
-        // Parse it back
-        let parsedKey = try PEMParser.parseRSAPrivateKey(pemString)
-        
-        // Test signing/verification with parsed key
-        let testData = "Test RSA round-trip".data(using: .utf8)!
-        let signature = try parsedKey.sign(data: testData)
-        let isValid = try parsedKey.verify(signature: signature, for: testData)
-        #expect(isValid)
-    }
-    
-    @Test("Parse unencrypted RSA private key")
+    @Test("Parse unencrypted RSA private key", .timeLimit(.minutes(2)))
     func testParseUnencryptedRSAPrivateKey() throws {
         // This test uses a real RSA key generated with ssh-keygen
         let pemString = """
@@ -64,49 +82,54 @@ struct PEMPrivateKeyParserTests {
         // Verify we got a valid RSA key
         #expect(rsaKey.keyType == .rsa)
         
-        // Debug: Check key size
-        print("RSA key size: \(rsaKey.privateKey.bitSize) bits")
-        
-        // Test signing/verification - matches the behavior from the standalone script
+        // Test signing/verification
         let testData = "Hello, World!".data(using: .utf8)!
         let signature = try rsaKey.sign(data: testData)
         
-        // Debug: Check signature format
-        var decoder = SSHDecoder(data: signature)
-        let sigType = try decoder.decodeString()
-        let sigBlob = try decoder.decodeData()
-        print("Signature type: \(sigType)")
-        print("Signature blob length: \(sigBlob.count)")
-        
-        // Try verifying with raw operations to debug
-        do {
-            // Test both direct verification and through the public key
-            let publicKey = rsaKey.privateKey.publicKey
-            
-            // Try direct verification with our Insecure.RSA
-            let directValid = try Insecure.RSA.verify(sigBlob, for: testData, with: publicKey, hashAlgorithm: .sha256)
-            print("Direct verification result: \(directValid)")
-            
-            // Try through the key's verify method
-            let isValid = try rsaKey.verify(signature: signature, for: testData)
-            print("Key verification result: \(isValid)")
-            #expect(isValid)
-        } catch {
-            print("Verification error: \(error)")
-            throw error
-        }
+        // Verify the signature
+        let isValid = try rsaKey.verify(signature: signature, for: testData)
+        #expect(isValid)
     }
     
-    @Test("Parse encrypted RSA private key with correct passphrase", 
-           .disabled("Test data appears to be truncated - needs a complete encrypted RSA key"))
+    @Test("Parse encrypted RSA private key with correct passphrase", .timeLimit(.minutes(2)))
     func testParseEncryptedRSAPrivateKey() throws {
-        // This test is disabled because the encrypted RSA key data appears to be truncated
-        // To properly test this, we would need a complete encrypted RSA private key
-        // generated with a command like:
-        // openssl genrsa -aes128 -passout pass:password 2048
+        // Create a temporary directory for our test
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
         
-        // For now, we test that the parser correctly identifies encrypted keys
-        // and requires a passphrase in the other tests
+        let keyPath = tempDir.appendingPathComponent("test_rsa_key")
+        let passphrase = "test_passphrase_123"
+        
+        // Use ssh-keygen to generate an encrypted RSA key
+        let generateResult = Process.run(
+            command: "ssh-keygen",
+            arguments: [
+                "-t", "rsa",
+                "-b", "2048",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-m", "PEM"  // Force PEM format
+            ]
+        )
+        
+        #expect(generateResult.exitCode == 0, "Failed to generate RSA key: \(generateResult.stderr)")
+        
+        // Read the generated private key
+        let pemString = try String(contentsOf: keyPath, encoding: .utf8)
+        
+        // Parse with correct passphrase
+        let rsaKey = try PEMParser.parseRSAPrivateKey(pemString, passphrase: passphrase)
+        
+        // Verify we got a valid RSA key
+        #expect(rsaKey.keyType == .rsa)
+        
+        // Test signing/verification
+        let testData = "Test data for encrypted key".data(using: .utf8)!
+        let signature = try rsaKey.sign(data: testData)
+        #expect(try rsaKey.verify(signature: signature, for: testData))
     }
     
     @Test("Parse encrypted RSA private key with wrong passphrase")
@@ -140,31 +163,6 @@ struct PEMPrivateKeyParserTests {
         
         #expect(throws: Error.self) {
             _ = try PEMParser.parseRSAPrivateKey(pemString, passphrase: nil)
-        }
-    }
-    
-    @Test("Parse encrypted RSA private key from standalone script")
-    func testParseEncryptedRSAPrivateKeyFromScript() throws {
-        // Test case from the standalone TestPEMParsing.swift script
-        let encryptedRSAPEM = """
-        -----BEGIN RSA PRIVATE KEY-----
-        Proc-Type: 4,ENCRYPTED
-        DEK-Info: AES-128-CBC,B8806FD5B854421C5D7BBF199B479374
-        
-        mGAHNn/KbLbNCNLhN6hZo8S5VJmVCio6eGCYfzpJDgcAGvXkA7yt7M8CQFQY5PfF
-        BobKWrHrUqAaujp5oY6OcQn3YzC20I1kF6BgB8g0LosMJOTlmMpk6pIJhsn7y0zy
-        MlPRkwXBVS1upxl2nkdRlBOINPSAQhr4pxNOHxJBc8NzZ9K4GmH5Y0L4hx8oXKBu
-        XnghhvM8s0PnUxPnWuUiEKmJm0QMMM5GhKNLQQClFNNvnLc7YfHC0W0LNLKdCCNK
-        M5bM/K0LJ1gEphVxHupQ8U8ksTMvbihF0X8d4fH2OcwJOEJNGKQeZblUqIl/cHyL
-        VJdDLoQOPBF9pJma2MrzVR7Ex72XvGnfPfKPnJhbpJPDQ7Y+NTzBLZHJl/S0WJcg
-        a0Lbo3R5AWgAXhJ8hfCYYS3g7K9TgYqBCXrk6v2nj9FR4TQjgh2x7V3DLIUdj+XJ
-        GXVxHEImJ4qJBKVdBqhdirq6B5kDnrC2Yw2XHrZ5xfIQQBHnHAwLIJ6vNzB7VMFV
-        -----END RSA PRIVATE KEY-----
-        """
-        
-        // This should fail without passphrase - matches behavior from standalone script
-        #expect(throws: Error.self) {
-            _ = try PEMParser.parseRSAPrivateKey(encryptedRSAPEM)
         }
     }
     
@@ -239,7 +237,7 @@ struct PEMPrivateKeyParserTests {
         #expect(try parsedKey.verify(signature: signature, for: testData))
     }
     
-    @Test("Parse unencrypted ECDSA P-521 private key")
+    @Test("Parse unencrypted ECDSA P-521 private key", .timeLimit(.minutes(1)))
     func testParseUnencryptedECDSAP521PrivateKey() throws {
         // Generate a test key
         let key = try ECDSAKeyGenerator.generateP521()

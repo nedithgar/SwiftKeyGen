@@ -41,7 +41,8 @@ extension PEMParser {
     /// Parse encrypted RSA private key
     private static func parseEncryptedRSAPrivateKey(_ pemString: String, passphrase: String) throws -> RSAKey {
         // Extract headers and encrypted data
-        let lines = pemString.split(separator: "\n").map { String($0) }
+        // Use components(separatedBy:) instead of split() to preserve empty lines
+        let lines = pemString.components(separatedBy: "\n")
         
         var procType: String?
         var dekInfo: String?
