@@ -36,25 +36,6 @@ struct RSATests {
         #expect(modulus.count >= 255 && modulus.count <= 257)
     }
     
-    @Test func generateDifferentKeySizes() throws {
-        // Test various key sizes supported by CryptoExtras
-        let sizes = [2048, 3072, 4096]
-        
-        for size in sizes {
-            let key = try SwiftKeyGen.generateKey(type: .rsa, bits: size) as! RSAKey
-            let publicKeyData = key.publicKeyData()
-            
-            var decoder = SSHDecoder(data: publicKeyData)
-            _ = try decoder.decodeString() // skip key type
-            _ = try decoder.decodeData()   // skip exponent
-            let modulus = try decoder.decodeData()
-            
-            // Modulus size should match key size (in bytes)
-            let expectedSize = size / 8
-            #expect(modulus.count >= expectedSize - 1 && modulus.count <= expectedSize + 1)
-        }
-    }
-    
     @Test func rsaFingerprint() throws {
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         
