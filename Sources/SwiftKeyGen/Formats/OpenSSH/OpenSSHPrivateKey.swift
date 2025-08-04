@@ -1,6 +1,15 @@
 import Foundation
 import Crypto
 import _CryptoExtras
+import BigInt
+
+// MARK: - Data Extension
+private extension Data {
+    func leftPadded(to size: Int) -> Data {
+        guard count < size else { return self }
+        return Data(repeating: 0, count: size - count) + self
+    }
+}
 
 public struct OpenSSHPrivateKey {
     // OpenSSH private key format constants
@@ -181,10 +190,29 @@ public struct OpenSSHPrivateKey {
             fullPrivateKey.append(rawPublicKey)
             encoder.encodeData(fullPrivateKey)
             
-        case _ as RSAKey:
-            // RSA private key format
-            // This is complex and requires access to RSA components
-            throw SSHKeyError.unsupportedKeyType
+        case let rsaKey as RSAKey:
+            // RSA private key format based on OpenSSH's ssh-rsa.c ssh_rsa_serialize_private:
+            // Format: n, e, d, iqmp, p, q
+            let privateKey = rsaKey.privateKey
+            
+            // Encode modulus (n)
+            encoder.encodeBigInt(privateKey.n.serialize())
+            
+            // Encode public exponent (e)
+            encoder.encodeBigInt(privateKey.e.serialize())
+            
+            // Encode private exponent (d)
+            encoder.encodeBigInt(privateKey.d.serialize())
+            
+            // Encode inverse of q mod p (iqmp)
+            // OpenSSH uses qInv which is already calculated in the private key
+            encoder.encodeBigInt(privateKey.qInv.serialize())
+            
+            // Encode prime p
+            encoder.encodeBigInt(privateKey.p.serialize())
+            
+            // Encode prime q
+            encoder.encodeBigInt(privateKey.q.serialize())
             
         case _ as ECDSAKey:
             // ECDSA private key format
@@ -402,15 +430,120 @@ public struct OpenSSHPrivateKey {
     }
     
     private static func parseRSAPrivateKey(decoder: inout SSHDecoder) throws -> RSAKey {
-        // RSA key parsing would require access to internal components
-        // For now, throw unsupported
-        throw SSHKeyError.unsupportedKeyType
+        // Based on OpenSSH's ssh-rsa.c ssh_rsa_deserialize_private:
+        // Format: n, e, d, iqmp, p, q, comment
+        
+        // Read modulus (n)
+        let nData = try decoder.decodeBigInt()
+        guard !nData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let n = BigUInt(nData)
+        
+        // Read public exponent (e)
+        let eData = try decoder.decodeBigInt()
+        guard !eData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let e = BigUInt(eData)
+        
+        // Read private exponent (d)
+        let dData = try decoder.decodeBigInt()
+        guard !dData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let d = BigUInt(dData)
+        
+        // Read inverse of q mod p (iqmp) - note: OpenSSH stores this before p and q
+        let iqmpData = try decoder.decodeBigInt()
+        guard !iqmpData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let iqmp = BigUInt(iqmpData)
+        
+        // Read prime p
+        let pData = try decoder.decodeBigInt()
+        guard !pData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let p = BigUInt(pData)
+        
+        // Read prime q
+        let qData = try decoder.decodeBigInt()
+        guard !qData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let q = BigUInt(qData)
+        
+        // Read comment
+        let comment = try decoder.decodeString()
+        
+        // Create the private key
+        let privateKey = Insecure.RSA.PrivateKey(n: n, e: e, d: d, p: p, q: q)
+        
+        // Create and return the RSAKey
+        return RSAKey(privateKey: privateKey, comment: comment.isEmpty ? nil : comment)
     }
     
     private static func parseECDSAPrivateKey(decoder: inout SSHDecoder, keyType: String) throws -> ECDSAKey {
-        // ECDSA key parsing would require access to internal components
-        // For now, throw unsupported
-        throw SSHKeyError.unsupportedKeyType
+        // Based on OpenSSH's ssh-ecdsa.c ssh_ecdsa_deserialize_private:
+        // Format: curve_name, public_key (EC point), private_key (scalar), comment
+        
+        // Read curve name
+        let curveName = try decoder.decodeString()
+        
+        // Verify curve name matches key type
+        let expectedCurveName: String
+        switch keyType {
+        case "ecdsa-sha2-nistp256":
+            expectedCurveName = "nistp256"
+        case "ecdsa-sha2-nistp384":
+            expectedCurveName = "nistp384"
+        case "ecdsa-sha2-nistp521":
+            expectedCurveName = "nistp521"
+        default:
+            throw SSHKeyError.unsupportedKeyType
+        }
+        
+        guard curveName == expectedCurveName else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Read and skip public key data (we don't need it for reconstruction)
+        _ = try decoder.decodeData()
+        
+        // Read private key scalar
+        let privateKeyData = try decoder.decodeBigInt()
+        guard !privateKeyData.isEmpty else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Read comment
+        let comment = try decoder.decodeString()
+        
+        // Create the appropriate private key based on curve
+        switch keyType {
+        case "ecdsa-sha2-nistp256":
+            // P256 private keys are 32 bytes
+            let paddedData = privateKeyData.leftPadded(to: 32)
+            let privateKey = try P256.Signing.PrivateKey(rawRepresentation: paddedData)
+            return ECDSAKey(p256Key: privateKey, comment: comment.isEmpty ? nil : comment)
+            
+        case "ecdsa-sha2-nistp384":
+            // P384 private keys are 48 bytes
+            let paddedData = privateKeyData.leftPadded(to: 48)
+            let privateKey = try P384.Signing.PrivateKey(rawRepresentation: paddedData)
+            return ECDSAKey(p384Key: privateKey, comment: comment.isEmpty ? nil : comment)
+            
+        case "ecdsa-sha2-nistp521":
+            // P521 private keys are 66 bytes
+            let paddedData = privateKeyData.leftPadded(to: 66)
+            let privateKey = try P521.Signing.PrivateKey(rawRepresentation: paddedData)
+            return ECDSAKey(p521Key: privateKey, comment: comment.isEmpty ? nil : comment)
+            
+        default:
+            throw SSHKeyError.unsupportedKeyType
+        }
     }
     
 }

@@ -101,4 +101,24 @@ struct SSHDecoder {
         offset += count
         return result
     }
+    
+    mutating func decodeBigInt() throws -> Data {
+        // SSH mpint format: length-prefixed data
+        let mpintData = try decodeData()
+        
+        // SSH mpint format allows for proper sign handling
+        // If the data is empty, return empty data (represents 0)
+        if mpintData.isEmpty {
+            return Data()
+        }
+        
+        // Remove any leading zeros except if needed for sign
+        // (SSH format may include a leading zero byte for positive numbers with high bit set)
+        var result = mpintData
+        while result.count > 1 && result[0] == 0 {
+            result = result.dropFirst()
+        }
+        
+        return result
+    }
 }

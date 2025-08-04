@@ -5,7 +5,7 @@ import Foundation
 @Suite("Final Signature Verification Test", .serialized)
 struct FinalSignatureVerificationTest {
     
-    @Test("RSA CA signing Ed25519 user certificate", .disabled("Causing signal 5 crash - needs investigation"))
+    @Test("RSA CA signing Ed25519 user certificate")
     func testRSACASignature() throws {
         // Generate RSA CA key
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
@@ -198,8 +198,9 @@ struct FinalSignatureVerificationTest {
         #expect(checkProcess.terminationStatus == 0, "Certificate validation failed")
     }
     
-    @Test("Verify RSA certificate with ssh-keygen", .disabled("RSA private key serialization not implemented"))
+    @Test("Verify RSA certificate with ssh-keygen")
     func testSSHKeygenVerificationRSA() throws {
+        print("Starting RSA certificate verification test")
         // Create temp directory
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -209,7 +210,7 @@ struct FinalSignatureVerificationTest {
         
         // Generate RSA CA key using SwiftKeyGen
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
-        
+
         // Generate Ed25519 user key using SwiftKeyGen
         let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
         
@@ -234,7 +235,8 @@ struct FinalSignatureVerificationTest {
             caKey: caKey,
             keyId: "test-rsa-user",
             principals: ["alice", "rsa.example.com"],
-            certificateType: .user
+            certificateType: .user,
+            signatureAlgorithm: "rsa-sha2-512"  // Use SHA-512 like ssh-keygen
         )
         
         // Save certificate

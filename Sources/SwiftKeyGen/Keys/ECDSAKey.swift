@@ -171,18 +171,9 @@ public struct ECDSAKey: SSHKey {
     }
     
     func verify(signature: Data, for data: Data) throws -> Bool {
-        // Get the public key and use ECDSAPublicKey for verification
-        switch privateKeyStorage {
-        case .p256(let key):
-            let publicKey = key.publicKey
-            return try ECDSAPublicKey.verifySignature(signature, for: data, keyType: keyType, publicKey: publicKey)
-        case .p384(let key):
-            let publicKey = key.publicKey
-            return try ECDSAPublicKey.verifySignature(signature, for: data, keyType: keyType, publicKey: publicKey)
-        case .p521(let key):
-            let publicKey = key.publicKey
-            return try ECDSAPublicKey.verifySignature(signature, for: data, keyType: keyType, publicKey: publicKey)
-        }
+        // Create a public-only version of this key and use it for verification
+        let publicOnlyKey = self.publicOnlyKey() as! ECDSAPublicKey
+        return try publicOnlyKey.verify(signature: signature, for: data)
     }
     
     /// Get raw signature without SSH formatting (for internal use)

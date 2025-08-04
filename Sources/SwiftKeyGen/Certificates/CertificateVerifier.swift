@@ -190,20 +190,12 @@ public struct CertificateVerifier {
             return try ed25519PublicKey.verify(signature: signature, for: signedData)
             
         case let rsaKey as RSAKey:
-            // RSA expects SSH formatted signature
-            var sigEncoder = SSHEncoder()
-            sigEncoder.encodeString(sigType)
-            sigEncoder.encodeData(signature)
-            let sshSignature = sigEncoder.encode()
-            return try rsaKey.verify(signature: sshSignature, for: signedData)
+            // RSA expects SSH formatted signature (which signatureBlob already is)
+            return try rsaKey.verify(signature: signatureBlob, for: signedData)
             
         case let rsaPublicKey as RSAPublicKey:
-            // Public-only RSA key needs SSH formatted signature
-            var sigEncoder = SSHEncoder()
-            sigEncoder.encodeString(sigType)
-            sigEncoder.encodeData(signature)
-            let sshSignature = sigEncoder.encode()
-            return try rsaPublicKey.verify(signature: sshSignature, for: signedData)
+            // Public-only RSA key needs SSH formatted signature (which signatureBlob already is)
+            return try rsaPublicKey.verify(signature: signatureBlob, for: signedData)
             
         case let ecdsaKey as ECDSAKey:
             // ECDSA expects raw signature
