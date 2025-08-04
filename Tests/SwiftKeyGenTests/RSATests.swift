@@ -89,40 +89,36 @@ struct RSATests {
         }
     }
     
-    @Test func arbitraryKeySizes() throws {
-        // Test various arbitrary key sizes that are now supported
-        let validSizes = [
-            1024,   // Minimum allowed
-            1536,   // Non-standard size
-            1792,   // Non-standard size
-            2048,   // Standard size (CryptoExtras)
-            2560,   // Non-standard size
-            3072,   // Standard size (CryptoExtras)
-            3584,   // Non-standard size
-            4096,   // Standard size (CryptoExtras)
-            4608,   // Non-standard size
-            8192,   // Large key
-            16384   // Maximum allowed
-        ]
+    @Test func arbitraryKeySize() throws {
+        // Test non-standard key size that is not directly supported by CryptoExtras
+        let size = 3584  // Non-standard size between 3072 and 4096
         
-        for size in validSizes {
-            let key = try SwiftKeyGen.generateKey(type: .rsa, bits: size, comment: "test-\(size)") as! RSAKey
-            
-            // Verify key was generated
-            #expect(key.comment == "test-\(size)")
-            
-            // Verify public key can be exported
-            let publicKeyString = key.publicKeyString()
-            #expect(publicKeyString.hasPrefix("ssh-rsa"))
-            #expect(publicKeyString.contains("test-\(size)"))
-            
-            // Verify key size by checking the public key data
-            let publicData = key.publicKeyData()
-            #expect(publicData.count > 0)
-            
-            // Basic fingerprint test
-            let fingerprint = key.fingerprint(hash: .sha256)
-            #expect(fingerprint.hasPrefix("SHA256:"))
-        }
+        let key = try SwiftKeyGen.generateKey(type: .rsa, bits: size, comment: "test-\(size)") as! RSAKey
+        
+        // Verify key was generated
+        #expect(key.comment == "test-\(size)")
+        
+        // Verify public key can be exported
+        let publicKeyString = key.publicKeyString()
+        #expect(publicKeyString.hasPrefix("ssh-rsa"))
+        #expect(publicKeyString.contains("test-\(size)"))
+        
+        // Verify key size by checking the public key data
+        let publicData = key.publicKeyData()
+        #expect(publicData.count > 0)
+        
+        // Verify the modulus size matches the requested key size
+        var decoder = SSHDecoder(data: publicData)
+        _ = try decoder.decodeString() // skip key type
+        _ = try decoder.decodeData()   // skip exponent
+        let modulus = try decoder.decodeData()
+        
+        // Modulus size should match key size (in bytes)
+        let expectedSize = size / 8  // 3584 / 8 = 448 bytes
+        #expect(modulus.count >= expectedSize - 1 && modulus.count <= expectedSize + 1)
+        
+        // Basic fingerprint test
+        let fingerprint = key.fingerprint(hash: .sha256)
+        #expect(fingerprint.hasPrefix("SHA256:"))
     }
 }

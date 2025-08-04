@@ -175,13 +175,20 @@ public struct KeyManager {
             throw SSHKeyError.invalidFormat
         }
         
-        var decoder = SSHDecoder(data: keyData)
-        
-        // Read magic header
-        let magic = try decoder.decodeData()
-        guard String(data: magic, encoding: .utf8) == "openssh-key-v1\0" else {
+        // Read and verify magic header - it's not length-prefixed
+        let magicLength = "openssh-key-v1\0".count
+        guard keyData.count >= magicLength else {
             throw SSHKeyError.invalidFormat
         }
+        
+        let magicData = keyData.subdata(in: 0..<magicLength)
+        let expectedMagic = Data("openssh-key-v1\0".utf8)
+        guard magicData == expectedMagic else {
+            throw SSHKeyError.invalidFormat
+        }
+        
+        // Create decoder starting after the magic header
+        var decoder = SSHDecoder(data: keyData.subdata(in: magicLength..<keyData.count))
         
         // Read cipher and KDF info
         let cipherName = try decoder.decodeString()
