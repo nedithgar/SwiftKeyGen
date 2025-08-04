@@ -80,7 +80,7 @@ func testEncryptedSEC1Export() throws {
     let dekInfoLine = lines.first { $0.hasPrefix("DEK-Info:") }!
     let dekParts = dekInfoLine.split(separator: " ")[1].split(separator: ",")
     #expect(dekParts[0] == "AES-128-CBC")
-    #expect(dekParts[1].count == 16) // 8 bytes hex = 16 chars
+    #expect(dekParts[1].count == 32) // 16 bytes hex = 32 chars for AES-128-CBC
 }
 
 @Test("Encrypted PKCS#8 PEM export")

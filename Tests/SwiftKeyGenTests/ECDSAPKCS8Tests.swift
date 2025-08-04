@@ -34,10 +34,10 @@ func testECDSAPKCS8ExportViaConverter() throws {
     // Generate test key
     let key = try ECDSAKeyGenerator.generateP256(comment: "test-converter")
     
-    // Test toPEM (should now return PKCS#8)
+    // Test toPEM (returns SEC1 format for ECDSA)
     let pem = try KeyConverter.toPEM(key: key)
-    #expect(pem.contains("-----BEGIN PRIVATE KEY-----"))
-    #expect(pem.contains("-----END PRIVATE KEY-----"))
+    #expect(pem.contains("-----BEGIN EC PRIVATE KEY-----"))
+    #expect(pem.contains("-----END EC PRIVATE KEY-----"))
     
     // Test toPKCS8
     let pkcs8Data = try KeyConverter.toPKCS8(key: key)

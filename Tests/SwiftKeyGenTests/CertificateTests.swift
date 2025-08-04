@@ -322,4 +322,104 @@ struct CertificateTests {
         )
         #expect(result == .valid)
     }
+    
+    @Test("RSA certificate with different signature algorithms")
+    func testRSACertificateSignatureAlgorithms() throws {
+        // Generate RSA CA key
+        let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca") as! RSAKey
+        
+        // Generate RSA user key
+        let userKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "user@test") as! RSAKey
+        
+        // Test different signature algorithms
+        let algorithms = ["rsa-sha2-256", "rsa-sha2-512"]
+        
+        for algorithm in algorithms {
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "test-\(algorithm)",
+                principals: ["testuser"],
+                certificateType: .user,
+                signatureAlgorithm: algorithm
+            )
+            
+            #expect(cert.certificate.signatureType == algorithm)
+            #expect(cert.certificate.certBlob != nil)
+            
+            // Verify the certificate
+            let result = CertificateVerifier.verifyCertificate(cert, caKey: caKey)
+            #expect(result == .valid, "Certificate with \(algorithm) should be valid")
+        }
+    }
+    
+    @Test("RSA certificate with incompatible signature algorithm")
+    func testRSACertificateIncompatibleAlgorithm() throws {
+        // Generate RSA CA key
+        let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
+        
+        // Generate user key
+        let userKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        
+        // Try to use Ed25519 algorithm with RSA CA key
+        #expect(throws: SSHKeyError.incompatibleSignatureAlgorithm) {
+            _ = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "test-incompatible",
+                principals: ["testuser"],
+                signatureAlgorithm: "ssh-ed25519"
+            )
+        }
+        
+        // Try to use ECDSA algorithm with RSA CA key
+        #expect(throws: SSHKeyError.incompatibleSignatureAlgorithm) {
+            _ = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "test-incompatible",
+                principals: ["testuser"],
+                signatureAlgorithm: "ecdsa-sha2-nistp256"
+            )
+        }
+    }
+    
+    @Test("Default signature algorithm for different key types")
+    func testDefaultSignatureAlgorithms() throws {
+        // Test RSA default (should be rsa-sha2-512)
+        let rsaCA = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
+        let rsaUser = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
+        
+        let rsaCert = try CertificateAuthority.signCertificate(
+            publicKey: rsaUser,
+            caKey: rsaCA,
+            keyId: "rsa-default",
+            principals: ["testuser"]
+        )
+        #expect(rsaCert.certificate.signatureType == "rsa-sha2-512")
+        
+        // Test Ed25519 default
+        let ed25519CA = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        let ed25519User = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        
+        let ed25519Cert = try CertificateAuthority.signCertificate(
+            publicKey: ed25519User,
+            caKey: ed25519CA,
+            keyId: "ed25519-default",
+            principals: ["testuser"]
+        )
+        #expect(ed25519Cert.certificate.signatureType == "ssh-ed25519")
+        
+        // Test ECDSA P-256 default
+        let ecdsaCA = try SwiftKeyGen.generateKey(type: .ecdsa256) as! ECDSAKey
+        let ecdsaUser = try SwiftKeyGen.generateKey(type: .ecdsa256) as! ECDSAKey
+        
+        let ecdsaCert = try CertificateAuthority.signCertificate(
+            publicKey: ecdsaUser,
+            caKey: ecdsaCA,
+            keyId: "ecdsa-default",
+            principals: ["testuser"]
+        )
+        #expect(ecdsaCert.certificate.signatureType == "ecdsa-sha2-nistp256")
+    }
 }

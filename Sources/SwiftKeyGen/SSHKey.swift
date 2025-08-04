@@ -30,6 +30,7 @@ public enum SSHKeyError: Error, LocalizedError, Equatable {
     case unsupportedSignatureAlgorithm
     case unsupportedOperation(String)
     case unsupportedCipher
+    case incompatibleSignatureAlgorithm
     
     public var errorDescription: String? {
         switch self {
@@ -60,6 +61,8 @@ public enum SSHKeyError: Error, LocalizedError, Equatable {
             return "Unsupported operation: \(reason)"
         case .unsupportedCipher:
             return "Unsupported cipher"
+        case .incompatibleSignatureAlgorithm:
+            return "Signature algorithm is not compatible with the key type"
         }
     }
 }

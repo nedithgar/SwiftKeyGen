@@ -241,6 +241,35 @@ public struct ECDSAKey: SSHKey {
             return key.pemRepresentation
         }
     }
+    
+    /// Verify raw signature without SSH formatting (for internal use)
+    func verifyRawSignature(_ signature: Data, for data: Data) throws -> Bool {
+        // Parse the SSH encoded signature (r, s components)
+        var decoder = SSHDecoder(data: signature)
+        let r = try decoder.decodeData()
+        let s = try decoder.decodeData()
+        
+        // Combine r and s into raw signature format
+        let rawSignature = r + s
+        
+        switch privateKeyStorage {
+        case .p256(let key):
+            guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
+                return false
+            }
+            return key.publicKey.isValidSignature(ecdsaSignature, for: data)
+        case .p384(let key):
+            guard let ecdsaSignature = try? P384.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
+                return false
+            }
+            return key.publicKey.isValidSignature(ecdsaSignature, for: data)
+        case .p521(let key):
+            guard let ecdsaSignature = try? P521.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
+                return false
+            }
+            return key.publicKey.isValidSignature(ecdsaSignature, for: data)
+        }
+    }
 }
 
 public struct ECDSAKeyGenerator {

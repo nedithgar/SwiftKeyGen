@@ -115,8 +115,24 @@ public struct RSAKey: SSHKey {
     }
     
     func verify(signature: Data, for data: Data) throws -> Bool {
+        // Parse SSH signature format
+        var decoder = SSHDecoder(data: signature)
+        let signatureType = try decoder.decodeString()
+        let signatureBlob = try decoder.decodeData()
+        
         let publicKey = privateKey.publicKey
-        return try Insecure.RSA.verify(signature, for: data, with: publicKey)
+        
+        // Verify based on signature type
+        switch signatureType {
+        case "ssh-rsa":
+            return try Insecure.RSA.verify(signatureBlob, for: data, with: publicKey, hashAlgorithm: .sha1)
+        case "rsa-sha2-256":
+            return try Insecure.RSA.verify(signatureBlob, for: data, with: publicKey, hashAlgorithm: .sha256)
+        case "rsa-sha2-512":
+            return try Insecure.RSA.verify(signatureBlob, for: data, with: publicKey, hashAlgorithm: .sha512)
+        default:
+            throw SSHKeyError.unsupportedSignatureAlgorithm
+        }
     }
     
     // Helper property for compatibility with existing code

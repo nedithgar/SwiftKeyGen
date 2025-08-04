@@ -170,25 +170,32 @@ public struct CertificateVerifier {
             throw SSHKeyError.signatureMismatch
         }
         
-        // Reconstruct the full SSH signature format
-        var fullSigEncoder = SSHEncoder()
-        fullSigEncoder.encodeString(sigType)
-        fullSigEncoder.encodeData(signature)
-        let fullSignature = fullSigEncoder.encode()
-        
-        // Verify the signature using public key
-        if let publicKey = caKey as? SSHPublicKey {
-            return try publicKey.verify(signature: fullSignature, for: signedData)
-        } else if let ed25519Key = caKey as? Ed25519Key {
-            // Full key can also verify
-            return try ed25519Key.verify(signature: fullSignature, for: signedData)
-        } else if let rsaKey = caKey as? RSAKey {
-            // Full RSA key can also verify
-            return try rsaKey.verify(signature: fullSignature, for: signedData)
-        } else if let ecdsaKey = caKey as? ECDSAKey {
-            // Full ECDSA key can also verify
-            return try ecdsaKey.verify(signature: fullSignature, for: signedData)
-        } else {
+        // Verify signature based on key type
+        switch caKey {
+        case let ed25519Key as Ed25519Key:
+            // Ed25519 expects raw signature
+            let publicKey = ed25519Key.privateKey.publicKey
+            return publicKey.isValidSignature(signature, for: signedData)
+            
+        case let rsaKey as RSAKey:
+            // RSA needs to verify based on signature type
+            let publicKey = rsaKey.privateKey.publicKey
+            switch sigType {
+            case "ssh-rsa":
+                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha1)
+            case "rsa-sha2-256":
+                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha256)
+            case "rsa-sha2-512":
+                return try Insecure.RSA.verify(signature, for: signedData, with: publicKey, hashAlgorithm: .sha512)
+            default:
+                throw SSHKeyError.unsupportedSignatureAlgorithm
+            }
+            
+        case let ecdsaKey as ECDSAKey:
+            // ECDSA expects raw signature
+            return try ecdsaKey.verifyRawSignature(signature, for: signedData)
+            
+        default:
             throw SSHKeyError.unsupportedKeyType
         }
     }

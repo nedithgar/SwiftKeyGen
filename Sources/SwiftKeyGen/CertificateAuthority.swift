@@ -16,7 +16,8 @@ public struct CertificateAuthority {
         validTo: Date? = nil,
         certificateType: SSHCertificateType = .user,
         criticalOptions: [(SSHCertificateOption, String)] = [],
-        extensions: [SSHCertificateExtension] = []
+        extensions: [SSHCertificateExtension] = [],
+        signatureAlgorithm: String? = nil
     ) throws -> CertifiedKey {
         // Validate inputs
         guard principals.count <= SSHCertificate.maxPrincipals else {
@@ -65,27 +66,54 @@ public struct CertificateAuthority {
         certifiedKey.certificate.signatureKey = caKey
         
         // Determine signature algorithm
-        let signatureAlgorithm: String
-        switch caKey.keyType {
-        case .rsa:
-            signatureAlgorithm = "rsa-sha2-512"
-        case .ed25519:
-            signatureAlgorithm = "ssh-ed25519"
-        case .ecdsa256:
-            signatureAlgorithm = "ecdsa-sha2-nistp256"
-        case .ecdsa384:
-            signatureAlgorithm = "ecdsa-sha2-nistp384"
-        case .ecdsa521:
-            signatureAlgorithm = "ecdsa-sha2-nistp521"
+        let finalSignatureAlgorithm: String
+        if let providedAlgorithm = signatureAlgorithm {
+            // Validate the provided algorithm is compatible with the CA key type
+            switch caKey.keyType {
+            case .rsa:
+                guard ["ssh-rsa", "rsa-sha2-256", "rsa-sha2-512"].contains(providedAlgorithm) else {
+                    throw SSHKeyError.incompatibleSignatureAlgorithm
+                }
+            case .ed25519:
+                guard providedAlgorithm == "ssh-ed25519" else {
+                    throw SSHKeyError.incompatibleSignatureAlgorithm
+                }
+            case .ecdsa256:
+                guard providedAlgorithm == "ecdsa-sha2-nistp256" else {
+                    throw SSHKeyError.incompatibleSignatureAlgorithm
+                }
+            case .ecdsa384:
+                guard providedAlgorithm == "ecdsa-sha2-nistp384" else {
+                    throw SSHKeyError.incompatibleSignatureAlgorithm
+                }
+            case .ecdsa521:
+                guard providedAlgorithm == "ecdsa-sha2-nistp521" else {
+                    throw SSHKeyError.incompatibleSignatureAlgorithm
+                }
+            }
+            finalSignatureAlgorithm = providedAlgorithm
+        } else {
+            // Use default algorithm for the key type
+            switch caKey.keyType {
+            case .rsa:
+                finalSignatureAlgorithm = "rsa-sha2-512"  // Default to SHA-512 like OpenSSH
+            case .ed25519:
+                finalSignatureAlgorithm = "ssh-ed25519"
+            case .ecdsa256:
+                finalSignatureAlgorithm = "ecdsa-sha2-nistp256"
+            case .ecdsa384:
+                finalSignatureAlgorithm = "ecdsa-sha2-nistp384"
+            case .ecdsa521:
+                finalSignatureAlgorithm = "ecdsa-sha2-nistp521"
+            }
         }
-        certifiedKey.certificate.signatureType = signatureAlgorithm
+        certifiedKey.certificate.signatureType = finalSignatureAlgorithm
         
         // Generate the certificate blob
         let certBlob = try generateCertificateBlob(
-            publicKey: publicKey,
-            certificate: certifiedKey.certificate,
+            certifiedKey: certifiedKey,
             caKey: caKey,
-            signatureAlgorithm: signatureAlgorithm
+            signatureAlgorithm: finalSignatureAlgorithm
         )
         
         certifiedKey.certificate.certBlob = certBlob
@@ -95,11 +123,12 @@ public struct CertificateAuthority {
     
     /// Generate certificate blob
     private static func generateCertificateBlob(
-        publicKey: any SSHKey,
-        certificate: SSHCertificate,
+        certifiedKey: CertifiedKey,
         caKey: any SSHKey,
         signatureAlgorithm: String
     ) throws -> Data {
+        let publicKey = certifiedKey.originalKey
+        let certificate = certifiedKey.certificate
         // Generate random nonce
         var nonce = [UInt8](repeating: 0, count: 32)
         for i in 0..<32 {
@@ -150,11 +179,7 @@ public struct CertificateAuthority {
         // Now we need to sign everything we've encoded so far
         let dataToSign = encoder.encode()
         
-        // Create the data to be signed (includes the signature algorithm)
-        var signEncoder = SSHEncoder()
-        signEncoder.encodeData(dataToSign)
-        
-        // Sign the certificate
+        // Sign the certificate blob directly (no type string prefix)
         let signature = try signCertificateData(
             data: dataToSign,
             caKey: caKey,
@@ -187,8 +212,17 @@ public struct CertificateAuthority {
             return Data(signature)
             
         case let rsaKey as RSAKey:
-            // For RSA certificate signing, OpenSSH uses rsa-sha2-512
-            return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha512)
+            // Sign based on the specified algorithm
+            switch algorithm {
+            case "ssh-rsa":
+                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha1)
+            case "rsa-sha2-256":
+                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha256)
+            case "rsa-sha2-512":
+                return try Insecure.RSA.sign(data, with: rsaKey.privateKey, hashAlgorithm: .sha512)
+            default:
+                throw SSHKeyError.unsupportedSignatureAlgorithm
+            }
             
         case let ecdsaKey as ECDSAKey:
             // For ECDSA, get raw signature
