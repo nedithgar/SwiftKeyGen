@@ -177,13 +177,16 @@ extension PEMParser {
         let dQ = BigUInt(exponent2Data)
         let qInv = BigUInt(coefficientData)
         
-        // Create RSA private key
+        // Create RSA private key using the stored CRT values
         let privateKey = Insecure.RSA.PrivateKey(
             n: n,
             e: e,
             d: d,
             p: p,
-            q: q
+            q: q,
+            dP: dP,
+            dQ: dQ,
+            qInv: qInv
         )
         
         return RSAKey(privateKey: privateKey)

@@ -115,7 +115,19 @@ extension Insecure {
                 // Calculate CRT values
                 self.dP = d % (p - 1)
                 self.dQ = d % (q - 1)
-                self.qInv = modularInverse(q, p)!
+                self.qInv = modularInverse(q, p) ?? BigUInt(0)
+            }
+            
+            /// Initialize with pre-computed CRT values
+            public init(n: BigUInt, e: BigUInt, d: BigUInt, p: BigUInt, q: BigUInt, dP: BigUInt, dQ: BigUInt, qInv: BigUInt) {
+                self.n = n
+                self.e = e
+                self.d = d
+                self.p = p
+                self.q = q
+                self.dP = dP
+                self.dQ = dQ
+                self.qInv = qInv
             }
             
             /// Get the public key
@@ -215,8 +227,15 @@ extension Insecure {
         public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey, hashAlgorithm: HashAlgorithm = .sha256) throws -> Bool {
             let keyByteSize = (publicKey.bitSize + 7) / 8
             
-            guard signature.count == keyByteSize else {
+            // Handle signature padding like OpenSSH does
+            let paddedSignature: Data
+            if signature.count > keyByteSize {
                 return false
+            } else if signature.count < keyByteSize {
+                // Pad with zeros at the beginning (left pad)
+                paddedSignature = Data(repeating: 0, count: keyByteSize - signature.count) + signature
+            } else {
+                paddedSignature = signature
             }
             
             // Calculate expected hash based on algorithm
@@ -237,7 +256,7 @@ extension Insecure {
             }
             
             // Verify: m = s^e mod n
-            let s = BigUInt(signature)
+            let s = BigUInt(paddedSignature)
             let m = s.power(publicKey.e, modulus: publicKey.n)
             
             // Convert to Data and unpad
@@ -492,6 +511,7 @@ extension Insecure {
         private static func modularInverse(_ a: BigUInt, _ m: BigUInt) -> BigUInt? {
             if m == 1 { return 0 }
             
+            let originalM = m
             var a = a % m
             var m = m
             var x0 = BigInt(0)
@@ -519,7 +539,7 @@ extension Insecure {
             }
             
             if x1 < 0 {
-                x1 += BigInt(m)
+                x1 += BigInt(originalM)
             }
             
             return BigUInt(x1)

@@ -28,34 +28,34 @@ struct PEMPrivateKeyParserTests {
     
     @Test("Parse unencrypted RSA private key")
     func testParseUnencryptedRSAPrivateKey() throws {
-        // This test uses the same RSA key from the standalone script to ensure compatibility
+        // This test uses a real RSA key generated with ssh-keygen
         let pemString = """
         -----BEGIN RSA PRIVATE KEY-----
-        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
+        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
         -----END RSA PRIVATE KEY-----
         """
         
@@ -80,7 +80,16 @@ struct PEMPrivateKeyParserTests {
         
         // Try verifying with raw operations to debug
         do {
+            // Test both direct verification and through the public key
+            let publicKey = rsaKey.privateKey.publicKey
+            
+            // Try direct verification with our Insecure.RSA
+            let directValid = try Insecure.RSA.verify(sigBlob, for: testData, with: publicKey, hashAlgorithm: .sha256)
+            print("Direct verification result: \(directValid)")
+            
+            // Try through the key's verify method
             let isValid = try rsaKey.verify(signature: signature, for: testData)
+            print("Key verification result: \(isValid)")
             #expect(isValid)
         } catch {
             print("Verification error: \(error)")
