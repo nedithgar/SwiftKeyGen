@@ -60,7 +60,7 @@ extension Insecure.RSA.PrivateKey {
         -----BEGIN RSA PRIVATE KEY-----
         \(base64)
         -----END RSA PRIVATE KEY-----
-        """
+        """ + "\n"
     }
 }
 
@@ -120,7 +120,7 @@ extension Insecure.RSA.PublicKey {
         -----BEGIN PUBLIC KEY-----
         \(base64)
         -----END PUBLIC KEY-----
-        """
+        """ + "\n"
     }
 }
 
