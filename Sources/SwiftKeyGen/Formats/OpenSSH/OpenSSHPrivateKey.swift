@@ -33,7 +33,7 @@ public struct OpenSSHPrivateKey {
         
         // Validate cipher
         guard let cipherInfo = Cipher.cipherByName(cipherName) else {
-            throw SSHKeyError.unsupportedCipher
+            throw SSHKeyError.unsupportedCipher(cipherName)
         }
         
         var encoded = SSHEncoder()
@@ -65,7 +65,7 @@ public struct OpenSSHPrivateKey {
             
             // Derive key using bcrypt_pbkdf for OpenSSH compatibility
             guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
-                throw SSHKeyError.unsupportedCipher
+                throw SSHKeyError.unsupportedCipher(cipherName)
             }
             
             derivedKey = try deriveKey(
@@ -116,7 +116,7 @@ public struct OpenSSHPrivateKey {
         if kdfName == KDFNAME && !derivedKey.isEmpty {
             // Get key and IV sizes
             guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
-                throw SSHKeyError.unsupportedCipher
+                throw SSHKeyError.unsupportedCipher(cipherName)
             }
             
             // Extract key and IV
@@ -312,7 +312,7 @@ public struct OpenSSHPrivateKey {
         if kdfName == KDFNAME {
             // Derive key
             guard let (keySize, ivSize) = Cipher.getKeyIVSize(cipher: cipherName) else {
-                throw SSHKeyError.unsupportedCipher
+                throw SSHKeyError.unsupportedCipher(cipherName)
             }
             
             let derivedKey = try deriveKey(

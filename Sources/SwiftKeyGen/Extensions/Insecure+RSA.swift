@@ -14,7 +14,7 @@ extension Insecure {
         /// Generate an RSA key pair with the specified bit size
         public static func generateKeyPair(bitSize: Int = 2048) throws -> (privateKey: PrivateKey, publicKey: PublicKey) {
             guard bitSize >= 512 && bitSize % 8 == 0 else {
-                throw SSHKeyError.invalidKeySize(bitSize)
+                throw SSHKeyError.invalidKeySize(bitSize, "RSA key size must be at least 512 bits and a multiple of 8")
             }
             
             let maxAttempts = 100

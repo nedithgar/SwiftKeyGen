@@ -215,9 +215,3 @@ extension Data {
     }
 }
 
-// MARK: - Error Extensions
-
-extension SSHKeyError {
-    static let randomGenerationFailed = SSHKeyError.invalidKeyData
-    static let invalidPadding = SSHKeyError.invalidKeyData
-}

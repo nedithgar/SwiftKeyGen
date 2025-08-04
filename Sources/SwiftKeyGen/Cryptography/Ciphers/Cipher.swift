@@ -64,7 +64,7 @@ enum Cipher {
         iv: Data
     ) throws -> Data {
         guard cipherByName(cipher) != nil else {
-            throw SSHKeyError.unsupportedCipher
+            throw SSHKeyError.unsupportedCipher(cipher)
         }
         
         switch cipher {
@@ -87,7 +87,7 @@ enum Cipher {
             return data
             
         default:
-            throw SSHKeyError.unsupportedCipher
+            throw SSHKeyError.unsupportedCipher(cipher)
         }
     }
     
@@ -99,7 +99,7 @@ enum Cipher {
         iv: Data
     ) throws -> Data {
         guard cipherByName(cipher) != nil else {
-            throw SSHKeyError.unsupportedCipher
+            throw SSHKeyError.unsupportedCipher(cipher)
         }
         
         switch cipher {
@@ -122,7 +122,7 @@ enum Cipher {
             return data
             
         default:
-            throw SSHKeyError.unsupportedCipher
+            throw SSHKeyError.unsupportedCipher(cipher)
         }
     }
     

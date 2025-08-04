@@ -228,7 +228,3 @@ public class CertifiedKey {
     }
 }
 
-// Add error case for certificates
-extension SSHKeyError {
-    static let certificateNotSigned = SSHKeyError.unsupportedKeyType // Reuse for now
-}

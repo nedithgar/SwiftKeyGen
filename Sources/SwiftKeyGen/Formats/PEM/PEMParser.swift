@@ -188,41 +188,397 @@ public struct PEMParser {
         return try Ed25519PublicKey(publicKeyData: publicKey.rawRepresentation)
     }
     
-    /// Parse an RSA private key from PEM format
-    public static func parseRSAPrivateKey(_ pemString: String, passphrase: String? = nil) throws -> RSAKey {
-        // TODO: Implement RSA private key parsing
-        // Current RSAKey uses Insecure.RSA.PrivateKey which doesn't have PEM parsing support
-        throw SSHKeyError.unsupportedOperation("RSA private key parsing not yet implemented")
-    }
+    // RSA private key parsing is now implemented in RSA+PEM.swift
     
     /// Parse an ECDSA private key from PEM format
     public static func parseECDSAPrivateKey(_ pemString: String, passphrase: String? = nil) throws -> ECDSAKey {
-        // Note: Swift Crypto doesn't support encrypted PEM, so passphrase is ignored
-        if passphrase != nil {
-            throw SSHKeyError.unsupportedOperation("Encrypted PEM not supported by Swift Crypto")
+        let trimmedPEM = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if it's encrypted
+        if isEncryptedPEM(trimmedPEM) {
+            guard let passphrase = passphrase else {
+                throw SSHKeyError.passphraseRequired
+            }
+            return try parseEncryptedECDSAPrivateKey(trimmedPEM, passphrase: passphrase)
+        } else {
+            // Unencrypted - try to parse as different curve types
+            if let p256Key = try? P256.Signing.PrivateKey(pemRepresentation: pemString) {
+                return ECDSAKey(p256Key: p256Key)
+            } else if let p384Key = try? P384.Signing.PrivateKey(pemRepresentation: pemString) {
+                return ECDSAKey(p384Key: p384Key)
+            } else if let p521Key = try? P521.Signing.PrivateKey(pemRepresentation: pemString) {
+                return ECDSAKey(p521Key: p521Key)
+            } else {
+                throw SSHKeyError.unsupportedOperation("Unable to parse ECDSA private key")
+            }
+        }
+    }
+    
+    /// Parse encrypted ECDSA private key
+    private static func parseEncryptedECDSAPrivateKey(_ pemString: String, passphrase: String) throws -> ECDSAKey {
+        // Extract headers and encrypted data
+        let lines = pemString.split(separator: "\n").map { String($0) }
+        
+        var dekInfo: String?
+        var base64Lines: [String] = []
+        var inBody = false
+        
+        for line in lines {
+            if line.hasPrefix("-----BEGIN") {
+                continue
+            } else if line.hasPrefix("-----END") {
+                break
+            } else if line.hasPrefix("DEK-Info:") {
+                dekInfo = line.replacingOccurrences(of: "DEK-Info:", with: "").trimmingCharacters(in: .whitespaces)
+            } else if line.isEmpty {
+                inBody = true
+            } else if inBody {
+                base64Lines.append(line)
+            }
         }
         
-        // Try to parse as different curve types
-        if let p256Key = try? P256.Signing.PrivateKey(pemRepresentation: pemString) {
-            return ECDSAKey(p256Key: p256Key)
-        } else if let p384Key = try? P384.Signing.PrivateKey(pemRepresentation: pemString) {
-            return ECDSAKey(p384Key: p384Key)
-        } else if let p521Key = try? P521.Signing.PrivateKey(pemRepresentation: pemString) {
-            return ECDSAKey(p521Key: p521Key)
-        } else {
-            throw SSHKeyError.unsupportedOperation("Unable to parse ECDSA private key")
+        guard let dekInfoStr = dekInfo else {
+            throw SSHKeyError.invalidKeyData
         }
+        
+        // Parse DEK-Info: cipher,iv
+        let dekParts = dekInfoStr.split(separator: ",").map { String($0) }
+        guard dekParts.count == 2 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        let cipherName = dekParts[0]
+        let ivHex = dekParts[1]
+        
+        guard let cipher = PEMEncryption.PEMCipher(rawValue: cipherName) else {
+            throw SSHKeyError.unsupportedCipher(cipherName)
+        }
+        
+        guard let iv = Data(hexString: ivHex) else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Decode encrypted data
+        let base64Content = base64Lines.joined()
+        guard let encryptedData = Data(base64Encoded: base64Content) else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Decrypt
+        let decryptedData = try PEMEncryption.decrypt(
+            data: encryptedData,
+            passphrase: passphrase,
+            cipher: cipher,
+            iv: iv
+        )
+        
+        // Parse decrypted data as EC private key
+        return try parseECDSAPrivateKeyFromDER(decryptedData)
+    }
+    
+    /// Parse ECDSA private key from DER data (SEC1 or PKCS#8 format)
+    private static func parseECDSAPrivateKeyFromDER(_ derData: Data) throws -> ECDSAKey {
+        // First try to parse as SEC1 format (traditional EC private key)
+        // If that fails, try PKCS#8 format
+        
+        var parser = ASN1Parser(data: derData)
+        
+        // Check the first tag
+        guard parser.offset < derData.count else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        let firstTag = derData[parser.offset]
+        
+        if firstTag == 0x30 {
+            // SEQUENCE - could be either format
+            parser.offset += 1
+            _ = try parser.parseLength()
+            
+            // Look at the first element
+            guard let firstElementData = try parser.parseInteger() else {
+                throw SSHKeyError.invalidKeyData
+            }
+            
+            if firstElementData.count == 1 && firstElementData[0] <= 1 {
+                // Version field - likely SEC1 format
+                return try parseECDSAPrivateKeyFromSEC1(derData)
+            } else {
+                // Likely PKCS#8 format
+                return try parseECDSAPrivateKeyFromPKCS8(derData)
+            }
+        }
+        
+        throw SSHKeyError.invalidKeyData
+    }
+    
+    /// Parse ECDSA private key from SEC1 format
+    private static func parseECDSAPrivateKeyFromSEC1(_ derData: Data) throws -> ECDSAKey {
+        // SEC1 format:
+        // SEQUENCE {
+        //   INTEGER version (1)
+        //   OCTET STRING privateKey
+        //   [0] OID curveOID OPTIONAL
+        //   [1] BIT STRING publicKey OPTIONAL
+        // }
+        
+        var parser = ASN1Parser(data: derData)
+        
+        // Skip SEQUENCE
+        guard parser.offset < derData.count && derData[parser.offset] == 0x30 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        parser.offset += 1
+        _ = try parser.parseLength()
+        
+        // Parse version (should be 1)
+        guard let versionData = try parser.parseInteger(),
+              versionData.count == 1 && versionData[0] == 1 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Parse private key OCTET STRING
+        guard let privateKeyData = try parser.parseOctetString() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Try to find curve OID (tagged with [0])
+        var curveType: KeyType?
+        if parser.offset < derData.count && derData[parser.offset] == 0xa0 {
+            parser.offset += 1
+            let tagLength = try parser.parseLength()
+            let tagEnd = parser.offset + tagLength
+            
+            // Parse the OID inside the tag
+            if let oid = try parser.parseObjectIdentifier() {
+                curveType = try determineCurveTypeFromOID(oid)
+            }
+            
+            parser.offset = tagEnd
+        }
+        
+        // If we couldn't determine curve from OID, try from key length
+        if curveType == nil {
+            switch privateKeyData.count {
+            case 32:
+                curveType = .ecdsa256
+            case 48:
+                curveType = .ecdsa384
+            case 65, 66:
+                curveType = .ecdsa521
+            default:
+                throw SSHKeyError.invalidKeyData
+            }
+        }
+        
+        // Create the appropriate key
+        switch curveType! {
+        case .ecdsa256:
+            let key = try P256.Signing.PrivateKey(rawRepresentation: privateKeyData)
+            return ECDSAKey(p256Key: key)
+        case .ecdsa384:
+            let key = try P384.Signing.PrivateKey(rawRepresentation: privateKeyData)
+            return ECDSAKey(p384Key: key)
+        case .ecdsa521:
+            let key = try P521.Signing.PrivateKey(rawRepresentation: privateKeyData)
+            return ECDSAKey(p521Key: key)
+        default:
+            throw SSHKeyError.unsupportedKeyType
+        }
+    }
+    
+    /// Parse ECDSA private key from PKCS#8 format
+    private static func parseECDSAPrivateKeyFromPKCS8(_ derData: Data) throws -> ECDSAKey {
+        // PKCS#8 format for EC:
+        // SEQUENCE {
+        //   INTEGER version (0)
+        //   SEQUENCE {
+        //     OBJECT IDENTIFIER ecPublicKey (1.2.840.10045.2.1)
+        //     OBJECT IDENTIFIER curveOID
+        //   }
+        //   OCTET STRING privateKey {
+        //     SEC1 private key structure
+        //   }
+        // }
+        
+        var parser = ASN1Parser(data: derData)
+        
+        // Skip outer SEQUENCE
+        guard parser.offset < derData.count && derData[parser.offset] == 0x30 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        parser.offset += 1
+        _ = try parser.parseLength()
+        
+        // Parse version (should be 0)
+        guard let versionData = try parser.parseInteger(),
+              versionData.count == 1 && versionData[0] == 0 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Parse algorithm identifier SEQUENCE
+        guard parser.offset < derData.count && derData[parser.offset] == 0x30 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        parser.offset += 1
+        let algSeqLength = try parser.parseLength()
+        let algSeqEnd = parser.offset + algSeqLength
+        
+        // Skip ecPublicKey OID
+        _ = try parser.parseObjectIdentifier()
+        
+        // Parse curve OID
+        guard let curveOID = try parser.parseObjectIdentifier() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        let curveType = try determineCurveTypeFromOID(curveOID)
+        
+        // Skip to end of algorithm sequence
+        parser.offset = algSeqEnd
+        
+        // Parse OCTET STRING containing the private key
+        guard let privateKeyOctet = try parser.parseOctetString() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // The OCTET STRING contains a SEC1 private key structure
+        return try parseECDSAPrivateKeyFromSEC1(privateKeyOctet)
     }
     
     /// Parse an Ed25519 private key from PEM format
     public static func parseEd25519PrivateKey(_ pemString: String, passphrase: String? = nil) throws -> Ed25519Key {
-        // Note: Swift Crypto doesn't support encrypted PEM, so passphrase is ignored
-        if passphrase != nil {
-            throw SSHKeyError.unsupportedOperation("Encrypted PEM not supported by Swift Crypto")
+        let trimmedPEM = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if it's encrypted
+        if isEncryptedPEM(trimmedPEM) {
+            guard let passphrase = passphrase else {
+                throw SSHKeyError.passphraseRequired
+            }
+            return try parseEncryptedEd25519PrivateKey(trimmedPEM, passphrase: passphrase)
+        } else {
+            // Unencrypted - use Swift Crypto directly
+            let privateKey = try Curve25519.Signing.PrivateKey(pemRepresentation: pemString)
+            return Ed25519Key(privateKey: privateKey)
+        }
+    }
+    
+    /// Check if PEM is encrypted
+    private static func isEncryptedPEM(_ pemString: String) -> Bool {
+        return pemString.contains("Proc-Type:") && pemString.contains("DEK-Info:")
+    }
+    
+    /// Parse encrypted Ed25519 private key
+    private static func parseEncryptedEd25519PrivateKey(_ pemString: String, passphrase: String) throws -> Ed25519Key {
+        // Extract headers and encrypted data
+        let lines = pemString.split(separator: "\n").map { String($0) }
+        
+        var dekInfo: String?
+        var base64Lines: [String] = []
+        var inBody = false
+        
+        for line in lines {
+            if line.hasPrefix("-----BEGIN") {
+                continue
+            } else if line.hasPrefix("-----END") {
+                break
+            } else if line.hasPrefix("DEK-Info:") {
+                dekInfo = line.replacingOccurrences(of: "DEK-Info:", with: "").trimmingCharacters(in: .whitespaces)
+            } else if line.isEmpty {
+                inBody = true
+            } else if inBody {
+                base64Lines.append(line)
+            }
         }
         
-        let privateKey = try Curve25519.Signing.PrivateKey(pemRepresentation: pemString)
+        guard let dekInfoStr = dekInfo else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Parse DEK-Info: cipher,iv
+        let dekParts = dekInfoStr.split(separator: ",").map { String($0) }
+        guard dekParts.count == 2 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        let cipherName = dekParts[0]
+        let ivHex = dekParts[1]
+        
+        guard let cipher = PEMEncryption.PEMCipher(rawValue: cipherName) else {
+            throw SSHKeyError.unsupportedCipher(cipherName)
+        }
+        
+        guard let iv = Data(hexString: ivHex) else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Decode encrypted data
+        let base64Content = base64Lines.joined()
+        guard let encryptedData = Data(base64Encoded: base64Content) else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Decrypt
+        let decryptedData = try PEMEncryption.decrypt(
+            data: encryptedData,
+            passphrase: passphrase,
+            cipher: cipher,
+            iv: iv
+        )
+        
+        // Parse decrypted data as PKCS#8
+        let privateKey = try parseEd25519PrivateKeyFromPKCS8(decryptedData)
         return Ed25519Key(privateKey: privateKey)
+    }
+    
+    /// Parse Ed25519 private key from PKCS#8 DER data
+    private static func parseEd25519PrivateKeyFromPKCS8(_ derData: Data) throws -> Curve25519.Signing.PrivateKey {
+        // PKCS#8 format for Ed25519:
+        // SEQUENCE {
+        //   INTEGER version (0)
+        //   SEQUENCE {
+        //     OBJECT IDENTIFIER algorithmIdentifier (1.3.101.112)
+        //   }
+        //   OCTET STRING privateKey {
+        //     OCTET STRING actualPrivateKey[32]
+        //   }
+        // }
+        
+        var parser = ASN1Parser(data: derData)
+        
+        // Skip outer SEQUENCE
+        guard parser.offset < derData.count && derData[parser.offset] == 0x30 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        parser.offset += 1
+        _ = try parser.parseLength()
+        
+        // Parse version (should be 0)
+        guard let versionData = try parser.parseInteger(),
+              versionData.count == 1 && versionData[0] == 0 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Skip algorithm identifier SEQUENCE
+        try parser.skipSequence()
+        
+        // Parse OCTET STRING containing the private key
+        guard let privateKeyOctet = try parser.parseOctetString() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // The OCTET STRING contains another OCTET STRING with the actual 32-byte key
+        var innerParser = ASN1Parser(data: privateKeyOctet)
+        guard let actualKeyData = try innerParser.parseOctetString() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        // Ed25519 private keys are 32 bytes
+        guard actualKeyData.count == 32 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        
+        return try Curve25519.Signing.PrivateKey(rawRepresentation: actualKeyData)
     }
     
     /// Check if a string is in PEM format
@@ -265,5 +621,26 @@ public struct PEMParser {
         }
         
         return nil
+    }
+}
+
+// MARK: - Data Extensions
+
+extension Data {
+    init?(hexString: String) {
+        let hex = hexString.replacingOccurrences(of: " ", with: "")
+        guard hex.count % 2 == 0 else { return nil }
+        
+        var data = Data()
+        var index = hex.startIndex
+        
+        while index < hex.endIndex {
+            let nextIndex = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<nextIndex], radix: 16) else { return nil }
+            data.append(byte)
+            index = nextIndex
+        }
+        
+        self = data
     }
 }

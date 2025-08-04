@@ -1,8 +1,8 @@
 import Foundation
 
 struct ASN1Parser {
-    private let data: Data
-    private var offset = 0
+    let data: Data
+    var offset = 0
     
     init(data: Data) {
         self.data = data
@@ -78,7 +78,7 @@ struct ASN1Parser {
         return (modulus: modulus, exponent: exponent)
     }
     
-    private mutating func skipSequence() throws {
+    mutating func skipSequence() throws {
         guard offset < data.count, data[offset] == 0x30 else {
             throw SSHKeyError.invalidKeyData
         }
@@ -88,7 +88,7 @@ struct ASN1Parser {
     }
     
     
-    private mutating func parseLength() throws -> Int {
+    mutating func parseLength() throws -> Int {
         guard offset < data.count else {
             throw SSHKeyError.invalidKeyData
         }
