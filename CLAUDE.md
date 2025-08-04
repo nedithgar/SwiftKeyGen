@@ -45,6 +45,12 @@ SwiftKeyGen supports key format conversion matching ssh-keygen behavior:
 - **Format detection**: Automatically detect key format
 - **Batch conversion**: Convert multiple keys at once
 
+## Certificate Defaults
+
+SwiftKeyGen matches ssh-keygen's default behavior:
+- **Default validity**: Forever (0 to max UInt64), matching ssh-keygen
+- **Validity override**: Use -V option to specify custom validity period
+
 Supported conversions:
 - OpenSSH ↔ RFC4716
 - PEM → OpenSSH

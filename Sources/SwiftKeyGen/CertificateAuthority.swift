@@ -12,7 +12,7 @@ public struct CertificateAuthority {
         keyId: String,
         principals: [String] = [],
         serial: UInt64? = nil,
-        validFrom: Date = Date(),
+        validFrom: Date? = nil,
         validTo: Date? = nil,
         certificateType: SSHCertificateType = .user,
         criticalOptions: [(SSHCertificateOption, String)] = [],
@@ -33,9 +33,18 @@ public struct CertificateAuthority {
         certifiedKey.certificate.serial = serial ?? generateSerial()
         
         // Set validity period
-        let defaultValidityDays = certificateType == .host ? 365 : 30
-        let validUntil = validTo ?? validFrom.addingTimeInterval(Double(defaultValidityDays) * 24 * 60 * 60)
-        certifiedKey.certificate.setValidity(from: validFrom, to: validUntil)
+        // If neither validFrom nor validTo is specified, use the default "forever" behavior
+        if let validFrom = validFrom, let validTo = validTo {
+            certifiedKey.certificate.setValidity(from: validFrom, to: validTo)
+        } else if let validFrom = validFrom {
+            // If only validFrom is specified, set it but keep validBefore as UInt64.max
+            certifiedKey.certificate.validAfter = UInt64(validFrom.timeIntervalSince1970)
+            // validBefore remains UInt64.max from init
+        } else if let validTo = validTo {
+            // If only validTo is specified, keep validAfter as 0 and set validBefore
+            certifiedKey.certificate.validBefore = UInt64(validTo.timeIntervalSince1970)
+        }
+        // Otherwise, both remain at their defaults (0 and UInt64.max = "forever")
         
         // Add critical options
         for (option, value) in criticalOptions {

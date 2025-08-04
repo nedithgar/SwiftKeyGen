@@ -60,6 +60,27 @@ struct CertificateTests {
         #expect(cert.certificate.principals.contains("*.example.com"))
     }
     
+    @Test("Certificate default validity is forever")
+    func testCertificateDefaultValidityForever() throws {
+        let caKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        let userKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        
+        // Create certificate without specifying validity dates
+        let cert = try CertificateAuthority.signCertificate(
+            publicKey: userKey,
+            caKey: caKey,
+            keyId: "test-user",
+            principals: ["test"],
+            certificateType: .user
+        )
+        
+        // Verify default validity is "forever"
+        #expect(cert.certificate.validAfter == 0)
+        #expect(cert.certificate.validBefore == UInt64.max)
+        #expect(cert.certificate.formatValidity() == "forever")
+        #expect(cert.certificate.isValid())
+    }
+    
     @Test("Certificate validity period")
     func testCertificateValidity() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
