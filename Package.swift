@@ -20,7 +20,7 @@ let package = Package(
             targets: ["SwiftKeyGen"]),
         .executable(
             name: "swiftkeygen",
-            targets: ["swiftkeygen"]),
+            targets: ["SwiftKeyGenCLI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
@@ -41,11 +41,11 @@ let package = Package(
             dependencies: ["SwiftKeyGen"]
         ),
         .executableTarget(
-            name: "swiftkeygen",
+            name: "SwiftKeyGenCLI",
             dependencies: ["SwiftKeyGen"]
         ),
         .executableTarget(
-            name: "HMACVerify",
+            name: "HMACVerifyTool",
             dependencies: ["SwiftKeyGen"]
         ),
     ]
