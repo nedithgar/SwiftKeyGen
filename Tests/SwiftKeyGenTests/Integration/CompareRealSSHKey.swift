@@ -50,7 +50,7 @@ struct CompareRealSSHKey {
             
             if let decodedData = Data(base64Encoded: base64String) {
                 print("Decoded length: \(decodedData.count)")
-                print("First 16 bytes: \(decodedData.prefix(16).hexString)")
+                print("First 16 bytes: \(decodedData.prefix(16).map { String(format: "%02x", $0) }.joined())")
             }
         }
     }
