@@ -21,6 +21,14 @@ Spans & Unsafe Access:
 - Read-only contiguous view: `array.span`
 - Mutable contiguous view: `array.mutableSpan` (requires `var` binding; returns a `MutableSpan<Element>`)
 - Use spans for interoperability and bulk operations without copying.
+ - Unsafe buffer read access (no copy): `array.span.withUnsafeBufferPointer { ptr in /* ptr.baseAddress / ptr.count */ }`
+ - Unsafe buffer write access: `var a = array; a.mutableSpan.withUnsafeMutableBufferPointer { ptr in /* mutate ptr */ }`
+ - Direct base address (only inside such closures): `ptr.baseAddress!.advanced(by: i)` (ensure index validity first)
+
+Unsafe Pointer Best Practices:
+- Keep pointer lifetimes inside the closure; never escape `baseAddress`.
+- Prefer bounds-checked indexing unless in a vetted hot path.
+- Audit every use in cryptographic code for constant-time requirements (avoid branching on secret-dependent indices).
 
 Mutation:
 - Per-element write via subscript set: `array[i] = value`
