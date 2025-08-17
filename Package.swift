@@ -6,12 +6,12 @@ import PackageDescription
 let package = Package(
     name: "SwiftKeyGen",
     platforms: [
-        .macOS(.v13),
-        .iOS(.v16),
-        .tvOS(.v16),
-        .watchOS(.v9),
-        .macCatalyst(.v16),
-        .visionOS(.v1)
+        .macOS(.v26),
+        .iOS(.v26),
+        .tvOS(.v26),
+        .watchOS(.v26),
+        .macCatalyst(.v26),
+        .visionOS(.v26)
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
