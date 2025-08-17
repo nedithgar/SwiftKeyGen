@@ -1,0 +1,27 @@
+- [ ] PREREQUISITE: Thoroughly read every file in `Docs/InlineArray/` (`inlinearray.md`, `init(_:)`, all `init(...)` variants, `subscript`, indexing (`index`, `startIndex`, `endIndex`, `index(after:)`, `index(before:)`), `indices`, `count`, `isEmpty`, `swapAt`, `span`, `mutableSpan`) and extract a concise capability/constraint summary (supported initializers, mutability rules, indexing guarantees, performance notes). Create `Docs/InlineArray/summary.md` capturing this.
+- [ ] Cross-reference each planned replacement with the summary to ensure no dynamic operations (e.g. resizing, appends) are required; if dynamic behavior is present, mark that site as NOT suitable and add rationale inline in this TODO (append "(skipped: needs dynamic size)").
+- [ ] Add an InlineArray usage cheat-sheet (init patterns, iteration patterns, unsafe buffer access) at the top of `summary.md` to minimize future accidental misuse; link this cheat-sheet in PR description.
+- [ ] Inventory all fixed-size small buffers (16, 24, 32, 64 bytes) across crypto code (AES*, ChaCha20Poly1305, TripleDES, BCrypt, PEM, SSHEncoding, CertificateAuthority) and classify by lifetime (stack-local vs stored property) and mutability.
+- [ ] Replace transient stack-local zeroed byte arrays of size <= 64 with `InlineArray<UInt8, N>` where N is compile-time constant (e.g. ChaCha20Poly1305: mp (16), saltBytes (OpenSSHPrivateKey) (16?), nonce (32), xored (6), sboxOutput (4)).
+- [ ] Evaluate converting AES state `[[UInt8]] 4x4` matrices into a single `InlineArray<UInt8,16>` plus helper indexers for cache-friendly iteration and fewer heap operations.
+- [ ] Assess feasibility of representing AES S-box (256 bytes) with `InlineArray<UInt8,256>` for improved locality (ensure large InlineArray doesn't bloat binary vs static [UInt8]; measure code size impact).
+- [ ] Consider representing AES round key schedule segments (w array of UInt32) with `InlineArray<UInt32, 4 * (Nr+1)>` only when key sizes are known at compile time (may not due to runtime key length; defer if dynamic).
+- [ ] Prototype replacing ChaCha20Poly1305 internal 16-word state `[UInt32](repeating:0,count:16)` with `InlineArray<UInt32,16>` and benchmark quarter-round performance before/after.
+- [ ] Review RSA DER encoding paths where small temporary `[UInt8]` buffers accumulate (e.g. variable length but often <= 32). Only convert those with truly fixed maximum known at compile time.
+- [ ] Examine `BubbleBabble`, `RandomArt`, and fingerprint generation for fixed-size visual grids or hash digests (SHA256=32, MD5=16) to adopt `InlineArray` for digest staging buffers.
+- [ ] In `PEMEncryption` and `BCrypt`, replace digest temporary arrays (`digest`, `hash`) with `InlineArray` wrappers sized to `CC_MD5_DIGEST_LENGTH`, `CC_SHA512_DIGEST_LENGTH` (require bridging constants to generic parameter; create typealiases `typealias MD5Digest = InlineArray<UInt8,16>` etc.).
+- [ ] For TripleDES: convert 6-byte `xored` and 4-byte `sboxOutput` temporaries to `InlineArray` and evaluate if repeated creation cost reduces (micro-benchmark feistel rounds).
+- [ ] Evaluate converting subkeys matrix `[[UInt8]]` (16 rounds * 6 bytes?) to `InlineArray<UInt8, 16*6>` with accessor to lower pointer chasing; verify readability.
+- [ ] Identify public API surfaces returning `[UInt8]` where replacing with `InlineArray` would be source-breaking; restrict changes to internal-only scopes first.
+- [ ] Add internal helper extensions for ergonomic conversion: `InlineArray.asArray()`, `InlineArray.withUnsafeBufferPointer` bridging to existing code to minimize invasive edits.
+- [ ] Create benchmarks (if not present) measuring encryption/decryption throughput (AES-CTR/GCM, ChaCha20Poly1305, TripleDES) before changes; store baseline numbers.
+- [ ] Add micro-bench for AES single-block encrypt, ChaCha20 quarter-round loop, bcrypt blowfish expand to isolate any InlineArray impact.
+- [ ] Confirm Swift 6.2 availability / conditional compilation (`#if swift(>=6.2)`) to maintain backward compatibility; fallback to existing `[UInt8]` on earlier toolchains.
+- [ ] Draft migration guidelines in `Docs/InlineArray/migration.md` (new) describing patterns: replacing nested 2D byte arrays with flattened InlineArray, digest buffers, small temporaries.
+- [ ] Assess memory alignment & ARC overhead differences (expect none for InlineArray vs Array) and ensure no assumptions about `Array` capacity APIs remain.
+- [ ] Audit uses of methods relying on dynamic count (e.g., `append`, `removeLast`)—disallowed for InlineArray; plan refactors to fixed indexing.
+- [ ] Ensure zeroization/security cleanup semantics: provide `overwrite(with:)` helper for InlineArray to mirror current buffer scrubbing patterns if any.
+- [ ] Run test suite after each conversion cluster (cipher-specific, digest-specific) to localize regressions.
+- [ ] Document performance deltas after each phase in CHANGELOG (add section) with environment details.
+- [ ] Final pass to evaluate readability trade-offs; revert marginal wins (<1% perf) to keep code clarity.
+- [ ] Prepare PR checklist referencing each bullet and mark done with measured improvements or rationale for skipping.
