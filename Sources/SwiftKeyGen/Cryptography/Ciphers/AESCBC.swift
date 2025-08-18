@@ -103,7 +103,8 @@ struct AESCBC {
 }
 
 /// AES block cipher engine
-private struct AESEngine {
+/// Now internal so it can be reused by AESCTR / other modes to avoid code duplication.
+struct AESEngine {
     private typealias AESExpandedKey = InlineArray<60, UInt32> // Maximum words for AES-256 (4*(14+1))
     private let expandedKey: AESExpandedKey
     private let expandedWordCount: Int
@@ -122,15 +123,12 @@ private struct AESEngine {
         self.expandedWordCount = count
     }
     
-    /// Encrypt a single 16-byte block (flattened state)
+    /// Encrypt a single 16-byte block (input as Data)
     func encryptBlock(_ input: Data) throws -> Data {
         guard input.count == 16 else { throw SSHKeyError.invalidKeyData }
         var state = AESState(repeating: 0)
-        // Load (column-major)
         for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
-        // Initial round key
-    Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
-        // Main rounds
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
         if rounds > 1 {
             for round in 1..<rounds {
                 Self.subBytes(&state)
@@ -139,12 +137,32 @@ private struct AESEngine {
                 Self.addRoundKey(&state, expandedKey: expandedKey, round: round)
             }
         }
-        // Final round
         Self.subBytes(&state)
         Self.shiftRows(&state)
-    Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
-        // Store
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
         var out = Data(count: 16)
+        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
+        return out
+    }
+
+    /// Encrypt a single 16-byte block (InlineArray variant to avoid interim Data allocations)
+    func encryptBlock(_ input: InlineArray<16, UInt8>) throws -> InlineArray<16, UInt8> {
+        var state = AESState(repeating: 0)
+        // Load (column-major) from flat 16-byte block laid out identical to Data version
+        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
+        if rounds > 1 {
+            for round in 1..<rounds {
+                Self.subBytes(&state)
+                Self.shiftRows(&state)
+                Self.mixColumns(&state)
+                Self.addRoundKey(&state, expandedKey: expandedKey, round: round)
+            }
+        }
+        Self.subBytes(&state)
+        Self.shiftRows(&state)
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
+        var out = InlineArray<16, UInt8>(repeating: 0)
         for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
         return out
     }
