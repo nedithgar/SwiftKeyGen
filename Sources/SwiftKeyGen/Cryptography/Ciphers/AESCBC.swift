@@ -106,6 +106,8 @@ struct AESCBC {
 private struct AESEngine {
     private let expandedKey: [UInt32]
     private let rounds: Int
+    private typealias AESState = InlineArray<16, UInt8>
+    @inline(__always) private static func idx(_ row: Int, _ col: Int) -> Int { col &* 4 &+ row }
     
     init(key: Data) throws {
         guard [16, 24, 32].contains(key.count) else {
@@ -116,56 +118,56 @@ private struct AESEngine {
         self.expandedKey = AESEngine.keyExpansion(key: key)
     }
     
-    /// Encrypt a single 16-byte block
+    /// Encrypt a single 16-byte block (flattened state)
     func encryptBlock(_ input: Data) throws -> Data {
-        guard input.count == 16 else {
-            throw SSHKeyError.invalidKeyData
+        guard input.count == 16 else { throw SSHKeyError.invalidKeyData }
+        var state = AESState(repeating: 0)
+        // Load (column-major)
+        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
+        // Initial round key
+        Self.addRoundKey(&state, roundKey: expandedKey, round: 0)
+        // Main rounds
+        if rounds > 1 {
+            for round in 1..<rounds {
+                Self.subBytes(&state)
+                Self.shiftRows(&state)
+                Self.mixColumns(&state)
+                Self.addRoundKey(&state, roundKey: expandedKey, round: round)
+            }
         }
-        
-        // We need to reimplement the AES block encryption here
-        // as AESCTR's methods are private
-        return AESEngine.aesEncryptBlock(input, expandedKey: expandedKey, rounds: rounds)
+        // Final round
+        Self.subBytes(&state)
+        Self.shiftRows(&state)
+        Self.addRoundKey(&state, roundKey: expandedKey, round: rounds)
+        // Store
+        var out = Data(count: 16)
+        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
+        return out
     }
-    
-    /// Decrypt a single 16-byte block
+
+    /// Decrypt a single 16-byte block (flattened state)
     func decryptBlock(_ input: Data) throws -> Data {
-        guard input.count == 16 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Initialize state from input
-        var state = [[UInt8]](repeating: [UInt8](repeating: 0, count: 4), count: 4)
-        for i in 0..<4 {
-            for j in 0..<4 {
-                state[j][i] = input[i * 4 + j]
+        guard input.count == 16 else { throw SSHKeyError.invalidKeyData }
+        var state = AESState(repeating: 0)
+        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
+        // Initial round key (last)
+        Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: rounds)
+        // Main reverse rounds
+        if rounds > 1 {
+            for round in (1..<rounds).reversed() {
+                Self.invShiftRows(&state)
+                Self.invSubBytes(&state)
+                Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: round)
+                Self.invMixColumns(&state)
             }
         }
-        
-        // Initial round key addition
-        AESEngine.addRoundKey(&state, roundKey: expandedKey, round: rounds)
-        
-        // Main rounds in reverse
-        for round in (1..<rounds).reversed() {
-            AESEngine.invShiftRows(&state)
-            AESEngine.invSubBytes(&state)
-            AESEngine.addRoundKey(&state, roundKey: expandedKey, round: round)
-            AESEngine.invMixColumns(&state)
-        }
-        
-        // Final round (no InvMixColumns)
-        AESEngine.invShiftRows(&state)
-        AESEngine.invSubBytes(&state)
-        AESEngine.addRoundKey(&state, roundKey: expandedKey, round: 0)
-        
-        // Convert state to output
-        var output = Data(count: 16)
-        for i in 0..<4 {
-            for j in 0..<4 {
-                output[i * 4 + j] = state[j][i]
-            }
-        }
-        
-        return output
+        // Final round
+        Self.invShiftRows(&state)
+        Self.invSubBytes(&state)
+        Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: 0)
+        var out = Data(count: 16)
+        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
+        return out
     }
     
     // MARK: - Helper Functions
@@ -212,14 +214,20 @@ private struct AESEngine {
         return w
     }
     
-    private static func addRoundKey(_ state: inout [[UInt8]], roundKey: [UInt32], round: Int) {
+    // MARK: - Round Operations (Flattened + Span)
+    private static func addRoundKey(_ state: inout AESState, roundKey: [UInt32], round: Int) {
+        var span = state.mutableSpan
         for c in 0..<4 {
             let keyWord = roundKey[round * 4 + c]
-            state[0][c] ^= UInt8((keyWord >> 24) & 0xff)
-            state[1][c] ^= UInt8((keyWord >> 16) & 0xff)
-            state[2][c] ^= UInt8((keyWord >> 8) & 0xff)
-            state[3][c] ^= UInt8(keyWord & 0xff)
+            span[idx(0,c)] ^= UInt8((keyWord >> 24) & 0xff)
+            span[idx(1,c)] ^= UInt8((keyWord >> 16) & 0xff)
+            span[idx(2,c)] ^= UInt8((keyWord >> 8) & 0xff)
+            span[idx(3,c)] ^= UInt8(keyWord & 0xff)
         }
+    }
+    // Decrypt variant: identical XOR, kept separate for clarity with naming parity
+    private static func addRoundKeyDecrypt(_ state: inout AESState, roundKey: [UInt32], round: Int) {
+        addRoundKey(&state, roundKey: roundKey, round: round)
     }
     
     private static func rotWord(_ word: UInt32) -> UInt32 {
@@ -263,91 +271,32 @@ private struct AESEngine {
         0xab000000, 0x4d000000, 0x9a000000
     ]
     
-    /// AES block encryption
-    private static func aesEncryptBlock(_ input: Data, expandedKey: [UInt32], rounds: Int) -> Data {
-        // Initialize state from input
-        var state = [[UInt8]](repeating: [UInt8](repeating: 0, count: 4), count: 4)
-        for i in 0..<4 {
-            for j in 0..<4 {
-                state[j][i] = input[i * 4 + j]
-            }
-        }
-        
-        // Initial round key addition
-        addRoundKey(&state, roundKey: expandedKey, round: 0)
-        
-        // Main rounds
-        for round in 1..<rounds {
-            subBytes(&state)
-            shiftRows(&state)
-            mixColumns(&state)
-            addRoundKey(&state, roundKey: expandedKey, round: round)
-        }
-        
-        // Final round (no MixColumns)
-        subBytes(&state)
-        shiftRows(&state)
-        addRoundKey(&state, roundKey: expandedKey, round: rounds)
-        
-        // Convert state to output
-        var output = Data(count: 16)
-        for i in 0..<4 {
-            for j in 0..<4 {
-                output[i * 4 + j] = state[j][i]
-            }
-        }
-        
-        return output
+    // SubBytes
+    private static func subBytes(_ state: inout AESState) {
+        var span = state.mutableSpan
+        for i in span.indices { span[i] = sbox[Int(span[i])] }
     }
-    
-    /// SubBytes transformation
-    private static func subBytes(_ state: inout [[UInt8]]) {
-        for i in 0..<4 {
-            for j in 0..<4 {
-                state[i][j] = sbox[Int(state[i][j])]
-            }
-        }
+    // ShiftRows (row-based rotates)
+    private static func shiftRows(_ state: inout AESState) {
+        // Row 1 rotate left 1
+        let r1c0 = state[idx(1,0)], r1c1 = state[idx(1,1)], r1c2 = state[idx(1,2)], r1c3 = state[idx(1,3)]
+        state[idx(1,0)] = r1c1; state[idx(1,1)] = r1c2; state[idx(1,2)] = r1c3; state[idx(1,3)] = r1c0
+        // Row 2 rotate left 2
+        let r2c0 = state[idx(2,0)], r2c1 = state[idx(2,1)], r2c2 = state[idx(2,2)], r2c3 = state[idx(2,3)]
+        state[idx(2,0)] = r2c2; state[idx(2,1)] = r2c3; state[idx(2,2)] = r2c0; state[idx(2,3)] = r2c1
+        // Row 3 rotate left 3 (right 1)
+        let r3c0 = state[idx(3,0)], r3c1 = state[idx(3,1)], r3c2 = state[idx(3,2)], r3c3 = state[idx(3,3)]
+        state[idx(3,0)] = r3c3; state[idx(3,1)] = r3c0; state[idx(3,2)] = r3c1; state[idx(3,3)] = r3c2
     }
-    
-    /// ShiftRows transformation
-    private static func shiftRows(_ state: inout [[UInt8]]) {
-        // Row 0 - no shift
-        
-        // Row 1 - shift left by 1
-        let temp1 = state[1][0]
-        state[1][0] = state[1][1]
-        state[1][1] = state[1][2]
-        state[1][2] = state[1][3]
-        state[1][3] = temp1
-        
-        // Row 2 - shift left by 2
-        let temp20 = state[2][0]
-        let temp21 = state[2][1]
-        state[2][0] = state[2][2]
-        state[2][1] = state[2][3]
-        state[2][2] = temp20
-        state[2][3] = temp21
-        
-        // Row 3 - shift left by 3 (or right by 1)
-        let temp3 = state[3][3]
-        state[3][3] = state[3][2]
-        state[3][2] = state[3][1]
-        state[3][1] = state[3][0]
-        state[3][0] = temp3
-    }
-    
-    /// MixColumns transformation
-    private static func mixColumns(_ state: inout [[UInt8]]) {
+    // MixColumns
+    private static func mixColumns(_ state: inout AESState) {
         for c in 0..<4 {
-            let a0 = state[0][c]
-            let a1 = state[1][c]
-            let a2 = state[2][c]
-            let a3 = state[3][c]
-            
-            state[0][c] = gfMul(0x02, a0) ^ gfMul(0x03, a1) ^ a2 ^ a3
-            state[1][c] = a0 ^ gfMul(0x02, a1) ^ gfMul(0x03, a2) ^ a3
-            state[2][c] = a0 ^ a1 ^ gfMul(0x02, a2) ^ gfMul(0x03, a3)
-            state[3][c] = gfMul(0x03, a0) ^ a1 ^ a2 ^ gfMul(0x02, a3)
+            let i0 = idx(0,c), i1 = idx(1,c), i2 = idx(2,c), i3 = idx(3,c)
+            let a0 = state[i0], a1 = state[i1], a2 = state[i2], a3 = state[i3]
+            state[i0] = gfMul(0x02, a0) ^ gfMul(0x03, a1) ^ a2 ^ a3
+            state[i1] = a0 ^ gfMul(0x02, a1) ^ gfMul(0x03, a2) ^ a3
+            state[i2] = a0 ^ a1 ^ gfMul(0x02, a2) ^ gfMul(0x03, a3)
+            state[i3] = gfMul(0x03, a0) ^ a1 ^ a2 ^ gfMul(0x02, a3)
         }
     }
     
@@ -373,54 +322,30 @@ private struct AESEngine {
         0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d
     ]
     
-    /// InvSubBytes transformation
-    private static func invSubBytes(_ state: inout [[UInt8]]) {
-        for i in 0..<4 {
-            for j in 0..<4 {
-                state[i][j] = invSbox[Int(state[i][j])]
-            }
-        }
+    // Inverse operations
+    private static func invSubBytes(_ state: inout AESState) {
+        var span = state.mutableSpan
+        for i in span.indices { span[i] = invSbox[Int(span[i])] }
     }
-    
-    /// InvShiftRows transformation
-    private static func invShiftRows(_ state: inout [[UInt8]]) {
-        // Row 0 - no shift
-        
-        // Row 1 - shift right by 1
-        let temp1 = state[1][3]
-        state[1][3] = state[1][2]
-        state[1][2] = state[1][1]
-        state[1][1] = state[1][0]
-        state[1][0] = temp1
-        
-        // Row 2 - shift right by 2
-        let temp20 = state[2][0]
-        let temp21 = state[2][1]
-        state[2][0] = state[2][2]
-        state[2][1] = state[2][3]
-        state[2][2] = temp20
-        state[2][3] = temp21
-        
-        // Row 3 - shift right by 3 (or left by 1)
-        let temp3 = state[3][0]
-        state[3][0] = state[3][1]
-        state[3][1] = state[3][2]
-        state[3][2] = state[3][3]
-        state[3][3] = temp3
+    private static func invShiftRows(_ state: inout AESState) {
+        // Row 1 rotate right 1
+        let r1c0 = state[idx(1,0)], r1c1 = state[idx(1,1)], r1c2 = state[idx(1,2)], r1c3 = state[idx(1,3)]
+        state[idx(1,0)] = r1c3; state[idx(1,1)] = r1c0; state[idx(1,2)] = r1c1; state[idx(1,3)] = r1c2
+        // Row 2 rotate right 2
+        let r2c0 = state[idx(2,0)], r2c1 = state[idx(2,1)], r2c2 = state[idx(2,2)], r2c3 = state[idx(2,3)]
+        state[idx(2,0)] = r2c2; state[idx(2,1)] = r2c3; state[idx(2,2)] = r2c0; state[idx(2,3)] = r2c1
+        // Row 3 rotate right 3 (left 1)
+        let r3c0 = state[idx(3,0)], r3c1 = state[idx(3,1)], r3c2 = state[idx(3,2)], r3c3 = state[idx(3,3)]
+        state[idx(3,0)] = r3c1; state[idx(3,1)] = r3c2; state[idx(3,2)] = r3c3; state[idx(3,3)] = r3c0
     }
-    
-    /// InvMixColumns transformation
-    private static func invMixColumns(_ state: inout [[UInt8]]) {
+    private static func invMixColumns(_ state: inout AESState) {
         for c in 0..<4 {
-            let a0 = state[0][c]
-            let a1 = state[1][c]
-            let a2 = state[2][c]
-            let a3 = state[3][c]
-            
-            state[0][c] = gfMul(0x0e, a0) ^ gfMul(0x0b, a1) ^ gfMul(0x0d, a2) ^ gfMul(0x09, a3)
-            state[1][c] = gfMul(0x09, a0) ^ gfMul(0x0e, a1) ^ gfMul(0x0b, a2) ^ gfMul(0x0d, a3)
-            state[2][c] = gfMul(0x0d, a0) ^ gfMul(0x09, a1) ^ gfMul(0x0e, a2) ^ gfMul(0x0b, a3)
-            state[3][c] = gfMul(0x0b, a0) ^ gfMul(0x0d, a1) ^ gfMul(0x09, a2) ^ gfMul(0x0e, a3)
+            let i0 = idx(0,c), i1 = idx(1,c), i2 = idx(2,c), i3 = idx(3,c)
+            let a0 = state[i0], a1 = state[i1], a2 = state[i2], a3 = state[i3]
+            state[i0] = gfMul(0x0e, a0) ^ gfMul(0x0b, a1) ^ gfMul(0x0d, a2) ^ gfMul(0x09, a3)
+            state[i1] = gfMul(0x09, a0) ^ gfMul(0x0e, a1) ^ gfMul(0x0b, a2) ^ gfMul(0x0d, a3)
+            state[i2] = gfMul(0x0d, a0) ^ gfMul(0x09, a1) ^ gfMul(0x0e, a2) ^ gfMul(0x0b, a3)
+            state[i3] = gfMul(0x0b, a0) ^ gfMul(0x0d, a1) ^ gfMul(0x09, a2) ^ gfMul(0x0e, a3)
         }
     }
     
