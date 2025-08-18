@@ -104,7 +104,9 @@ struct AESCBC {
 
 /// AES block cipher engine
 private struct AESEngine {
-    private let expandedKey: [UInt32]
+    private typealias AESExpandedKey = InlineArray<60, UInt32> // Maximum words for AES-256 (4*(14+1))
+    private let expandedKey: AESExpandedKey
+    private let expandedWordCount: Int
     private let rounds: Int
     private typealias AESState = InlineArray<16, UInt8>
     @inline(__always) private static func idx(_ row: Int, _ col: Int) -> Int { col &* 4 &+ row }
@@ -115,7 +117,9 @@ private struct AESEngine {
         }
         
         self.rounds = AESEngine.numberOfRounds(keySize: key.count)
-        self.expandedKey = AESEngine.keyExpansion(key: key)
+        let (ek, count) = AESEngine.keyExpansion(key: key, rounds: self.rounds)
+        self.expandedKey = ek
+        self.expandedWordCount = count
     }
     
     /// Encrypt a single 16-byte block (flattened state)
@@ -125,20 +129,20 @@ private struct AESEngine {
         // Load (column-major)
         for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
         // Initial round key
-        Self.addRoundKey(&state, roundKey: expandedKey, round: 0)
+    Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
         // Main rounds
         if rounds > 1 {
             for round in 1..<rounds {
                 Self.subBytes(&state)
                 Self.shiftRows(&state)
                 Self.mixColumns(&state)
-                Self.addRoundKey(&state, roundKey: expandedKey, round: round)
+                Self.addRoundKey(&state, expandedKey: expandedKey, round: round)
             }
         }
         // Final round
         Self.subBytes(&state)
         Self.shiftRows(&state)
-        Self.addRoundKey(&state, roundKey: expandedKey, round: rounds)
+    Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
         // Store
         var out = Data(count: 16)
         for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
@@ -151,20 +155,20 @@ private struct AESEngine {
         var state = AESState(repeating: 0)
         for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
         // Initial round key (last)
-        Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: rounds)
+    Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: rounds)
         // Main reverse rounds
         if rounds > 1 {
             for round in (1..<rounds).reversed() {
                 Self.invShiftRows(&state)
                 Self.invSubBytes(&state)
-                Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: round)
+                Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: round)
                 Self.invMixColumns(&state)
             }
         }
         // Final round
         Self.invShiftRows(&state)
         Self.invSubBytes(&state)
-        Self.addRoundKeyDecrypt(&state, roundKey: expandedKey, round: 0)
+    Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: 0)
         var out = Data(count: 16)
         for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
         return out
@@ -181,44 +185,38 @@ private struct AESEngine {
         }
     }
     
-    private static func keyExpansion(key: Data) -> [UInt32] {
+    private static func keyExpansion(key: Data, rounds: Int) -> (AESExpandedKey, Int) {
         let nk = key.count / 4
-        let nr = numberOfRounds(keySize: key.count)
         let nb = 4
-        var w = [UInt32](repeating: 0, count: nb * (nr + 1))
-        
-        // Copy key into first part of expanded key
+        let totalWords = nb * (rounds + 1) // 44, 52, 60
+        var w = AESExpandedKey(repeating: 0)
+        // Copy key words
         for i in 0..<nk {
             let offset = i * 4
-            w[i] = UInt32(key[offset]) << 24 |
-                   UInt32(key[offset + 1]) << 16 |
-                   UInt32(key[offset + 2]) << 8 |
-                   UInt32(key[offset + 3])
+            let word = UInt32(key[offset]) << 24 |
+                       UInt32(key[offset + 1]) << 16 |
+                       UInt32(key[offset + 2]) << 8 |
+                       UInt32(key[offset + 3])
+            w[i] = word
         }
-        
-        // Expand the key
-        for i in nk..<(nb * (nr + 1)) {
+        // Expand
+        for i in nk..<totalWords {
             var temp = w[i - 1]
-            
             if i % nk == 0 {
-                // RotWord and SubWord
-                temp = subWord(rotWord(temp)) ^ rcon[(i / nk) - 1]
+                temp = subWord(rotWord(temp)) ^ rconAt((i / nk) - 1)
             } else if nk > 6 && i % nk == 4 {
-                // SubWord for AES-256
                 temp = subWord(temp)
             }
-            
             w[i] = w[i - nk] ^ temp
         }
-        
-        return w
+        return (w, totalWords)
     }
     
     // MARK: - Round Operations (Flattened + Span)
-    private static func addRoundKey(_ state: inout AESState, roundKey: [UInt32], round: Int) {
+    private static func addRoundKey(_ state: inout AESState, expandedKey: AESExpandedKey, round: Int) {
         var span = state.mutableSpan
         for c in 0..<4 {
-            let keyWord = roundKey[round * 4 + c]
+            let keyWord = expandedKey[round * 4 + c]
             span[idx(0,c)] ^= UInt8((keyWord >> 24) & 0xff)
             span[idx(1,c)] ^= UInt8((keyWord >> 16) & 0xff)
             span[idx(2,c)] ^= UInt8((keyWord >> 8) & 0xff)
@@ -226,8 +224,8 @@ private struct AESEngine {
         }
     }
     // Decrypt variant: identical XOR, kept separate for clarity with naming parity
-    private static func addRoundKeyDecrypt(_ state: inout AESState, roundKey: [UInt32], round: Int) {
-        addRoundKey(&state, roundKey: roundKey, round: round)
+    private static func addRoundKeyDecrypt(_ state: inout AESState, expandedKey: AESExpandedKey, round: Int) {
+        addRoundKey(&state, expandedKey: expandedKey, round: round)
     }
     
     private static func rotWord(_ word: UInt32) -> UInt32 {
@@ -236,15 +234,15 @@ private struct AESEngine {
     
     private static func subWord(_ word: UInt32) -> UInt32 {
         var result: UInt32 = 0
-        result |= UInt32(sbox[Int((word >> 24) & 0xff)]) << 24
-        result |= UInt32(sbox[Int((word >> 16) & 0xff)]) << 16
-        result |= UInt32(sbox[Int((word >> 8) & 0xff)]) << 8
-        result |= UInt32(sbox[Int(word & 0xff)])
+        result |= UInt32(sboxAt(Int((word >> 24) & 0xff))) << 24
+        result |= UInt32(sboxAt(Int((word >> 16) & 0xff))) << 16
+        result |= UInt32(sboxAt(Int((word >> 8) & 0xff))) << 8
+        result |= UInt32(sboxAt(Int(word & 0xff)))
         return result
     }
     
     /// S-box from AESCTR
-    private static let sbox: [UInt8] = [
+    private static let sbox: InlineArray<256, UInt8> = [
         0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
         0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
         0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
@@ -264,7 +262,7 @@ private struct AESEngine {
     ]
     
     /// Round constants
-    private static let rcon: [UInt32] = [
+    private static let rcon: InlineArray<15, UInt32> = [
         0x01000000, 0x02000000, 0x04000000, 0x08000000,
         0x10000000, 0x20000000, 0x40000000, 0x80000000,
         0x1b000000, 0x36000000, 0x6c000000, 0xd8000000,
@@ -274,7 +272,7 @@ private struct AESEngine {
     // SubBytes
     private static func subBytes(_ state: inout AESState) {
         var span = state.mutableSpan
-        for i in span.indices { span[i] = sbox[Int(span[i])] }
+    for i in span.indices { span[i] = sboxAt(Int(span[i])) }
     }
     // ShiftRows (row-based rotates)
     private static func shiftRows(_ state: inout AESState) {
@@ -303,7 +301,7 @@ private struct AESEngine {
     // MARK: - Inverse AES Operations
     
     /// Inverse S-box for InvSubBytes transformation
-    private static let invSbox: [UInt8] = [
+    private static let invSbox: InlineArray<256, UInt8> = [
         0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
         0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
         0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
@@ -325,7 +323,7 @@ private struct AESEngine {
     // Inverse operations
     private static func invSubBytes(_ state: inout AESState) {
         var span = state.mutableSpan
-        for i in span.indices { span[i] = invSbox[Int(span[i])] }
+    for i in span.indices { span[i] = invSboxAt(Int(span[i])) }
     }
     private static func invShiftRows(_ state: inout AESState) {
         // Row 1 rotate right 1
@@ -370,5 +368,10 @@ private struct AESEngine {
         
         return p
     }
+
+    // Lookup helpers for InlineArray tables
+    @inline(__always) private static func sboxAt(_ i: Int) -> UInt8 { sbox[i] }
+    @inline(__always) private static func invSboxAt(_ i: Int) -> UInt8 { invSbox[i] }
+    @inline(__always) private static func rconAt(_ i: Int) -> UInt32 { rcon[i] }
 }
 
