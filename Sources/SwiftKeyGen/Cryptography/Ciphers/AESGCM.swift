@@ -1,5 +1,6 @@
 import Foundation
-
+// MARK: Disabled
+// TODO: Fix this
 /// Simple AES wrapper for GCM mode
 private struct AES {
     private let expandedKey: [UInt32]
