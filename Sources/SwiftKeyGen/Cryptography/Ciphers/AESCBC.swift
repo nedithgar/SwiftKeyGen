@@ -1,5 +1,39 @@
 import Foundation
 
+// MARK: - AES CBC (InlineArray optimized)
+// Migration note:
+// Uses Swift 6.2 InlineArray for per-block working buffers (16 bytes) to avoid
+// allocating temporary Arrays/Data repeatedly. Further optimization (e.g. using
+// InlineArray for the 4x4 AES state) can be explored later.
+
+private struct AESBlock {
+    private var storage: InlineArray<16, UInt8>
+    init(zero: Void = ()) { self.storage = InlineArray(repeating: 0) }
+    init(iv data: Data) {
+        precondition(data.count == 16, "IV must be 16 bytes")
+        var tmp = InlineArray<16, UInt8>(repeating: 0)
+        for i in 0..<16 { tmp[i] = data[i] }
+        self.storage = tmp
+    }
+    init(data: Data, offset: Int) {
+        precondition(offset + 16 <= data.count, "Out of range block load")
+        var tmp = InlineArray<16, UInt8>(repeating: 0)
+        for i in 0..<16 { tmp[i] = data[offset + i] }
+        self.storage = tmp
+    }
+    init(raw: InlineArray<16, UInt8>) { self.storage = raw }
+    func toData() -> Data {
+        var d = Data(count: 16)
+        for i in 0..<16 { d[i] = storage[i] }
+        return d
+    }
+    static func ^ (lhs: AESBlock, rhs: AESBlock) -> AESBlock {
+        var out = InlineArray<16, UInt8>(repeating: 0)
+        for i in 0..<16 { out[i] = lhs.storage[i] ^ rhs.storage[i] }
+        return AESBlock(raw: out)
+    }
+}
+
 /// AES-CBC mode implementation for OpenSSH compatibility
 struct AESCBC {
     
@@ -22,34 +56,16 @@ struct AESCBC {
         // Get AES instance
         let aes = try AESEngine(key: key)
         
-        var result = Data()
-        var previousBlock = Array(iv)  // Convert to array for easier access
-        
-        // Process each block
+        // Preallocate result buffer
+        var result = Data(count: data.count)
+        var previous = AESBlock(iv: iv)
         for offset in stride(from: 0, to: data.count, by: 16) {
-            // Get plaintext block as array
-            let endOffset = min(offset + 16, data.count)
-            let plaintextBlock = Array(data[offset..<endOffset])
-            
-            // Ensure we have exactly 16 bytes
-            guard plaintextBlock.count == 16 else {
-                throw SSHKeyError.invalidKeyData
-            }
-            
-            // XOR with previous ciphertext (or IV for first block)
-            var xorBlock = Data(count: 16)
-            for i in 0..<16 {
-                xorBlock[i] = plaintextBlock[i] ^ previousBlock[i]
-            }
-            
-            // Encrypt the XORed block
-            let ciphertextBlock = try aes.encryptBlock(xorBlock)
-            result.append(ciphertextBlock)
-            
-            // Update previous block
-            previousBlock = Array(ciphertextBlock)
+            let plainBlock = AESBlock(data: data, offset: offset)
+            let xored = plainBlock ^ previous
+            let cipherData = try aes.encryptBlock(xored.toData())
+            result.replaceSubrange(offset..<(offset + 16), with: cipherData)
+            previous = AESBlock(data: cipherData, offset: 0)
         }
-        
         return result
     }
     
@@ -72,36 +88,16 @@ struct AESCBC {
         // Get AES instance
         let aes = try AESEngine(key: key)
         
-        var result = Data()
-        var previousBlock = Array(iv)  // Convert to array for easier access
-        
-        // Process each block
+        var result = Data(count: data.count)
+        var previous = AESBlock(iv: iv)
         for offset in stride(from: 0, to: data.count, by: 16) {
-            // Get ciphertext block as array
-            let endOffset = min(offset + 16, data.count)
-            let ciphertextBlock = Array(data[offset..<endOffset])
-            
-            // Ensure we have exactly 16 bytes
-            guard ciphertextBlock.count == 16 else {
-                throw SSHKeyError.invalidKeyData
-            }
-            
-            // Decrypt the block
-            let decryptedBlock = try aes.decryptBlock(Data(ciphertextBlock))
-            let decryptedArray = Array(decryptedBlock)
-            
-            // XOR with previous ciphertext (or IV for first block)
-            var plaintextBlock = Data(count: 16)
-            for i in 0..<16 {
-                plaintextBlock[i] = decryptedArray[i] ^ previousBlock[i]
-            }
-            
-            result.append(plaintextBlock)
-            
-            // Update previous block
-            previousBlock = ciphertextBlock
+            let cipherBlock = AESBlock(data: data, offset: offset)
+            let decryptedData = try aes.decryptBlock(cipherBlock.toData())
+            let decrypted = AESBlock(data: decryptedData, offset: 0)
+            let plain = decrypted ^ previous
+            result.replaceSubrange(offset..<(offset + 16), with: plain.toData())
+            previous = cipherBlock
         }
-        
         return result
     }
 }
