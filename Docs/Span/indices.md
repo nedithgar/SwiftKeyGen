@@ -1,0 +1,21 @@
+# indices
+
+**Instance Property**
+
+> The indices that are valid for subscripting the span, in ascending order.
+
+**Availability:**
+* iOS 12.2+
+* iPadOS 12.2+
+* Mac Catalyst 12.2+
+* macOS 10.14.4+
+* tvOS 12.2+
+* visionOS 1.0+
+* watchOS 5.2+
+
+```swift
+var indices: Range<Span<Element>.Index> { get }
+```
+
+## Discussion
+
