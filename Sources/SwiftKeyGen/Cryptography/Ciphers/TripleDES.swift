@@ -1,155 +1,117 @@
 import Foundation
 
-/// Triple DES (3DES) CBC mode implementation for OpenSSH compatibility
+// MARK: - Triple DES (3DES) CBC mode (InlineArray optimized)
+// Migrated to Swift 6.2 InlineArray for fixed-size (8-byte) block operations to
+// eliminate per-block Data / Array heap allocations in the hot loop.
+// Remaining internal bit/perm logic still uses temporary Data for clarity;
+// can be further optimized later if DES performance becomes critical.
+
+private typealias DESBlock = InlineArray<8, UInt8>
+private typealias RoundKey = InlineArray<6, UInt8> // 48-bit subkey per round
+
+extension InlineArray<8, UInt8> {
+    @inline(__always) func toData() -> Data {
+        var d = Data(count: 8)
+        for i in 0..<8 { d[i] = self[i] }
+        return d
+    }
+}
+
 struct TripleDESCBC {
-    
-    /// Encrypt data using 3DES-CBC mode
+    /// Encrypt data using 3DES-CBC mode (EDE)
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
         // 3DES uses 24-byte key (3 x 8 bytes)
-        guard key.count == 24 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        guard iv.count == 8 else { // DES block size is 8 bytes
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Ensure data is padded to block size
-        guard data.count % 8 == 0 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Split key into three DES keys
-        let key1 = Data(key.prefix(8))
-        let key2 = Data(key[8..<16])
-        let key3 = Data(key.suffix(8))
-        
-        // Create DES instances
-        let des1 = try DES(key: key1)
-        let des2 = try DES(key: key2)
-        let des3 = try DES(key: key3)
-        
-        var result = Data()
-        var previousBlock = Array(iv)  // Convert to array for easier access
-        
+        guard key.count == 24 else { throw SSHKeyError.invalidKeyData }
+        guard iv.count == 8 else { throw SSHKeyError.invalidKeyData }
+        guard data.count % 8 == 0 else { throw SSHKeyError.invalidKeyData }
+
+        // Split key into three DES keys (copy bytes once)
+        let k1 = key[0..<8]
+        let k2 = key[8..<16]
+        let k3 = key[16..<24]
+        let des1 = try DES(keyBytes: k1)
+        let des2 = try DES(keyBytes: k2)
+        let des3 = try DES(keyBytes: k3)
+
+        var result = Data(capacity: data.count)
+
+        // Previous ciphertext (CBC chaining) as InlineArray
+        var previous = DESBlock(repeating: 0)
+        for i in 0..<8 { previous[i] = iv[i] }
+
         // Process each block with 3DES-EDE (Encrypt-Decrypt-Encrypt)
         for offset in stride(from: 0, to: data.count, by: 8) {
-            // Get plaintext block as array
-            let endOffset = min(offset + 8, data.count)
-            let plaintextBlock = Array(data[offset..<endOffset])
-            
-            // Ensure we have exactly 8 bytes
-            guard plaintextBlock.count == 8 else {
-                throw SSHKeyError.invalidKeyData
-            }
-            
-            // XOR with previous ciphertext (CBC mode)
-            var xorBlock = Data(count: 8)
-            for i in 0..<8 {
-                xorBlock[i] = plaintextBlock[i] ^ previousBlock[i]
-            }
-            
-            // 3DES-EDE: Encrypt with key1, decrypt with key2, encrypt with key3
-            let temp1 = try des1.encryptBlock(xorBlock)
-            let temp2 = try des2.decryptBlock(temp1)
-            let ciphertextBlock = try des3.encryptBlock(temp2)
-            
-            result.append(ciphertextBlock)
-            previousBlock = Array(ciphertextBlock)
+            var plain = DESBlock(repeating: 0)
+            for i in 0..<8 { plain[i] = data[offset + i] }
+
+            // XOR with previous (CBC)
+            var xored = DESBlock(repeating: 0)
+            for i in 0..<8 { xored[i] = plain[i] ^ previous[i] }
+
+            let t1 = des1.encryptBlock(xored)
+            let t2 = des2.decryptBlock(t1)
+            let cipher = des3.encryptBlock(t2)
+
+            result.append(cipher.toData())
+            previous = cipher
         }
-        
         return result
     }
-    
-    /// Decrypt data using 3DES-CBC mode
+
+    /// Decrypt data using 3DES-CBC mode (DED)
     static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        // 3DES uses 24-byte key
-        guard key.count == 24 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        guard iv.count == 8 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Ensure data is padded to block size
-        guard data.count % 8 == 0 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Split key into three DES keys
-        let key1 = Data(key.prefix(8))
-        let key2 = Data(key[8..<16])
-        let key3 = Data(key.suffix(8))
-        
-        // Create DES instances
-        let des1 = try DES(key: key1)
-        let des2 = try DES(key: key2)
-        let des3 = try DES(key: key3)
-        
-        var result = Data()
-        var previousBlock = Array(iv)  // Convert to array for easier access
-        
-        // Process each block with 3DES-DED (Decrypt-Encrypt-Decrypt)
+        guard key.count == 24 else { throw SSHKeyError.invalidKeyData }
+        guard iv.count == 8 else { throw SSHKeyError.invalidKeyData }
+        guard data.count % 8 == 0 else { throw SSHKeyError.invalidKeyData }
+
+        let k1 = key[0..<8]
+        let k2 = key[8..<16]
+        let k3 = key[16..<24]
+        let des1 = try DES(keyBytes: k1)
+        let des2 = try DES(keyBytes: k2)
+        let des3 = try DES(keyBytes: k3)
+
+        var result = Data(capacity: data.count)
+        var previous = DESBlock(repeating: 0)
+        for i in 0..<8 { previous[i] = iv[i] }
+
         for offset in stride(from: 0, to: data.count, by: 8) {
-            // Get ciphertext block as array
-            let endOffset = min(offset + 8, data.count)
-            let ciphertextBlock = Array(data[offset..<endOffset])
-            
-            // Ensure we have exactly 8 bytes
-            guard ciphertextBlock.count == 8 else {
-                throw SSHKeyError.invalidKeyData
-            }
-            
-            // 3DES-DED: Decrypt with key3, encrypt with key2, decrypt with key1
-            let temp1 = try des3.decryptBlock(Data(ciphertextBlock))
-            let temp2 = try des2.encryptBlock(temp1)
-            let decryptedBlock = try des1.decryptBlock(temp2)
-            let decryptedArray = Array(decryptedBlock)
-            
-            // XOR with previous ciphertext (CBC mode)
-            var plaintextBlock = Data(count: 8)
-            for i in 0..<8 {
-                plaintextBlock[i] = decryptedArray[i] ^ previousBlock[i]
-            }
-            
-            result.append(plaintextBlock)
-            previousBlock = ciphertextBlock
+            var cipher = DESBlock(repeating: 0)
+            for i in 0..<8 { cipher[i] = data[offset + i] }
+
+            let t1 = des3.decryptBlock(cipher)
+            let t2 = des2.encryptBlock(t1)
+            let dec = des1.decryptBlock(t2)
+
+            // XOR with previous ciphertext block (CBC)
+            var plain = DESBlock(repeating: 0)
+            for i in 0..<8 { plain[i] = dec[i] ^ previous[i] }
+
+            result.append(plain.toData())
+            previous = cipher
         }
-        
         return result
     }
 }
 
 /// DES block cipher implementation
 private struct DES {
-    private let subkeys: [[UInt8]]
-    
-    init(key: Data) throws {
-        guard key.count == 8 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Generate 16 round subkeys
-        self.subkeys = DES.generateSubkeys(key: key)
+    private let subkeys: [RoundKey] // 16 round keys
+
+    init(keyBytes: Data.SubSequence) throws {
+        guard keyBytes.count == 8 else { throw SSHKeyError.invalidKeyData }
+        let k = Data(keyBytes)
+        self.subkeys = DES.generateSubkeys(key: k)
     }
-    
-    /// Encrypt a single 8-byte block
-    func encryptBlock(_ block: Data) throws -> Data {
-        guard block.count == 8 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        return DES.processBlock(block, subkeys: subkeys, decrypt: false)
+
+    /// Encrypt a single 8-byte block (InlineArray)
+    @inline(__always) func encryptBlock(_ block: DESBlock) -> DESBlock {
+        DES.processBlock(block, subkeys: subkeys, decrypt: false)
     }
-    
-    /// Decrypt a single 8-byte block
-    func decryptBlock(_ block: Data) throws -> Data {
-        guard block.count == 8 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        return DES.processBlock(block, subkeys: subkeys, decrypt: true)
+
+    /// Decrypt a single 8-byte block (InlineArray)
+    @inline(__always) func decryptBlock(_ block: DESBlock) -> DESBlock {
+        DES.processBlock(block, subkeys: subkeys, decrypt: true)
     }
     
     // MARK: - DES Core Implementation
@@ -259,41 +221,39 @@ private struct DES {
     ]
     
     /// Process a block through DES
-    private static func processBlock(_ block: Data, subkeys: [[UInt8]], decrypt: Bool) -> Data {
-        // Initial permutation
-        let permuted = applyPermutation(block, table: IP, inputBits: 64, outputBits: 64)
-        
-        // Split into left and right halves
+    private static func processBlock(_ block: DESBlock, subkeys: [RoundKey], decrypt: Bool) -> DESBlock {
+        // Convert to Data for permutation reuse
+        let blockData = block.toData()
+        let permuted = applyPermutation(blockData, table: IP, inputBits: 64, outputBits: 64)
+
         var left = Array(permuted.prefix(4))
         var right = Array(permuted.suffix(4))
-        
-        // 16 rounds
+
         for round in 0..<16 {
-            let subkeyIndex = decrypt ? (15 - round) : round
-            let newRight = xor(left, feistel(right, subkey: subkeys[subkeyIndex]))
+            let idx = decrypt ? (15 - round) : round
+            let newRight = xor(left, feistel(right, subkey: subkeys[idx]))
             left = right
             right = newRight
         }
-        
-        // Combine halves (swap for final)
-        var combined = Data()
+
+        var combined = Data(capacity: 8)
         combined.append(contentsOf: right)
         combined.append(contentsOf: left)
-        
-        // Final permutation
-        return applyPermutation(combined, table: FP, inputBits: 64, outputBits: 64)
+        let finalPerm = applyPermutation(combined, table: FP, inputBits: 64, outputBits: 64)
+
+        var out = DESBlock(repeating: 0)
+        for i in 0..<8 { out[i] = finalPerm[i] }
+        return out
     }
     
     /// Feistel function
-    private static func feistel(_ right: [UInt8], subkey: [UInt8]) -> [UInt8] {
+    private static func feistel(_ right: [UInt8], subkey: RoundKey) -> [UInt8] {
         // Expand right half from 32 to 48 bits
         let expanded = applyPermutation(Data(right), table: E, inputBits: 32, outputBits: 48)
         
-        // XOR with subkey
-        var xored = [UInt8](repeating: 0, count: 6)
-        for i in 0..<6 {
-            xored[i] = expanded[i] ^ subkey[i]
-        }
+        // XOR with subkey (InlineArray RoundKey)
+        var xored = RoundKey(repeating: 0)
+        for i in 0..<6 { xored[i] = expanded[i] ^ subkey[i] }
         
         // Apply S-boxes
         var sboxOutput = [UInt8](repeating: 0, count: 4)
@@ -315,7 +275,7 @@ private struct DES {
     }
     
     /// Generate subkeys
-    private static func generateSubkeys(key: Data) -> [[UInt8]] {
+    private static func generateSubkeys(key: Data) -> [RoundKey] {
         // PC1 permutation
         let PC1: [Int] = [
             57, 49, 41, 33, 25, 17, 9,
@@ -358,7 +318,7 @@ private struct DES {
         var C = Array(permutedBits.prefix(28))
         var D = Array(permutedBits.suffix(28))
         
-        var subkeys: [[UInt8]] = []
+    var subkeys: [RoundKey] = []
         
         for round in 0..<16 {
             // Left shift
@@ -370,8 +330,10 @@ private struct DES {
             let combined = bitsToBytes(combinedBits)
             
             // Apply PC2
-            let subkey = applyPermutation(combined, table: PC2, inputBits: 56, outputBits: 48)
-            subkeys.append(Array(subkey))
+            let subkeyData = applyPermutation(combined, table: PC2, inputBits: 56, outputBits: 48)
+            var rk = RoundKey(repeating: 0)
+            for i in 0..<6 { rk[i] = subkeyData[i] }
+            subkeys.append(rk)
         }
         
         return subkeys
@@ -428,16 +390,14 @@ private struct DES {
         return zip(a, b).map { $0 ^ $1 }
     }
     
-    private static func getSixBits(_ bytes: [UInt8], index: Int) -> UInt8 {
+    private static func getSixBits(_ bytes: RoundKey, index: Int) -> UInt8 {
         let bitOffset = index * 6
         let byteOffset = bitOffset / 8
         let bitPosition = bitOffset % 8
-        
+
         if bitPosition <= 2 {
-            // All 6 bits in one byte
             return (bytes[byteOffset] >> (2 - bitPosition)) & 0x3F
         } else {
-            // Bits span two bytes
             let highBits = (bytes[byteOffset] << (bitPosition - 2)) & 0x3F
             let lowBits = bytes[byteOffset + 1] >> (10 - bitPosition)
             return highBits | lowBits
