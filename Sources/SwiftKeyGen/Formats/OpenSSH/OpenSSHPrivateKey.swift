@@ -143,7 +143,7 @@ public struct OpenSSHPrivateKey {
         // the size of encrypted data WITHOUT the auth tag
         let authLen = cipherInfo.authLen
         let encryptedDataLength = authLen > 0 ? finalData.count - authLen : finalData.count
-        encoded.encodeUInt32(UInt32(encryptedDataLength))
+    encoded.encodeUInt32(UInt32(encryptedDataLength))
         var encodedData = encoded.encode()
         encodedData.append(finalData)
         
@@ -328,12 +328,20 @@ public struct OpenSSHPrivateKey {
         
         // Read encrypted private key data length
         let encryptedLength = try decoder.decodeUInt32()
-        guard decoder.remaining >= Int(encryptedLength) else {
+        // Determine if this cipher appends an authentication tag that is NOT
+        // included in the length field (OpenSSH behaviour for authenticated
+        // ciphers: the length encodes only the ciphertext/padded plaintext, the
+        // tag bytes follow immediately after and must be consumed separately).
+        guard let cipherInfo = Cipher.cipherByName(cipherName) else {
+            throw SSHKeyError.unsupportedCipher(cipherName)
+        }
+        let authLen = cipherInfo.authLen
+        let totalEncryptedLen = Int(encryptedLength) + authLen
+        guard decoder.remaining >= totalEncryptedLen else {
             throw SSHKeyError.invalidFormat
         }
-        
-        // Read encrypted data
-        let encryptedData = try decoder.decodeBytes(count: Int(encryptedLength))
+        // Read ciphertext (+ tag if present)
+        let encryptedData = try decoder.decodeBytes(count: totalEncryptedLen)
         
         // Decrypt if necessary
         let decryptedData: Data
