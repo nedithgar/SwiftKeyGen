@@ -8,11 +8,19 @@ import Foundation
 
 private typealias DESBlock = InlineArray<8, UInt8>
 private typealias RoundKey = InlineArray<6, UInt8> // 48-bit subkey per round
+private typealias DESHalf = InlineArray<4, UInt8>
 
 extension InlineArray<8, UInt8> {
     @inline(__always) func toData() -> Data {
         var d = Data(count: 8)
         for i in 0..<8 { d[i] = self[i] }
+        return d
+    }
+}
+extension InlineArray<4, UInt8> {
+    @inline(__always) func toData() -> Data {
+        var d = Data(count: 4)
+        for i in 0..<4 { d[i] = self[i] }
         return d
     }
 }
@@ -224,22 +232,24 @@ private struct DES {
     private static func processBlock(_ block: DESBlock, subkeys: [RoundKey], decrypt: Bool) -> DESBlock {
         // Convert to Data for permutation reuse
         let blockData = block.toData()
-        let permuted = applyPermutation(blockData, table: IP, inputBits: 64, outputBits: 64)
+    let permuted = applyPermutation(blockData, table: IP, inputBits: 64, outputBits: 64)
 
-        var left = Array(permuted.prefix(4))
-        var right = Array(permuted.suffix(4))
+    var left = DESHalf(repeating: 0)
+    var right = DESHalf(repeating: 0)
+    for i in 0..<4 { left[i] = permuted[i]; right[i] = permuted[4 + i] }
 
         for round in 0..<16 {
             let idx = decrypt ? (15 - round) : round
-            let newRight = xor(left, feistel(right, subkey: subkeys[idx]))
+            let f = feistel(right, subkey: subkeys[idx])
+            let newRight = xor(left, f)
             left = right
             right = newRight
         }
 
-        var combined = Data(capacity: 8)
-        combined.append(contentsOf: right)
-        combined.append(contentsOf: left)
-        let finalPerm = applyPermutation(combined, table: FP, inputBits: 64, outputBits: 64)
+    var combined = Data(capacity: 8)
+    for i in 0..<4 { combined.append(right[i]) }
+    for i in 0..<4 { combined.append(left[i]) }
+    let finalPerm = applyPermutation(combined, table: FP, inputBits: 64, outputBits: 64)
 
         var out = DESBlock(repeating: 0)
         for i in 0..<8 { out[i] = finalPerm[i] }
@@ -247,16 +257,16 @@ private struct DES {
     }
     
     /// Feistel function
-    private static func feistel(_ right: [UInt8], subkey: RoundKey) -> [UInt8] {
+    private static func feistel(_ right: DESHalf, subkey: RoundKey) -> DESHalf {
         // Expand right half from 32 to 48 bits
-        let expanded = applyPermutation(Data(right), table: E, inputBits: 32, outputBits: 48)
+    let expanded = applyPermutation(right.toData(), table: E, inputBits: 32, outputBits: 48)
         
         // XOR with subkey (InlineArray RoundKey)
         var xored = RoundKey(repeating: 0)
         for i in 0..<6 { xored[i] = expanded[i] ^ subkey[i] }
         
         // Apply S-boxes
-        var sboxOutput = [UInt8](repeating: 0, count: 4)
+        var sboxOutput = DESHalf(repeating: 0)
         for i in 0..<8 {
             let sixBits = getSixBits(xored, index: i)
             let row = Int((sixBits & 0x20) >> 4 | (sixBits & 0x01))
@@ -271,7 +281,10 @@ private struct DES {
         }
         
         // Apply permutation P
-        return Array(applyPermutation(Data(sboxOutput), table: P, inputBits: 32, outputBits: 32))
+    let perm = applyPermutation(sboxOutput.toData(), table: P, inputBits: 32, outputBits: 32)
+        var out = DESHalf(repeating: 0)
+        for i in 0..<4 { out[i] = perm[i] }
+        return out
     }
     
     /// Generate subkeys
@@ -304,7 +317,7 @@ private struct DES {
         let shifts: [Int] = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
         
         // Apply PC1
-        let permutedKey = applyPermutation(key, table: PC1, inputBits: 64, outputBits: 56)
+    let permutedKey = applyPermutation(key, table: PC1, inputBits: 64, outputBits: 56)
         
         // Convert to bits for C and D
         var permutedBits = [Bool]()
@@ -352,9 +365,8 @@ private struct DES {
         
         // Create output bit array
         var outputBitArray = [Bool](repeating: false, count: outputBits)
-        
         for i in 0..<outputBits {
-            let sourcePos = table[i] - 1  // Convert 1-based to 0-based
+            let sourcePos = table[i] - 1
             if sourcePos >= 0 && sourcePos < inputBitArray.count {
                 outputBitArray[i] = inputBitArray[sourcePos]
             }
@@ -386,8 +398,10 @@ private struct DES {
         return shifted
     }
     
-    private static func xor(_ a: [UInt8], _ b: [UInt8]) -> [UInt8] {
-        return zip(a, b).map { $0 ^ $1 }
+    private static func xor(_ a: DESHalf, _ b: DESHalf) -> DESHalf {
+        var out = DESHalf(repeating: 0)
+        for i in 0..<4 { out[i] = a[i] ^ b[i] }
+        return out
     }
     
     private static func getSixBits(_ bytes: RoundKey, index: Int) -> UInt8 {
