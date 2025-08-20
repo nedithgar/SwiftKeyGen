@@ -2,9 +2,6 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-
-
-
 @Test("3DES-CBC encryption and decryption")
 func test3DESCBC() throws {
     let testData = Data(repeating: 0x41, count: 24) // 24 bytes
