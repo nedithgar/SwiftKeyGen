@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
+@Suite("AES-CTR Tests")
 struct AESCTRTests {
     
     @Test func testAESCTRBasic() throws {
