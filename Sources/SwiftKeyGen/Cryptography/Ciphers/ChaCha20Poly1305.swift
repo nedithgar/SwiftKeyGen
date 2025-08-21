@@ -1,5 +1,7 @@
 import Foundation
 
+// MARK: - ChaCha20-Poly1305 (OpenSSH variant) InlineArray / Span optimized
+
 /// ChaCha20-Poly1305 implementation for OpenSSH compatibility
 /// Note: OpenSSH uses a custom construction that differs from standard ChaCha20-Poly1305
 struct ChaCha20Poly1305OpenSSH {
@@ -7,32 +9,43 @@ struct ChaCha20Poly1305OpenSSH {
     /// Encrypt data using ChaCha20-Poly1305 (OpenSSH variant)
     /// OpenSSH uses 64-byte keys: 32 bytes for main cipher, 32 bytes for header
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        guard key.count == 64 else { // 2 x 256-bit keys
-            throw SSHKeyError.invalidKeyData
+        guard key.count == 64 else { throw SSHKeyError.invalidKeyData }
+        // OpenSSH layout: first 32 bytes main cipher+MAC key (K2), second 32 bytes header key (unused here)
+        var mainKey = InlineArray<32, UInt8>(repeating: 0)
+        for i in 0..<32 { mainKey[i] = key[i] }
+
+        // Sequence (nonce) (8 bytes) — copy if provided
+        var seq = InlineArray<8, UInt8>(repeating: 0)
+        if iv.count >= 8 {
+            iv.withUnsafeBytes { raw in
+                let p = raw.bindMemory(to: UInt8.self).baseAddress!
+                for i in 0..<8 { seq[i] = p[i] }
+            }
         }
-        // Layout per OpenSSH: first 32 bytes = K2 (payload + MAC), second 32 bytes = K1 (header) – header unused here
-        let mainKey = Array(key.prefix(32))
-        // Sequence (nonce) comes from iv (8 bytes) or zero if absent
-        var seq = Data(repeating: 0, count: 8)
-        if iv.count >= 8 { seq.replaceSubrange(0..<8, with: iv.prefix(8)) }
-        // Build 16-byte IV buffer: 8 bytes counter || 8 bytes sequence (both little-endian interpretation)
-        var ivCounter0 = Data(count: 16)
-        // counter already zero
-        ivCounter0.replaceSubrange(8..<16, with: seq)
+
+        // 16‑byte IV buffer: counter (8 bytes little‑endian) || sequence (8 bytes)
+        var ivCounter0 = InlineArray<16, UInt8>(repeating: 0)
+        for i in 0..<8 { ivCounter0[8 + i] = seq[i] }
+
         var ctx = ChaCha20Context(key: mainKey)
-        // Generate Poly1305 one-time key using counter=0
-        ctx.ivSetup(iv: ivCounter0)
-        var polyKey = Data(repeating: 0, count: 32)
-        let zeroBlock = Data(repeating: 0, count: 32)
-        ctx.encrypt(src: zeroBlock, dst: &polyKey) // first 256 bits of keystream
-        // Encrypt payload with counter=1
+        ctx.ivSetup(ivInline: ivCounter0)
+
+        // Derive Poly1305 key (32 bytes) = first half of keystream block 0
+        let polyKeyKS = ctx.generateKeystream() // does NOT mutate external counter state
+        var polyKey = InlineArray<32, UInt8>(repeating: 0)
+        for i in 0..<32 { polyKey[i] = polyKeyKS[i] }
+
+        // Prepare counter=1 for payload (increment low 32 bits)
         var ivCounter1 = ivCounter0
-        ivCounter1[0] = 1 // little-endian 64-bit value = 1 (low 32 bits in first 4 bytes, rest zero fine)
-        ctx.ivSetup(iv: ivCounter1)
+        ivCounter1[0] = 1 // little-endian increment (only first byte needed in this construction)
+        ctx.ivSetup(ivInline: ivCounter1)
+
+        // Encrypt payload streaming (avoid per-block allocations)
         var encrypted = Data(count: data.count)
         ctx.encrypt(src: data, dst: &encrypted)
-        // MAC over ciphertext only (no AAD in this simplified usage)
-        let tag = Poly1305.auth(message: encrypted, key: polyKey)
+
+        // MAC over ciphertext (no AAD) — Poly1305 expects Data key (convert once)
+        let tag = Poly1305.auth(message: encrypted, key: polyKey.toData())
         return encrypted + tag
     }
     
@@ -40,33 +53,41 @@ struct ChaCha20Poly1305OpenSSH {
     static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
         guard key.count == 64 else { throw SSHKeyError.invalidKeyData }
         guard data.count >= 16 else { throw SSHKeyError.invalidKeyData }
-        let ciphertextSlice = data.prefix(data.count - 16)
-        // Ensure contiguous Data storage (avoid potential slice indexing traps in constant-time ops)
-        let ciphertext = Data(ciphertextSlice)
+
+        let ctLen = data.count - 16
+        let ciphertext = data.prefix(ctLen)
         let tag = data.suffix(16)
-        // Sequence (nonce)
-        var seq = Data(repeating: 0, count: 8)
-        if iv.count >= 8 { seq.replaceSubrange(0..<8, with: iv.prefix(8)) }
-        var ivCounter0 = Data(count: 16)
-        ivCounter0.replaceSubrange(8..<16, with: seq)
-        let mainKey = Array(key.prefix(32))
-        var ctx = ChaCha20Context(key: mainKey)
-        // Re-create Poly1305 key
-        ctx.ivSetup(iv: ivCounter0)
-        var polyKey = Data(repeating: 0, count: 32)
-        let zeroBlock = Data(repeating: 0, count: 32)
-        ctx.encrypt(src: zeroBlock, dst: &polyKey)
-        // Verify tag constant-time
-        let expected = Poly1305.auth(message: ciphertext, key: polyKey)
-        guard constantTimeEqual(expected, tag) else {
-            throw SSHKeyError.invalidKeyData
+
+        // Reconstruct sequence
+        var seq = InlineArray<8, UInt8>(repeating: 0)
+        if iv.count >= 8 {
+            iv.withUnsafeBytes { raw in
+                let p = raw.bindMemory(to: UInt8.self).baseAddress!
+                for i in 0..<8 { seq[i] = p[i] }
+            }
         }
-        // Decrypt with counter=1
+        var ivCounter0 = InlineArray<16, UInt8>(repeating: 0)
+        for i in 0..<8 { ivCounter0[8 + i] = seq[i] }
+
+        var mainKey = InlineArray<32, UInt8>(repeating: 0)
+        for i in 0..<32 { mainKey[i] = key[i] }
+        var ctx = ChaCha20Context(key: mainKey)
+        ctx.ivSetup(ivInline: ivCounter0)
+
+        // Derive poly key
+        let polyKeyKS = ctx.generateKeystream()
+        var polyKey = InlineArray<32, UInt8>(repeating: 0)
+        for i in 0..<32 { polyKey[i] = polyKeyKS[i] }
+
+        let expected = Poly1305.auth(message: Data(ciphertext), key: polyKey.toData())
+        guard constantTimeEqual(expected, tag) else { throw SSHKeyError.invalidKeyData }
+
+        // Decrypt (counter=1)
         var ivCounter1 = ivCounter0
         ivCounter1[0] = 1
-        ctx.ivSetup(iv: ivCounter1)
-        var decrypted = Data(count: ciphertext.count)
-        ctx.encrypt(src: ciphertext, dst: &decrypted)
+        ctx.ivSetup(ivInline: ivCounter1)
+        var decrypted = Data(count: ctLen)
+        ctx.encrypt(src: Data(ciphertext), dst: &decrypted)
         return decrypted
     }
 
@@ -78,9 +99,7 @@ struct ChaCha20Poly1305OpenSSH {
             b.withUnsafeBytes { bb in
                 let ap = ab.bindMemory(to: UInt8.self).baseAddress!
                 let bp = bb.bindMemory(to: UInt8.self).baseAddress!
-                for i in 0..<a.count {
-                    diff |= ap[i] ^ bp[i]
-                }
+                for i in 0..<a.count { diff |= ap[i] ^ bp[i] }
             }
         }
         return diff == 0
@@ -89,160 +108,93 @@ struct ChaCha20Poly1305OpenSSH {
 
 /// ChaCha20 context matching OpenSSH implementation
 private struct ChaCha20Context {
-    private var state: [UInt32]
-    
-    init(key: [UInt8]) {
-        self.state = [UInt32](repeating: 0, count: 16)
+    private typealias ChaChaState = InlineArray<16, UInt32>
+    private var state: ChaChaState
+
+    init(key: InlineArray<32, UInt8>) {
+        self.state = ChaChaState(repeating: 0)
         keySetup(key: key)
     }
-    
-    mutating func keySetup(key: [UInt8]) {
-        guard key.count >= 32 else { return }
-        
+
+    mutating func keySetup(key: InlineArray<32, UInt8>) {
         // Constants "expand 32-byte k"
         state[0] = 0x61707865
         state[1] = 0x3320646e
         state[2] = 0x79622d32
         state[3] = 0x6b206574
-        
-        // Key
         for i in 0..<8 {
-            let offset = i * 4
-            state[4 + i] = UInt32(key[offset]) |
-                           UInt32(key[offset + 1]) << 8 |
-                           UInt32(key[offset + 2]) << 16 |
-                           UInt32(key[offset + 3]) << 24
+            let off = i * 4
+            state[4 + i] = UInt32(key[off]) |
+                           UInt32(key[off + 1]) << 8 |
+                           UInt32(key[off + 2]) << 16 |
+                           UInt32(key[off + 3]) << 24
         }
     }
-    
-    mutating func ivSetup(iv: Data) {
-        // OpenSSH uses 16-byte IV: counter (8 bytes) || nonce (8 bytes)
-        if iv.count >= 16 {
-            // Counter (first 8 bytes)
-            state[12] = UInt32(iv[0]) |
-                        UInt32(iv[1]) << 8 |
-                        UInt32(iv[2]) << 16 |
-                        UInt32(iv[3]) << 24
-            state[13] = UInt32(iv[4]) |
-                        UInt32(iv[5]) << 8 |
-                        UInt32(iv[6]) << 16 |
-                        UInt32(iv[7]) << 24
-            
-            // Nonce (next 8 bytes)
-            state[14] = UInt32(iv[8]) |
-                        UInt32(iv[9]) << 8 |
-                        UInt32(iv[10]) << 16 |
-                        UInt32(iv[11]) << 24
-            state[15] = UInt32(iv[12]) |
-                        UInt32(iv[13]) << 8 |
-                        UInt32(iv[14]) << 16 |
-                        UInt32(iv[15]) << 24
-        } else if iv.count >= 8 {
-            // Fallback for 8-byte IV (legacy)
-            state[12] = 0
-            state[13] = 0
-            state[14] = UInt32(iv[0]) |
-                        UInt32(iv[1]) << 8 |
-                        UInt32(iv[2]) << 16 |
-                        UInt32(iv[3]) << 24
-            state[15] = UInt32(iv[4]) |
-                        UInt32(iv[5]) << 8 |
-                        UInt32(iv[6]) << 16 |
-                        UInt32(iv[7]) << 24
-        }
+
+    mutating func ivSetup(ivInline: InlineArray<16, UInt8>) {
+        // Counter (first 8 bytes little-endian as two words)
+        state[12] = UInt32(ivInline[0]) | UInt32(ivInline[1]) << 8 | UInt32(ivInline[2]) << 16 | UInt32(ivInline[3]) << 24
+        state[13] = UInt32(ivInline[4]) | UInt32(ivInline[5]) << 8 | UInt32(ivInline[6]) << 16 | UInt32(ivInline[7]) << 24
+        // Nonce (next 8 bytes)
+        state[14] = UInt32(ivInline[8]) | UInt32(ivInline[9]) << 8 | UInt32(ivInline[10]) << 16 | UInt32(ivInline[11]) << 24
+        state[15] = UInt32(ivInline[12]) | UInt32(ivInline[13]) << 8 | UInt32(ivInline[14]) << 16 | UInt32(ivInline[15]) << 24
     }
-    
+
     mutating func encrypt(src: Data, dst: inout Data) {
         var srcOffset = 0
         var dstOffset = 0
-        
         while srcOffset < src.count {
             let blockSize = min(64, src.count - srcOffset)
-            let keystream = generateKeystream()
-            
-            for i in 0..<blockSize {
-                if dstOffset + i < dst.count {
-                    dst[dstOffset + i] = src[srcOffset + i] ^ keystream[i]
-                }
-            }
-            
+            let ks = generateKeystream()
+            for i in 0..<blockSize { dst[dstOffset + i] = src[srcOffset + i] ^ ks[i] }
             srcOffset += blockSize
             dstOffset += blockSize
-            
-            // Increment counter
+            // Increment 64-bit counter (two 32-bit words little-endian)
             state[12] = state[12] &+ 1
-            if state[12] == 0 {
-                state[13] = state[13] &+ 1
-            }
+            if state[12] == 0 { state[13] = state[13] &+ 1 }
         }
     }
-    
-    /// Generate 64-byte keystream block
-    private func generateKeystream() -> Data {
-        // Working state is a copy of the current state
-        var workingState = state
-        
-        // 20 rounds (10 double-rounds)
-        for _ in 0..<10 {
-            // Column rounds
-            quarterRound(&workingState, 0, 4, 8, 12)
-            quarterRound(&workingState, 1, 5, 9, 13)
-            quarterRound(&workingState, 2, 6, 10, 14)
-            quarterRound(&workingState, 3, 7, 11, 15)
-            
-            // Diagonal rounds
-            quarterRound(&workingState, 0, 5, 10, 15)
-            quarterRound(&workingState, 1, 6, 11, 12)
-            quarterRound(&workingState, 2, 7, 8, 13)
-            quarterRound(&workingState, 3, 4, 9, 14)
+
+    /// Generate a 64-byte keystream block without mutating the counter (caller increments outside if needed)
+    func generateKeystream() -> InlineArray<64, UInt8> {
+        var working = state // copy
+        for _ in 0..<10 { // 20 rounds (10 double rounds)
+            quarterRound(&working, 0, 4, 8, 12)
+            quarterRound(&working, 1, 5, 9, 13)
+            quarterRound(&working, 2, 6, 10, 14)
+            quarterRound(&working, 3, 7, 11, 15)
+            quarterRound(&working, 0, 5, 10, 15)
+            quarterRound(&working, 1, 6, 11, 12)
+            quarterRound(&working, 2, 7, 8, 13)
+            quarterRound(&working, 3, 4, 9, 14)
         }
-        
-        // Add initial state
+        for i in 0..<16 { working[i] = working[i] &+ state[i] }
+        var out = InlineArray<64, UInt8>(repeating: 0)
         for i in 0..<16 {
-            workingState[i] = workingState[i] &+ state[i]
+            let off = i * 4
+            let w = working[i]
+            out[off] = UInt8(w & 0xff)
+            out[off + 1] = UInt8((w >> 8) & 0xff)
+            out[off + 2] = UInt8((w >> 16) & 0xff)
+            out[off + 3] = UInt8((w >> 24) & 0xff)
         }
-        
-        // Serialize to bytes (little-endian)
-        var keystream = Data(count: 64)
-        for i in 0..<16 {
-            let offset = i * 4
-            keystream[offset] = UInt8(workingState[i] & 0xff)
-            keystream[offset + 1] = UInt8((workingState[i] >> 8) & 0xff)
-            keystream[offset + 2] = UInt8((workingState[i] >> 16) & 0xff)
-            keystream[offset + 3] = UInt8((workingState[i] >> 24) & 0xff)
-        }
-        
-        return keystream
+        return out
     }
-    
-    /// ChaCha20 quarter round
-    private func quarterRound(_ state: inout [UInt32], _ a: Int, _ b: Int, _ c: Int, _ d: Int) {
-        state[a] = state[a] &+ state[b]
-        state[d] = rotl32(state[d] ^ state[a], 16)
-        
-        state[c] = state[c] &+ state[d]
-        state[b] = rotl32(state[b] ^ state[c], 12)
-        
-        state[a] = state[a] &+ state[b]
-        state[d] = rotl32(state[d] ^ state[a], 8)
-        
-        state[c] = state[c] &+ state[d]
-        state[b] = rotl32(state[b] ^ state[c], 7)
+
+    private func quarterRound(_ s: inout ChaChaState, _ a: Int, _ b: Int, _ c: Int, _ d: Int) {
+        s[a] = s[a] &+ s[b]; s[d] = rotl32(s[d] ^ s[a], 16)
+        s[c] = s[c] &+ s[d]; s[b] = rotl32(s[b] ^ s[c], 12)
+        s[a] = s[a] &+ s[b]; s[d] = rotl32(s[d] ^ s[a], 8)
+        s[c] = s[c] &+ s[d]; s[b] = rotl32(s[b] ^ s[c], 7)
     }
-    
-    /// Rotate left 32-bit
-    private func rotl32(_ value: UInt32, _ bits: Int) -> UInt32 {
-        return (value << bits) | (value >> (32 - bits))
-    }
+    private func rotl32(_ v: UInt32, _ n: Int) -> UInt32 { (v << n) | (v >> (32 - n)) }
 }
 
 /// Poly1305 MAC implementation
 private struct Poly1305 {
     /// Generate Poly1305 authentication tag
     static func auth(message: Data, key: Data) -> Data {
-        guard key.count == 32 else {
-            return Data(count: 16)
-        }
+        guard key.count == 32 else { return Data(count: 16) }
         
         // Initialize r (first 16 bytes of key)
         var t0 = UInt32(key[0]) | UInt32(key[1]) << 8 | UInt32(key[2]) << 16 | UInt32(key[3]) << 24
@@ -281,7 +233,7 @@ private struct Poly1305 {
         var offset = 0
         
         // Process full blocks
-        while offset + 16 <= message.count {
+    while offset + 16 <= message.count {
             let t0 = UInt32(message[offset]) | UInt32(message[offset+1]) << 8 | UInt32(message[offset+2]) << 16 | UInt32(message[offset+3]) << 24
             let t1 = UInt32(message[offset+4]) | UInt32(message[offset+5]) << 8 | UInt32(message[offset+6]) << 16 | UInt32(message[offset+7]) << 24
             let t2 = UInt32(message[offset+8]) | UInt32(message[offset+9]) << 8 | UInt32(message[offset+10]) << 16 | UInt32(message[offset+11]) << 24
@@ -317,7 +269,7 @@ private struct Poly1305 {
         
         // Process final partial block if any
         if offset < message.count {
-            var mp = [UInt8](repeating: 0, count: 16)
+            var mp = InlineArray<16, UInt8>(repeating: 0)
             let remaining = message.count - offset
             for i in 0..<remaining {
                 mp[i] = message[offset + i]
@@ -400,27 +352,35 @@ private struct Poly1305 {
         f3 += UInt64(sk3)
         
         // Create tag with carry propagation
-        var tag = Data(count: 16)
-        tag[0] = UInt8(f0 & 0xff)
-        tag[1] = UInt8((f0 >> 8) & 0xff)
-        tag[2] = UInt8((f0 >> 16) & 0xff)
-        tag[3] = UInt8((f0 >> 24) & 0xff)
+        var tagInline = InlineArray<16, UInt8>(repeating: 0)
+        tagInline[0] = UInt8(f0 & 0xff)
+        tagInline[1] = UInt8((f0 >> 8) & 0xff)
+        tagInline[2] = UInt8((f0 >> 16) & 0xff)
+        tagInline[3] = UInt8((f0 >> 24) & 0xff)
         f1 += (f0 >> 32)
-        tag[4] = UInt8(f1 & 0xff)
-        tag[5] = UInt8((f1 >> 8) & 0xff)
-        tag[6] = UInt8((f1 >> 16) & 0xff)
-        tag[7] = UInt8((f1 >> 24) & 0xff)
+        tagInline[4] = UInt8(f1 & 0xff)
+        tagInline[5] = UInt8((f1 >> 8) & 0xff)
+        tagInline[6] = UInt8((f1 >> 16) & 0xff)
+        tagInline[7] = UInt8((f1 >> 24) & 0xff)
         f2 += (f1 >> 32)
-        tag[8] = UInt8(f2 & 0xff)
-        tag[9] = UInt8((f2 >> 8) & 0xff)
-        tag[10] = UInt8((f2 >> 16) & 0xff)
-        tag[11] = UInt8((f2 >> 24) & 0xff)
+        tagInline[8] = UInt8(f2 & 0xff)
+        tagInline[9] = UInt8((f2 >> 8) & 0xff)
+        tagInline[10] = UInt8((f2 >> 16) & 0xff)
+        tagInline[11] = UInt8((f2 >> 24) & 0xff)
         f3 += (f2 >> 32)
-        tag[12] = UInt8(f3 & 0xff)
-        tag[13] = UInt8((f3 >> 8) & 0xff)
-        tag[14] = UInt8((f3 >> 16) & 0xff)
-        tag[15] = UInt8((f3 >> 24) & 0xff)
-        
-        return tag
+        tagInline[12] = UInt8(f3 & 0xff)
+        tagInline[13] = UInt8((f3 >> 8) & 0xff)
+        tagInline[14] = UInt8((f3 >> 16) & 0xff)
+        tagInline[15] = UInt8((f3 >> 24) & 0xff)
+        return tagInline.toData()
+    }
+}
+
+// MARK: - InlineArray helpers
+private extension InlineArray where Element == UInt8 {
+    @inline(__always) func toData() -> Data {
+        var d = Data(count: count)
+        for i in 0..<count { d[i] = self[i] }
+        return d
     }
 }
