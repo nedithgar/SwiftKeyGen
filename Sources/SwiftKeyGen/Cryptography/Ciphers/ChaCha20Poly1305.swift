@@ -17,10 +17,8 @@ struct ChaCha20Poly1305OpenSSH {
         // Sequence (nonce) (8 bytes) — copy if provided
         var seq = InlineArray<8, UInt8>(repeating: 0)
         if iv.count >= 8 {
-            iv.withUnsafeBytes { raw in
-                let p = raw.bindMemory(to: UInt8.self).baseAddress!
-                for i in 0..<8 { seq[i] = p[i] }
-            }
+            let s = iv.span
+            for i in 0..<8 { seq[i] = s[i] }
         }
 
         // 16‑byte IV buffer: counter (8 bytes little‑endian) || sequence (8 bytes)
@@ -61,10 +59,8 @@ struct ChaCha20Poly1305OpenSSH {
         // Reconstruct sequence
         var seq = InlineArray<8, UInt8>(repeating: 0)
         if iv.count >= 8 {
-            iv.withUnsafeBytes { raw in
-                let p = raw.bindMemory(to: UInt8.self).baseAddress!
-                for i in 0..<8 { seq[i] = p[i] }
-            }
+            let s = iv.span
+            for i in 0..<8 { seq[i] = s[i] }
         }
         var ivCounter0 = InlineArray<16, UInt8>(repeating: 0)
         for i in 0..<8 { ivCounter0[8 + i] = seq[i] }
