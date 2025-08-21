@@ -7,103 +7,83 @@ struct ChaCha20Poly1305OpenSSH {
     /// Encrypt data using ChaCha20-Poly1305 (OpenSSH variant)
     /// OpenSSH uses 64-byte keys: 32 bytes for main cipher, 32 bytes for header
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        // Temporarily disabled due to implementation issues
-        throw SSHKeyError.unsupportedCipher("ChaCha20-Poly1305 encryption is temporarily unavailable")
-        
-        guard key.count == 64 else { // OpenSSH uses 2x32 byte keys
+        guard key.count == 64 else { // 2 x 256-bit keys
             throw SSHKeyError.invalidKeyData
         }
-        
-        // Split keys
+        // Layout per OpenSSH: first 32 bytes = K2 (payload + MAC), second 32 bytes = K1 (header) – header unused here
         let mainKey = Array(key.prefix(32))
-        let headerKey = Array(key.suffix(32))
-        
-        // For private key encryption, the IV parameter is used directly
-        // Pad IV to 16 bytes if needed
-        var fullIV = Data(count: 16)
-        if iv.count > 0 {
-            fullIV.replaceSubrange(0..<min(iv.count, 16), with: iv)
-        }
-        
-        // Create ChaCha20 context (header key unused for private keys)
-        var mainCtx = ChaCha20Context(key: mainKey)
-        
-        // Generate Poly1305 key by running ChaCha20 on zeros with counter=0
-        mainCtx.ivSetup(iv: fullIV)
-        var polyKey = Data(repeating: 0, count: 32) // Initialize with zeros
-        let polyKeyZeros = Data(repeating: 0, count: 32)
-        mainCtx.encrypt(src: polyKeyZeros, dst: &polyKey)
-        
-        // Set ChaCha20 counter to 1 for main encryption
-        var ivWithCounter = fullIV
-        ivWithCounter[0] = 1 // Set first byte to 1 (OpenSSH style)
-        mainCtx.ivSetup(iv: ivWithCounter)
-        
-        // Encrypt the data
+        // Sequence (nonce) comes from iv (8 bytes) or zero if absent
+        var seq = Data(repeating: 0, count: 8)
+        if iv.count >= 8 { seq.replaceSubrange(0..<8, with: iv.prefix(8)) }
+        // Build 16-byte IV buffer: 8 bytes counter || 8 bytes sequence (both little-endian interpretation)
+        var ivCounter0 = Data(count: 16)
+        // counter already zero
+        ivCounter0.replaceSubrange(8..<16, with: seq)
+        var ctx = ChaCha20Context(key: mainKey)
+        // Generate Poly1305 one-time key using counter=0
+        ctx.ivSetup(iv: ivCounter0)
+        var polyKey = Data(repeating: 0, count: 32)
+        let zeroBlock = Data(repeating: 0, count: 32)
+        ctx.encrypt(src: zeroBlock, dst: &polyKey) // first 256 bits of keystream
+        // Encrypt payload with counter=1
+        var ivCounter1 = ivCounter0
+        ivCounter1[0] = 1 // little-endian 64-bit value = 1 (low 32 bits in first 4 bytes, rest zero fine)
+        ctx.ivSetup(iv: ivCounter1)
         var encrypted = Data(count: data.count)
-        mainCtx.encrypt(src: data, dst: &encrypted)
-        
-        // Calculate Poly1305 tag
+        ctx.encrypt(src: data, dst: &encrypted)
+        // MAC over ciphertext only (no AAD in this simplified usage)
         let tag = Poly1305.auth(message: encrypted, key: polyKey)
-        
-        // Return encrypted data + tag
         return encrypted + tag
     }
     
     /// Decrypt data using ChaCha20-Poly1305 (OpenSSH variant)
     static func decrypt(data: Data, key: Data, iv: Data) throws -> Data {
-        // Temporarily disabled due to implementation issues
-        throw SSHKeyError.unsupportedCipher("ChaCha20-Poly1305 decryption is temporarily unavailable")
-        
-        guard key.count == 64 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Check minimum size (need at least 16 bytes for tag)
-        guard data.count >= 16 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        // Split keys
-        let mainKey = Array(key.prefix(32))
-        let headerKey = Array(key.suffix(32))
-        
-        // Split data and tag
-        let encrypted = data.prefix(data.count - 16)
+        guard key.count == 64 else { throw SSHKeyError.invalidKeyData }
+        guard data.count >= 16 else { throw SSHKeyError.invalidKeyData }
+        let ciphertextSlice = data.prefix(data.count - 16)
+        // Ensure contiguous Data storage (avoid potential slice indexing traps in constant-time ops)
+        let ciphertext = Data(ciphertextSlice)
         let tag = data.suffix(16)
-        
-        // For private key decryption, the IV parameter is used directly
-        // Pad IV to 16 bytes if needed
-        var fullIV = Data(count: 16)
-        if iv.count > 0 {
-            fullIV.replaceSubrange(0..<min(iv.count, 16), with: iv)
-        }
-        
-        // Create ChaCha20 context (header key unused for private keys)
-        var mainCtx = ChaCha20Context(key: mainKey)
-        
-        // Generate Poly1305 key
-        mainCtx.ivSetup(iv: fullIV)
-        var polyKey = Data(repeating: 0, count: 32) // Initialize with zeros
-        let polyKeyZeros = Data(repeating: 0, count: 32)
-        mainCtx.encrypt(src: polyKeyZeros, dst: &polyKey)
-        
-        // Verify tag
-        let expectedTag = Poly1305.auth(message: encrypted, key: polyKey)
-        guard tag == expectedTag else {
+        // Sequence (nonce)
+        var seq = Data(repeating: 0, count: 8)
+        if iv.count >= 8 { seq.replaceSubrange(0..<8, with: iv.prefix(8)) }
+        var ivCounter0 = Data(count: 16)
+        ivCounter0.replaceSubrange(8..<16, with: seq)
+        let mainKey = Array(key.prefix(32))
+        var ctx = ChaCha20Context(key: mainKey)
+        // Re-create Poly1305 key
+        ctx.ivSetup(iv: ivCounter0)
+        var polyKey = Data(repeating: 0, count: 32)
+        let zeroBlock = Data(repeating: 0, count: 32)
+        ctx.encrypt(src: zeroBlock, dst: &polyKey)
+        // Verify tag constant-time
+        let expected = Poly1305.auth(message: ciphertext, key: polyKey)
+        guard constantTimeEqual(expected, tag) else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        // Set ChaCha20 counter to 1 for main decryption
-        var ivWithCounter = fullIV
-        ivWithCounter[0] = 1 // Set first byte to 1 (OpenSSH style)
-        mainCtx.ivSetup(iv: ivWithCounter)
-        
-        // Decrypt the data
-        var decrypted = Data(count: encrypted.count)
-        mainCtx.encrypt(src: encrypted, dst: &decrypted) // ChaCha20 is symmetric
-        
+        // Decrypt with counter=1
+        var ivCounter1 = ivCounter0
+        ivCounter1[0] = 1
+        ctx.ivSetup(iv: ivCounter1)
+        var decrypted = Data(count: ciphertext.count)
+        ctx.encrypt(src: ciphertext, dst: &decrypted)
         return decrypted
+    }
+
+    /// Constant-time comparison (16-byte tags here)
+    private static func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
+        if a.count != b.count { return false }
+        var diff: UInt8 = 0
+        a.withUnsafeBytes { ab in
+            b.withUnsafeBytes { bb in
+                let ap = ab.bindMemory(to: UInt8.self).baseAddress!
+                let bp = bb.bindMemory(to: UInt8.self).baseAddress!
+                for i in 0..<a.count {
+                    diff |= ap[i] ^ bp[i]
+                }
+            }
+        }
+        return diff == 0
     }
 }
 
@@ -271,18 +251,18 @@ private struct Poly1305 {
         var t3 = UInt32(key[12]) | UInt32(key[13]) << 8 | UInt32(key[14]) << 16 | UInt32(key[15]) << 24
         
         // Clamp and compute r values (matching OpenSSH)
-        var r0 = t0 & 0x3ffffff
+        let r0 = t0 & 0x3ffffff
         t0 >>= 26
         t0 |= t1 << 6
-        var r1 = t0 & 0x3ffff03
+        let r1 = t0 & 0x3ffff03
         t1 >>= 20
         t1 |= t2 << 12
-        var r2 = t1 & 0x3ffc0ff
+        let r2 = t1 & 0x3ffc0ff
         t2 >>= 14
         t2 |= t3 << 18
-        var r3 = t2 & 0x3f03fff
+        let r3 = t2 & 0x3f03fff
         t3 >>= 8
-        var r4 = t3 & 0x00fffff
+        let r4 = t3 & 0x00fffff
         
         // Precompute multipliers
         let s1 = r1 &* 5
@@ -389,7 +369,7 @@ private struct Poly1305 {
         var g1 = h1 + b; b = g1 >> 26; g1 &= 0x3ffffff
         var g2 = h2 + b; b = g2 >> 26; g2 &= 0x3ffffff
         var g3 = h3 + b; b = g3 >> 26; g3 &= 0x3ffffff
-        var g4 = h4 &+ b &- (1 << 26)
+        let g4 = h4 &+ b &- (1 << 26)
         
         // b = (g4 >> 31) - 1, nb = ~b
         // In C: if g4 has high bit set (would be negative), (g4 >> 31) = 1, so b = 0
