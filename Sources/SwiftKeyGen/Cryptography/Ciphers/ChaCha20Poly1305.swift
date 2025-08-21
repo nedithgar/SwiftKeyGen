@@ -90,14 +90,10 @@ struct ChaCha20Poly1305OpenSSH {
     /// Constant-time comparison (16-byte tags here)
     private static func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
         if a.count != b.count { return false }
+        let sa = a.span
+        let sb = b.span
         var diff: UInt8 = 0
-        a.withUnsafeBytes { ab in
-            b.withUnsafeBytes { bb in
-                let ap = ab.bindMemory(to: UInt8.self).baseAddress!
-                let bp = bb.bindMemory(to: UInt8.self).baseAddress!
-                for i in 0..<a.count { diff |= ap[i] ^ bp[i] }
-            }
-        }
+        for i in 0..<sa.count { diff |= sa[i] ^ sb[i] }
         return diff == 0
     }
 }
