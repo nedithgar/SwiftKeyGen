@@ -12,24 +12,33 @@ private struct AESBlock {
     init(iv data: Data) {
         precondition(data.count == 16, "IV must be 16 bytes")
         var tmp = InlineArray<16, UInt8>(repeating: 0)
-        for i in 0..<16 { tmp[i] = data[i] }
+        let src = data.span
+        var dst = tmp.mutableSpan
+        for i in 0..<16 { dst[i] = src[i] }
         self.storage = tmp
     }
     init(data: Data, offset: Int) {
         precondition(offset + 16 <= data.count, "Out of range block load")
         var tmp = InlineArray<16, UInt8>(repeating: 0)
-        for i in 0..<16 { tmp[i] = data[offset + i] }
+        let src = data.span
+        var dst = tmp.mutableSpan
+        for i in 0..<16 { dst[i] = src[offset + i] }
         self.storage = tmp
     }
     init(raw: InlineArray<16, UInt8>) { self.storage = raw }
     func toData() -> Data {
         var d = Data(count: 16)
-        for i in 0..<16 { d[i] = storage[i] }
+        var outSpan = d.mutableSpan
+        let src = storage.span
+        for i in 0..<16 { outSpan[i] = src[i] }
         return d
     }
     static func ^ (lhs: AESBlock, rhs: AESBlock) -> AESBlock {
         var out = InlineArray<16, UInt8>(repeating: 0)
-        for i in 0..<16 { out[i] = lhs.storage[i] ^ rhs.storage[i] }
+        var span = out.mutableSpan
+        let l = lhs.storage.span
+        let r = rhs.storage.span
+        for i in 0..<16 { span[i] = l[i] ^ r[i] }
         return AESBlock(raw: out)
     }
 }
@@ -58,12 +67,22 @@ struct AESCBC {
         
         // Preallocate result buffer
         var result = Data(count: data.count)
+        if data.isEmpty { return result }
+        var outSpan = result.mutableSpan
+        let inSpan = data.span
         var previous = AESBlock(iv: iv)
+        var blockBuf = InlineArray<16, UInt8>(repeating: 0)
         for offset in stride(from: 0, to: data.count, by: 16) {
-            let plainBlock = AESBlock(data: data, offset: offset)
+            // Load plaintext block into blockBuf
+            var bbSpan = blockBuf.mutableSpan
+            for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
+            let plainBlock = AESBlock(raw: blockBuf)
             let xored = plainBlock ^ previous
             let cipherData = try aes.encryptBlock(xored.toData())
-            result.replaceSubrange(offset..<(offset + 16), with: cipherData)
+            let cSpan = cipherData.span
+            for i in 0..<16 { outSpan[offset + i] = cSpan[i] }
+            previous = AESBlock(raw: blockBuf) // will overwrite next loop anyway
+            // Reload previous from ciphertext for correctness
             previous = AESBlock(data: cipherData, offset: 0)
         }
         return result
@@ -89,13 +108,22 @@ struct AESCBC {
         let aes = try AESEngine(key: key)
         
         var result = Data(count: data.count)
+        if data.isEmpty { return result }
+        var outSpan = result.mutableSpan
+        let inSpan = data.span
         var previous = AESBlock(iv: iv)
+        var blockBuf = InlineArray<16, UInt8>(repeating: 0)
         for offset in stride(from: 0, to: data.count, by: 16) {
-            let cipherBlock = AESBlock(data: data, offset: offset)
+            // Load cipher block into blockBuf
+            var bbSpan = blockBuf.mutableSpan
+            for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
+            let cipherBlock = AESBlock(raw: blockBuf)
             let decryptedData = try aes.decryptBlock(cipherBlock.toData())
             let decrypted = AESBlock(data: decryptedData, offset: 0)
             let plain = decrypted ^ previous
-            result.replaceSubrange(offset..<(offset + 16), with: plain.toData())
+            let plainData = plain.toData()
+            let pSpan = plainData.span
+            for i in 0..<16 { outSpan[offset + i] = pSpan[i] }
             previous = cipherBlock
         }
         return result
