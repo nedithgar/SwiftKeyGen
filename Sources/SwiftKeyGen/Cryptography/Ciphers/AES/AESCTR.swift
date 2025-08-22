@@ -17,7 +17,11 @@ struct AESCTR {
 
         // Initialize counter from IV
         var counter = Block(repeating: 0)
-        for i in 0..<16 { counter[i] = iv[i] }
+        do {
+            var cSpan = counter.mutableSpan
+            let ivSpan = iv.span
+            for i in 0..<16 { cSpan[i] = ivSpan[i] }
+        }
 
         // Preallocate output
         var output = Data(count: data.count)
