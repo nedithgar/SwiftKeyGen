@@ -7,17 +7,25 @@ struct KeyParserTests {
     // TODO: Optimize tests
     // MARK: `detectKeyTypes` 2000s, `validateKeyData` 500s, `multipleHashTypes` 800s
     
-    @Test func detectKeyTypes() throws {
-        // Generate various keys and test detection
-        let keyTypes: [KeyType] = [.ed25519, .rsa, .ecdsa256, .ecdsa384, .ecdsa521]
-        
+    @Test func detectKeyTypesNonRSA() throws {
+        // Faster path – exclude RSA (expensive) to keep core detection coverage
+        let keyTypes: [KeyType] = [.ed25519, .ecdsa256, .ecdsa384, .ecdsa521]
+
         for keyType in keyTypes {
             let key = try SwiftKeyGen.generateKey(type: keyType, comment: "test")
             let publicKeyString = key.publicKeyString()
-            
+
             let detectedType = KeyParser.detectKeyType(from: publicKeyString)
             #expect(detectedType == keyType)
         }
+    }
+
+    @Test func detectKeyTypesRSAOnly() throws {
+        // Isolate RSA so its higher generation cost doesn't multiply with others
+        let key = try SwiftKeyGen.generateKey(type: .rsa, comment: "test-rsa")
+        let publicKeyString = key.publicKeyString()
+        let detectedType = KeyParser.detectKeyType(from: publicKeyString)
+        #expect(detectedType == .rsa)
     }
     
     @Test func parsePublicKeyWithComment() throws {
@@ -41,17 +49,22 @@ struct KeyParserTests {
         #expect(comment == nil)
     }
     
-    @Test func validateKeyData() throws {
-        // Test valid keys
-        let keyTypes: [KeyType] = [.ed25519, .rsa, .ecdsa256, .ecdsa384, .ecdsa521]
-        
+    @Test func validateKeyDataNonRSA() throws {
+        // Validate all non-RSA key types
+        let keyTypes: [KeyType] = [.ed25519, .ecdsa256, .ecdsa384, .ecdsa521]
+
         for keyType in keyTypes {
             let key = try SwiftKeyGen.generateKey(type: keyType)
             let keyData = key.publicKeyData()
-            
-            // Should not throw
+
             try KeyParser.validatePublicKeyData(keyData, type: keyType)
         }
+    }
+
+    @Test func validateKeyDataRSAOnly() throws {
+        let key = try SwiftKeyGen.generateKey(type: .rsa)
+        let keyData = key.publicKeyData()
+        try KeyParser.validatePublicKeyData(keyData, type: .rsa)
     }
     
     @Test func invalidKeyData() throws {
