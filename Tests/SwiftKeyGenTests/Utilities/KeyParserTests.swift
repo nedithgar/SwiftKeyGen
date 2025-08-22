@@ -3,6 +3,9 @@ import Foundation
 @testable import SwiftKeyGen
 
 struct KeyParserTests {
+
+    // TODO: Optimize tests
+    // MARK: `detectKeyTypes` 2000s, `validateKeyData` 500s, `multipleHashTypes` 800s
     
     @Test func detectKeyTypes() throws {
         // Generate various keys and test detection
