@@ -107,17 +107,22 @@ struct KeyParserTests {
     }
     
     @Test func multipleHashTypesNonRSA() throws {
-        // Use Ed25519 for speed while exercising all supported hash output formats.
-        let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
-        let publicKeyString = key.publicKeyString()
+        // Exercise all fingerprint hash types across each non-RSA algorithm (performance: exclude RSA).
+        // This ensures consistent formatting logic irrespective of underlying key algorithm.
+        let keyTypes: [KeyType] = [.ed25519, .ecdsa256, .ecdsa384, .ecdsa521]
 
-        let sha256 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha256)
-        let sha512 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha512)
-        let md5 = try KeyParser.fingerprint(from: publicKeyString, hash: .md5)
+        for keyType in keyTypes {
+            let key = try SwiftKeyGen.generateKey(type: keyType)
+            let publicKeyString = key.publicKeyString()
 
-        #expect(sha256.hasPrefix("SHA256:"))
-        #expect(sha512.hasPrefix("SHA512:"))
-        #expect(md5.contains(":") && !md5.hasPrefix("SHA")) // MD5 prints hex groups with colons
+            let sha256 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha256)
+            let sha512 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha512)
+            let md5 = try KeyParser.fingerprint(from: publicKeyString, hash: .md5)
+
+            #expect(sha256.hasPrefix("SHA256:"), "Expected SHA256 prefix for \(keyType)")
+            #expect(sha512.hasPrefix("SHA512:"), "Expected SHA512 prefix for \(keyType)")
+            #expect(md5.contains(":") && !md5.hasPrefix("SHA"), "Expected MD5 colon separated hex for \(keyType)") // MD5 prints hex groups with colons
+        }
     }
 
     @Test func multipleHashTypesRSAOnly() throws {
