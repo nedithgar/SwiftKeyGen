@@ -41,26 +41,36 @@ struct TripleDESCBC {
         let des2 = try DES(keyBytes: k2)
         let des3 = try DES(keyBytes: k3)
 
-        var result = Data(capacity: data.count)
-
-        // Previous ciphertext (CBC chaining) as InlineArray
+        if data.isEmpty { return Data() }
+        var result = Data(count: data.count)
+        var outSpan = result.mutableSpan
+        let inSpan = data.span
+        let ivSpan = iv.span
         var previous = DESBlock(repeating: 0)
-        for i in 0..<8 { previous[i] = iv[i] }
-
-        // Process each block with 3DES-EDE (Encrypt-Decrypt-Encrypt)
+        do {
+            var span = previous.mutableSpan
+            for i in 0..<8 { span[i] = ivSpan[i] }
+        }
+        var plain = DESBlock(repeating: 0)
+        var xored = DESBlock(repeating: 0)
         for offset in stride(from: 0, to: data.count, by: 8) {
-            var plain = DESBlock(repeating: 0)
-            for i in 0..<8 { plain[i] = data[offset + i] }
-
-            // XOR with previous (CBC)
-            var xored = DESBlock(repeating: 0)
-            for i in 0..<8 { xored[i] = plain[i] ^ previous[i] }
-
+            // Load plaintext
+            do {
+                var p = plain.mutableSpan
+                for i in 0..<8 { p[i] = inSpan[offset + i] }
+            }
+            // XOR with previous
+            do {
+                let p = plain.span
+                let prev = previous.span
+                var xs = xored.mutableSpan
+                for i in 0..<8 { xs[i] = p[i] ^ prev[i] }
+            }
             let t1 = des1.encryptBlock(xored)
             let t2 = des2.decryptBlock(t1)
             let cipher = des3.encryptBlock(t2)
-
-            result.append(cipher.toData())
+            let cSpan = cipher.span
+            for i in 0..<8 { outSpan[offset + i] = cSpan[i] }
             previous = cipher
         }
         return result
@@ -79,24 +89,34 @@ struct TripleDESCBC {
         let des2 = try DES(keyBytes: k2)
         let des3 = try DES(keyBytes: k3)
 
-        var result = Data(capacity: data.count)
+        if data.isEmpty { return Data() }
+        var result = Data(count: data.count)
+        var outSpan = result.mutableSpan
+        let inSpan = data.span
+        let ivSpan = iv.span
         var previous = DESBlock(repeating: 0)
-        for i in 0..<8 { previous[i] = iv[i] }
-
+        do {
+            var span = previous.mutableSpan
+            for i in 0..<8 { span[i] = ivSpan[i] }
+        }
+        var cipherBlock = DESBlock(repeating: 0)
         for offset in stride(from: 0, to: data.count, by: 8) {
-            var cipher = DESBlock(repeating: 0)
-            for i in 0..<8 { cipher[i] = data[offset + i] }
-
-            let t1 = des3.decryptBlock(cipher)
+            // Load cipher block
+            do {
+                var cs = cipherBlock.mutableSpan
+                for i in 0..<8 { cs[i] = inSpan[offset + i] }
+            }
+            let t1 = des3.decryptBlock(cipherBlock)
             let t2 = des2.encryptBlock(t1)
             let dec = des1.decryptBlock(t2)
-
-            // XOR with previous ciphertext block (CBC)
-            var plain = DESBlock(repeating: 0)
-            for i in 0..<8 { plain[i] = dec[i] ^ previous[i] }
-
-            result.append(plain.toData())
-            previous = cipher
+            // Produce plaintext by XOR dec and previous inside a limited borrow scope
+            do {
+                let decSpan = dec.span
+                let prevSpan = previous.span
+                for i in 0..<8 { outSpan[offset + i] = decSpan[i] ^ prevSpan[i] }
+            }
+            // Now safe to update previous
+            previous = cipherBlock
         }
         return result
     }
