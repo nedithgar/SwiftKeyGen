@@ -4,8 +4,9 @@ import Foundation
 
 struct KeyParserTests {
 
-    // TODO: Optimize tests
-    // MARK: `detectKeyTypes` 2000s, `validateKeyData` 500s, `multipleHashTypes` 800s
+    // TODO: Further micro-optimizations if aggregate suite time regresses
+    // MARK: Approx timings before optimization: `detectKeyTypes` 2000s, `validateKeyData` 500s, `multipleHashTypes` 800s
+    //       `multipleHashTypes` now split into fast (Ed25519) + minimal RSA-only to cut runtime.
     
     @Test func detectKeyTypesNonRSA() throws {
         // Faster path – exclude RSA (expensive) to keep core detection coverage
@@ -105,16 +106,25 @@ struct KeyParserTests {
         #expect(directFingerprint == parsedFingerprint)
     }
     
-    @Test func multipleHashTypes() throws {
-        let key = try SwiftKeyGen.generateKey(type: .rsa) as! RSAKey
+    @Test func multipleHashTypesNonRSA() throws {
+        // Use Ed25519 for speed while exercising all supported hash output formats.
+        let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let publicKeyString = key.publicKeyString()
-        
+
         let sha256 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha256)
         let sha512 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha512)
         let md5 = try KeyParser.fingerprint(from: publicKeyString, hash: .md5)
-        
+
         #expect(sha256.hasPrefix("SHA256:"))
         #expect(sha512.hasPrefix("SHA512:"))
-        #expect(md5.contains(":") && !md5.hasPrefix("SHA"))
+        #expect(md5.contains(":") && !md5.hasPrefix("SHA")) // MD5 prints hex groups with colons
+    }
+
+    @Test func multipleHashTypesRSAOnly() throws {
+        // Minimal RSA coverage (single hash) to ensure RSA path still interoperates with fingerprinting.
+        let key = try SwiftKeyGen.generateKey(type: .rsa) as! RSAKey
+        let publicKeyString = key.publicKeyString()
+        let sha256 = try KeyParser.fingerprint(from: publicKeyString, hash: .sha256)
+        #expect(sha256.hasPrefix("SHA256:"))
     }
 }
