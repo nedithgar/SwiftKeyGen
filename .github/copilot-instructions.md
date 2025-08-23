@@ -78,7 +78,7 @@ Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, no
 - Keep fixed sizes in a single source of truth (e.g. a `static let blockSize = 16`) and reference via generic parameter `N` when constructing an `InlineArray` to prevent mismatches.
 - When interoperating with C APIs that require raw pointers, confine `withUnsafeBytes` / `withUnsafeMutableBytes` to the narrowest scope and immediately wrap the memory in a `Span` for internal processing.
 
-Reference docs: see `Docs/InlineArray` and `Docs/Span` for the generated symbol documentation of initializers, indexing, and slicing helpers.
+Reference docs: see `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` (standard `Data` bridging + span helpers) for the generated symbol documentation of initializers, indexing, and slicing helpers.
 
 Rationale: These abstractions give predictable performance (no surprise allocations), eliminate classes of pointer lifetime bugs (use‑after‑free, double free), and keep code closer to pure Swift value semantics.
 
