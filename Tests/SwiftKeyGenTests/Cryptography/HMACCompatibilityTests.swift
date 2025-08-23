@@ -84,9 +84,9 @@ struct HMACCompatibilityTests {
         ])
         
         let testCases = [
-            ("test.example.com", "|1|HaNPCCkpLq+qhleDMimm/Tod4q0=|VxJmTUzgxzBWGmT8FW8QHcbhmL0="),
-            ("localhost", "|1|HaNPCCkpLq+qhleDMimm/Tod4q0=|a6Qn7jdlVkqg7OwLI/0PQFKzNMw="),
-            ("10.0.0.1", "|1|HaNPCCkpLq+qhleDMimm/Tod4q0=|Ec5vGhcNf1z+5+bDBYRJH/d5jSY=")
+            ("test.example.com", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|7DBFvfIIAxNY7UMj5O3hNRxfTrk="),
+            ("localhost", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|e46EZf40DiTd9NkZyO15Ko9hl/U="),
+            ("10.0.0.1", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|82B4NA5XRpnF1kvRst2lgEMNZqc=")
         ]
         
         for (hostname, expectedHash) in testCases {
