@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("Final Signature Verification Test", .serialized)
+@Suite("Final Signature Verification Test")
 struct FinalSignatureVerificationTest {
     
     @Test("RSA CA signing Ed25519 user certificate")
