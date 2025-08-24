@@ -6,7 +6,7 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - Language/Tooling: Swift 6.2 Package (SPM). Test framework: Swift Testing (not XCTest).
 - Primary library target: `SwiftKeyGen` (+ CLI targets: `swiftkeygen`, `HMACVerifyTool`).
 - Domains: SSH key generation, parsing, conversion, fingerprinting, certificates, cryptography primitives.
-- External deps (Package.swift): `swift-crypto`, `BigInt`.
+- External dependencies (Package.swift): `swift-crypto`, `BigInt`.
 
 ## Build & Run
 - Build: `swift build`
