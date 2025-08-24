@@ -255,6 +255,8 @@ public struct OpenSSHPrivateKey {
             case .p521(let key):
                 privateKeyScalar = key.rawRepresentation
             }
+            // ECDSA private keys must use encodeBigInt to match OpenSSH format
+            // The bigint encoding handles sign bit properly
             encoder.encodeBigInt(privateKeyScalar)
             
         default:
@@ -505,7 +507,7 @@ public struct OpenSSHPrivateKey {
         guard !iqmpData.isEmpty else {
             throw SSHKeyError.invalidKeyData
         }
-        let iqmp = BigUInt(iqmpData)
+        _ = BigUInt(iqmpData) // Read but not currently used in RSA key reconstruction
         
         // Read prime p
         let pData = try decoder.decodeBigInt()

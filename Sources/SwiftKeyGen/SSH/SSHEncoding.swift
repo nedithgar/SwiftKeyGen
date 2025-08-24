@@ -32,8 +32,14 @@ struct SSHEncoder {
         }
         
         // Remove leading zeros (except if it's needed for sign)
-        while bytes.count > 1 && bytes[0] == 0 && bytes[1] & 0x80 == 0 {
-            bytes.removeFirst()
+        // Use index-based approach instead of removeFirst() to avoid potential issues
+        var startIndex = 0
+        while startIndex + 1 < bytes.count && bytes[startIndex] == 0 && bytes[startIndex + 1] & 0x80 == 0 {
+            startIndex += 1
+        }
+        
+        if startIndex > 0 {
+            bytes = Data(bytes.suffix(from: startIndex))
         }
         
         encodeData(bytes)
@@ -112,13 +118,24 @@ struct SSHDecoder {
             return Data()
         }
         
-        // Remove any leading zeros except if needed for sign
-        // (SSH format may include a leading zero byte for positive numbers with high bit set)
-        var result = mpintData
-        while result.count > 1 && result[0] == 0 {
-            result = result.dropFirst()
+        // Remove leading zeros to match OpenSSH behavior
+        // OpenSSH's sshbuf_get_bignum2_bytes_direct trims leading zeros,
+        // but we need to be careful: for ECDSA keys, we might legitimately 
+        // have multiple leading zeros that are part of the key value
+        //
+        // The SSH bigint format adds ONE leading 0x00 if the high bit is set.
+        // So we should strip leading zeros, but preserve the semantic value.
+        var startIndex = 0
+        while startIndex < mpintData.count && mpintData[startIndex] == 0 {
+            startIndex += 1
         }
         
-        return result
+        // If all bytes were zeros, return empty data (represents 0)
+        if startIndex == mpintData.count {
+            return Data()
+        }
+        
+        let result = mpintData.suffix(from: startIndex)
+        return Data(result)
     }
 }
