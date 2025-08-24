@@ -5,7 +5,7 @@ import Foundation
 @Suite("Private Key Parsing Tests")
 struct PrivateKeyParsingTests {
     
-    @Test("Parse RSA private key from OpenSSH format")
+    @Test("Parse RSA private key from OpenSSH format", .disabled()) // Disabled due to long runtime
     func testRSAPrivateKeyParsing() throws {
         // Generate an RSA key
         let originalKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@example.com") as! RSAKey

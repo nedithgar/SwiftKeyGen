@@ -214,10 +214,48 @@ public struct OpenSSHPrivateKey {
             // Encode prime q
             encoder.encodeBigInt(privateKey.q.serialize())
             
-        case _ as ECDSAKey:
+        case let ecdsaKey as ECDSAKey:
             // ECDSA private key format
-            // This is complex and requires access to EC components
-            throw SSHKeyError.unsupportedKeyType
+            // Based on OpenSSH's ssh-ecdsa.c ssh_ecdsa_serialize_private
+            // Format: curve_name, public_key (EC point), private_key (scalar), comment
+            
+            // 1. Encode curve name
+            let curveName: String
+            switch ecdsaKey.keyType {
+            case .ecdsa256:
+                curveName = "nistp256"
+            case .ecdsa384:
+                curveName = "nistp384"
+            case .ecdsa521:
+                curveName = "nistp521"
+            default:
+                throw SSHKeyError.unsupportedKeyType
+            }
+            encoder.encodeString(curveName)
+            
+            // 2. Encode public key point (X9.63 representation)
+            let publicKeyPoint: Data
+            switch ecdsaKey.privateKeyStorage {
+            case .p256(let key):
+                publicKeyPoint = key.publicKey.x963Representation
+            case .p384(let key):
+                publicKeyPoint = key.publicKey.x963Representation
+            case .p521(let key):
+                publicKeyPoint = key.publicKey.x963Representation
+            }
+            encoder.encodeData(publicKeyPoint)
+            
+            // 3. Encode private key scalar (raw representation)
+            let privateKeyScalar: Data
+            switch ecdsaKey.privateKeyStorage {
+            case .p256(let key):
+                privateKeyScalar = key.rawRepresentation
+            case .p384(let key):
+                privateKeyScalar = key.rawRepresentation
+            case .p521(let key):
+                privateKeyScalar = key.rawRepresentation
+            }
+            encoder.encodeBigInt(privateKeyScalar)
             
         default:
             throw SSHKeyError.unsupportedKeyType
