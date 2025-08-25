@@ -109,11 +109,67 @@ Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, no
 - Put tests in the nearest domain folder (`Tests/SwiftKeyGenTests/<Domain>`).
 - Follow existing naming: `<Feature>Tests.swift` or `<Format>ParserTests.swift`.
 - Use current test examples (e.g. `RSABitSizeTest`, `PEMParserTests`) for structure—focused, data-driven, explicit assertions.
+- **Single Test Target**: Keep all tests in one target (`SwiftKeyGenTests`); use tags to organize by type rather than creating separate targets.
+
+### Test Tags (Swift Testing)
+Tags allow categorization and selective execution of tests without separate test targets. Define custom tags by extending `Tag`:
+
+```swift
+import Testing
+
+extension Tag {
+    @Tag static var unit: Self
+    @Tag static var integration: Self
+    @Tag static var performance: Self
+    @Tag static var critical: Self
+}
+```
+
+**Apply tags to tests:**
+```swift
+// Single tag
+@Test(.tags(.unit))
+func testKeyGeneration() { ... }
+
+// Multiple tags
+@Test(.tags(.integration, .critical))
+func testEndToEndKeyFlow() { ... }
+```
+
+**Apply tags to entire suites:**
+```swift
+@Suite(.tags(.integration))
+struct CertificateIntegrationTests {
+    @Test func testCertificateSigning() { ... }
+    @Test func testCertificateVerification() { ... }
+}
+```
+
+**Run tests by tag:**
+- In Xcode: Test navigator auto-groups by tags; select a tag to run those tests
+- Command line (requires Xcode 16.3+):
+  ```bash
+  # Run only unit tests
+  swift test --filter-tags unit
+  
+  # Run all except integration tests
+  swift test --skip-tags integration
+  
+  # SPM also supports filtering (check current version support)
+  swift test --filter 'tag:unit'
+  ```
+
+**Recommended tags for this project:**
+- `.unit` — Fast, focused tests of individual functions/types
+- `.integration` — Multi-component tests (e.g., format conversion round-trips, CLI workflows)
+- `.performance` — Benchmarks, large key generation
+- `.critical` — Core security/correctness tests (run in CI always)
 
 ### Test Requirements
 - Add at least one cross-format round‑trip test when adding a new format or conversion path.
 - Test edge cases: parse failures (bad headers), boundary conditions, error paths.
 - Integration tests via CLI if applicable.
+- Tag tests appropriately to enable selective execution during development vs. CI.
 
 ### Adding Formats / Conversions
 1. Implement low-level parse/serialize in `Formats/<FormatName>/`.
