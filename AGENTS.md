@@ -94,10 +94,4 @@ Rationale: These abstractions give predictable performance (no surprise allocati
 - Do NOT introduce experimental crypto or unsupported key types without roadmap alignment.
 - Avoid adding platform-specific code unless guarded with availability checks matching existing style.
 
-## Example: Adding a New Fingerprint Format (Hypothetical)
-- Extend enum (e.g. `FingerprintHash` or formatter enum) with case + documentation.
-- Implement calculation using existing digest pipeline.
-- Add display formatting in the same file as similar cases.
-- Write tests: one known vector + integration through `KeyPair.fingerprint()`.
-
 Keep changes small, incremental, and covered by tests. Provide concrete reasoning in PR descriptions (what OpenSSH behavior or spec you're matching).
