@@ -146,18 +146,19 @@ struct CertificateIntegrationTests {
 ```
 
 **Run tests by tag:**
-- In Xcode: Test navigator auto-groups by tags; select a tag to run those tests
-- Command line (requires Xcode 16.3+):
+- **In Xcode**: Test navigator auto-groups by tags; select a tag to run those tests
+- **Command line with xcodebuild** (requires Xcode 16.3+):
   ```bash
-  # Run only unit tests
-  swift test --filter-tags unit
+  # Run only tests with unit tag
+  xcodebuild test -scheme SwiftKeyGen -only-testing-tags unit
   
   # Run all except integration tests
-  swift test --skip-tags integration
+  xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration
   
-  # SPM also supports filtering (check current version support)
-  swift test --filter 'tag:unit'
+  # Combine multiple tags
+  xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration,performance
   ```
+- **SPM (swift test)**: Tag filtering is **not yet supported** in SPM command-line tools (tracked as [swift-testing #591](https://github.com/swiftlang/swift-testing/issues/591)). Current workaround: use `--filter` with regex patterns matching test names
 
 **Recommended tags for this project:**
 - `.unit` — Fast, focused tests of individual functions/types
