@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("AES-CBC Tests", .tags(.unit))
-struct AESCBCTests {
+@Suite("AES-CBC Unit Tests", .tags(.unit))
+struct AESCBCUnitTests {
     @Test("AES-128-CBC encryption and decryption")
     func testAES128CBC() throws {
         let testData = Data(repeating: 0x41, count: 32) // 32 bytes of 'A'
