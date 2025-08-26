@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("AES-CBC Tests")
+@Suite("AES-CBC Tests", .tags(.unit))
 struct AESCBCTests {
     @Test("AES-128-CBC encryption and decryption")
     func testAES128CBC() throws {
