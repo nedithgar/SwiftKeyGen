@@ -6,7 +6,7 @@ import Foundation
 struct AESCTRUnitTests {
     
     
-    @Test("AES-128-CTR encryption and decryption") func testAESCTRBasic() throws {
+    @Test("AES-128-CTR encryption and decryption") func testAESCTR128() throws {
         // Test with a simple known pattern
         let key = Data(repeating: 0x2b, count: 16) // AES-128 key
         let iv = Data(repeating: 0x00, count: 16)  // Zero IV
@@ -21,29 +21,24 @@ struct AESCTRUnitTests {
     }
     
 
-    @Test("AES-128-CTR round-trip") func testAESCTR128RoundTrip() throws {
-        try roundTripCTR(keySize: 16, description: "AES-128")
-    }
-
-    @Test("AES-192-CTR round-trip") func testAESCTR192RoundTrip() throws {
-        try roundTripCTR(keySize: 24, description: "AES-192")
-    }
-
-    @Test("AES-256-CTR round-trip") func testAESCTR256RoundTrip() throws {
-        try roundTripCTR(keySize: 32, description: "AES-256")
-    }
-
-    /// Shared helper for AES-CTR round-trip tests across key sizes.
-    /// - Parameters:
-    ///   - keySize: Size in bytes (16, 24, 32).
-    ///   - description: Human readable label for expectation context.
-    private func roundTripCTR(keySize: Int, description: String, file: StaticString = #filePath, line: UInt = #line) throws {
-        let plaintext = Data("Hello, World! This is a test message.".utf8)
-        let iv = Data(repeating: 0x01, count: 16)
-        let key = Data(repeating: 0x2b, count: keySize)
+    @Test("AES-192-CTR encryption and decryption") func testAESCTR192() throws {
+        let key = Data(repeating: 0x2b, count: 24) // AES-192 key
+        let iv = Data(repeating: 0x00, count: 16)  // Zero IV (same baseline as 128-bit test)
+        let plaintext = Data(repeating: 0x00, count: 32)
         let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
+        #expect(ciphertext.count == plaintext.count)
         let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
-        #expect(decrypted == plaintext, "Round-trip failed for \(description) (\(keySize * 8) bits)")
+        #expect(decrypted == plaintext)
+    }
+
+    @Test("AES-256-CTR encryption and decryption") func testAESCTR256() throws {
+        let key = Data(repeating: 0x2b, count: 32) // AES-256 key
+        let iv = Data(repeating: 0x00, count: 16)  // Zero IV
+        let plaintext = Data(repeating: 0x00, count: 32)
+        let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
+        #expect(ciphertext.count == plaintext.count)
+        let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
+        #expect(decrypted == plaintext)
     }
     
     @Test("AES-128-CTR counter rollover encryption and decryption") func testCounterIncrement() throws {
