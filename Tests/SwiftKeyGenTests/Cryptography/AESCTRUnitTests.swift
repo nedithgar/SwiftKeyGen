@@ -2,10 +2,11 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("AES-CTR Tests")
-struct AESCTRTests {
+@Suite("AES-CTR Unit Tests", .tags(.unit))
+struct AESCTRUnitTests {
     
-    @Test func testAESCTRBasic() throws {
+    
+    @Test("AES-128-CTR encryption and decryption") func testAESCTRBasic() throws {
         // Test with a simple known pattern
         let key = Data(repeating: 0x2b, count: 16) // AES-128 key
         let iv = Data(repeating: 0x00, count: 16)  // Zero IV
@@ -19,7 +20,7 @@ struct AESCTRTests {
         #expect(decrypted == plaintext)
     }
     
-    @Test func testAESCTRDifferentKeySizes() throws {
+    @Test("AES-CTR encryption and decryption (128/192/256-bit keys)") func testAESCTRDifferentKeySizes() throws {
         let plaintext = Data("Hello, World! This is a test message.".utf8)
         let iv = Data(repeating: 0x01, count: 16)
         
@@ -42,7 +43,7 @@ struct AESCTRTests {
         #expect(decrypted256 == plaintext)
     }
     
-    @Test func testCounterIncrement() throws {
+    @Test("AES-128-CTR counter rollover encryption and decryption") func testCounterIncrement() throws {
         // Test that counter increments properly
         let key = Data(repeating: 0x2b, count: 16)
         let iv = Data([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -60,7 +61,7 @@ struct AESCTRTests {
         #expect(decrypted == plaintext)
     }
     
-    @Test func testInvalidKeySize() throws {
+    @Test("AES-CTR invalid key length") func testInvalidKeySize() throws {
         let plaintext = Data("test".utf8)
         let iv = Data(repeating: 0x00, count: 16)
         let invalidKey = Data(repeating: 0x2b, count: 15) // Invalid size
@@ -70,7 +71,7 @@ struct AESCTRTests {
         }
     }
     
-    @Test func testInvalidIVSize() throws {
+    @Test("AES-CTR invalid IV length") func testInvalidIVSize() throws {
         let plaintext = Data("test".utf8)
         let key = Data(repeating: 0x2b, count: 16)
         let invalidIV = Data(repeating: 0x00, count: 15) // Invalid size
