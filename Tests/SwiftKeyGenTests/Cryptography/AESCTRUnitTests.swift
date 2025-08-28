@@ -5,7 +5,6 @@ import Foundation
 @Suite("AES-CTR Unit Tests", .tags(.unit))
 struct AESCTRUnitTests {
     
-    
     @Test("AES-128-CTR encryption and decryption") func testAESCTR128() throws {
         try assertCTRBasic(keySize: 16)
     }
@@ -72,13 +71,16 @@ struct AESCTRUnitTests {
         #expect(decrypted == plaintext)
     }
 
-    @Test("AES-CTR invalid key length") func testInvalidKeySize() throws {
+    @Test("AES-CTR invalid key lengths") func testInvalidKeySizes() throws {
         let plaintext = Data("test".utf8)
         let iv = Data(repeating: 0x00, count: 16)
-        let invalidKey = Data(repeating: 0x2b, count: 15) // Invalid size
-        
-        #expect(throws: SSHKeyError.invalidKeyData) {
-            _ = try AESCTR.encrypt(data: plaintext, key: invalidKey, iv: iv)
+        // All sizes that should be rejected (valid sizes: 16, 24, 32)
+        let invalidSizes = [0, 1, 7, 8, 15, 17, 18, 23, 25, 31, 33, 48]
+        for size in invalidSizes {
+            let invalidKey = Data(repeating: 0x2b, count: size)
+            #expect(throws: SSHKeyError.invalidKeyData) {
+                _ = try AESCTR.encrypt(data: plaintext, key: invalidKey, iv: iv)
+            }
         }
     }
     
