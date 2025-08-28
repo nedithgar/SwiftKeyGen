@@ -67,6 +67,46 @@ struct AESCTRUnitTests {
         let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
         #expect(decrypted == plaintext)
     }
+
+    @Test("AES-192-CTR counter rollover encryption and decryption") func testAESCTR192CounterRolloverWrap() throws {
+        let key = Data(repeating: 0x2b, count: 24)
+        let iv = Data([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE])
+        let plaintext = Data(repeating: 0x00, count: 48)
+        let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
+        #expect(ciphertext.count == plaintext.count)
+        let block0 = ciphertext[0..<16]
+        let block1 = ciphertext[16..<32]
+        let block2 = ciphertext[32..<48]
+        #expect(block0 != block1)
+        #expect(block1 != block2)
+        #expect(block0 != block2)
+        let firstTwoPlainBlocks = Data(repeating: 0x00, count: 32)
+        let firstTwoCipher = try AESCTR.encrypt(data: firstTwoPlainBlocks, key: key, iv: iv)
+        #expect(firstTwoCipher == ciphertext.prefix(32))
+        let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
+        #expect(decrypted == plaintext)
+    }
+
+    @Test("AES-256-CTR counter rollover encryption and decryption") func testAESCTR256CounterRolloverWrap() throws {
+        let key = Data(repeating: 0x2b, count: 32)
+        let iv = Data([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                       0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE])
+        let plaintext = Data(repeating: 0x00, count: 48)
+        let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
+        #expect(ciphertext.count == plaintext.count)
+        let block0 = ciphertext[0..<16]
+        let block1 = ciphertext[16..<32]
+        let block2 = ciphertext[32..<48]
+        #expect(block0 != block1)
+        #expect(block1 != block2)
+        #expect(block0 != block2)
+        let firstTwoPlainBlocks = Data(repeating: 0x00, count: 32)
+        let firstTwoCipher = try AESCTR.encrypt(data: firstTwoPlainBlocks, key: key, iv: iv)
+        #expect(firstTwoCipher == ciphertext.prefix(32))
+        let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
+        #expect(decrypted == plaintext)
+    }
     
     @Test("AES-CTR invalid key length") func testInvalidKeySize() throws {
         let plaintext = Data("test".utf8)
