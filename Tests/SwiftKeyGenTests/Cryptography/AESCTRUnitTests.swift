@@ -55,13 +55,13 @@ struct AESCTRUnitTests {
         let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
         // ciphertext length should match plaintext length
         #expect(ciphertext.count == plaintext.count)
-        let b0 = ciphertext[0..<16]
-        let b1 = ciphertext[16..<32]
-        let b2 = ciphertext[32..<48]
+        let firstBlock = ciphertext[0..<16]
+        let secondBlock = ciphertext[16..<32]
+        let thirdBlock = ciphertext[32..<48]
         // Blocks should all differ (distinct keystream per counter value and after rollover)
-        #expect(b0 != b1)
-        #expect(b1 != b2)
-        #expect(b0 != b2)
+        #expect(firstBlock != secondBlock)
+        #expect(secondBlock != thirdBlock)
+        #expect(firstBlock != thirdBlock)
         let firstTwoPlain = Data(repeating: 0x00, count: 32)
         let firstTwoCipher = try AESCTR.encrypt(data: firstTwoPlain, key: key, iv: iv)
         // Re-encrypting prefix should reproduce identical first two blocks
