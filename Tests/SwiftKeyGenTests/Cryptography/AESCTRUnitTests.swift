@@ -84,13 +84,16 @@ struct AESCTRUnitTests {
         }
     }
     
-    @Test("AES-CTR invalid IV length") func testInvalidIVSize() throws {
+    @Test("AES-CTR invalid IV lengths") func testInvalidIVSizes() throws {
         let plaintext = Data("test".utf8)
         let key = Data(repeating: 0x2b, count: 16)
-        let invalidIV = Data(repeating: 0x00, count: 15) // Invalid size
-        
-        #expect(throws: SSHKeyError.invalidKeyData) {
-            _ = try AESCTR.encrypt(data: plaintext, key: key, iv: invalidIV)
+        // All IV sizes that should be rejected (valid IV size: 16 bytes)
+        let invalidIVLengths = [0, 1, 7, 8, 15, 17, 18, 24, 31, 32]
+        for len in invalidIVLengths {
+            let invalidIV = Data(repeating: 0x00, count: len)
+            #expect(throws: SSHKeyError.invalidKeyData) {
+                _ = try AESCTR.encrypt(data: plaintext, key: key, iv: invalidIV)
+            }
         }
     }
 }
