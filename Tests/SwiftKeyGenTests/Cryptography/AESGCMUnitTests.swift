@@ -2,8 +2,8 @@ import Testing
 @testable import SwiftKeyGen
 import Foundation
 
-@Suite("AES-GCM Tests")
-struct AESGCMTests {
+@Suite("AES-GCM Unit Tests", .tags(.unit))
+struct AESGCMUnitTests {
     
     @Test("AES-GCM encryption and decryption")
     func testAESGCMEncryptDecrypt() throws {
