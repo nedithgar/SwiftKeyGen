@@ -20,7 +20,6 @@ struct AESCTRUnitTests {
         #expect(decrypted == plaintext)
     }
     
-
     @Test("AES-192-CTR encryption and decryption") func testAESCTR192() throws {
         let key = Data(repeating: 0x2b, count: 24) // AES-192 key
         let iv = Data(repeating: 0x00, count: 16)  // Zero IV (same baseline as 128-bit test)
@@ -41,20 +40,30 @@ struct AESCTRUnitTests {
         #expect(decrypted == plaintext)
     }
     
-    @Test("AES-128-CTR counter rollover encryption and decryption") func testCounterIncrement() throws {
-        // Test that counter increments properly
+    @Test("AES-128-CTR counter rollover encryption and decryption") func testAESCTR128CounterRolloverWrap() throws {
         let key = Data(repeating: 0x2b, count: 16)
         let iv = Data([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE])
-        
-        // Encrypt enough data to force counter rollover
+
         let plaintext = Data(repeating: 0x00, count: 48) // 3 blocks
         let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
-        
-        // Verify it encrypts without error
+
         #expect(ciphertext.count == plaintext.count)
-        
-        // Decrypt should work
+
+        // Block-level keystream distinctness checks
+        let block0 = ciphertext[0..<16]
+        let block1 = ciphertext[16..<32]
+        let block2 = ciphertext[32..<48]
+        #expect(block0 != block1)
+        #expect(block1 != block2)
+        #expect(block0 != block2)
+
+        // Streaming determinism: re-encrypt first 32 bytes with same IV should reproduce prefix
+        let firstTwoPlainBlocks = Data(repeating: 0x00, count: 32)
+        let firstTwoCipher = try AESCTR.encrypt(data: firstTwoPlainBlocks, key: key, iv: iv)
+        #expect(firstTwoCipher == ciphertext.prefix(32))
+
+        // Round-trip correctness
         let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
         #expect(decrypted == plaintext)
     }
