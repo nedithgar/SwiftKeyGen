@@ -62,6 +62,21 @@ swift package generate-xcodeproj
 
 ## Code Style Guidelines
 
+### Swift Naming Conventions
+**CRITICAL**: All code MUST follow [Swift API Design Guidelines](https://swift.org/documentation/api-design-guidelines/). Key rules:
+
+- **Types**: `UpperCamelCase` (e.g., `KeyManager`, `RSAKey`, `CertificateAuthority`)
+- **Functions/Methods/Properties**: `lowerCamelCase` (e.g., `generateKeyPair()`, `publicKeyString`, `isValid`)
+- **Enums/Cases**: Type is `UpperCamelCase`, cases are `lowerCamelCase` (e.g., `KeyType.ed25519`, `SSHKeyError.invalidFormat`)
+- **Acronyms**: Treat as words—uppercase when type name (e.g., `RSAKey`, `SSHCertificate`), lowercase in compound names (e.g., `rsaKeySize`, `sshPublicKey`)
+- **Boolean Properties**: Use `is`/`has` prefix (e.g., `isEmpty`, `isValid`, `hasPassphrase`)
+- **Factory Methods**: Start with `make`/`generate`/`create` verb (e.g., `generateKeyPair()`, `makeFingerprint()`)
+- **Conversions**: Use `to<Type>()` or `as<Type>()` pattern (e.g., `toPEM()`, `asOpenSSHString()`)
+- **Parameters**: Omit first label when method reads naturally (e.g., `parse(_: Data)` not `parse(data: Data)`); use labels for clarity after first param
+- **Avoid**: snake_case, Hungarian notation, unnecessary abbreviations
+
+**When reviewing existing code**: If you spot violations, fix them. When adding new code, get it right the first time.
+
 ### Design & Patterns
 - **Public API**: Funnel through static factories (e.g. `SwiftKeyGen.generateKeyPair`, `KeyFileManager.generateKeyPairFiles`). Mimic this style for new capabilities.
 - **Key Types**: Expose generation, signing, verification, public serialization (OpenSSH string), fingerprinting.
