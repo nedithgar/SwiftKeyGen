@@ -7,32 +7,22 @@ struct AESCTRUnitTests {
     
     
     @Test("AES-128-CTR encryption and decryption") func testAESCTR128() throws {
-        // Test with a simple known pattern
-        let key = Data(repeating: 0x2b, count: 16) // AES-128 key
-        let iv = Data(repeating: 0x00, count: 16)  // Zero IV
-        let plaintext = Data(repeating: 0x00, count: 32) // 32 bytes of zeros
-        
-        let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
-        #expect(ciphertext.count == plaintext.count)
-        
-        // Decrypt should give us back the original
-        let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
-        #expect(decrypted == plaintext)
+        try assertCTRBasic(keySize: 16)
     }
     
     @Test("AES-192-CTR encryption and decryption") func testAESCTR192() throws {
-        let key = Data(repeating: 0x2b, count: 24) // AES-192 key
-        let iv = Data(repeating: 0x00, count: 16)  // Zero IV (same baseline as 128-bit test)
-        let plaintext = Data(repeating: 0x00, count: 32)
-        let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
-        #expect(ciphertext.count == plaintext.count)
-        let decrypted = try AESCTR.decrypt(data: ciphertext, key: key, iv: iv)
-        #expect(decrypted == plaintext)
+        try assertCTRBasic(keySize: 24)
     }
 
     @Test("AES-256-CTR encryption and decryption") func testAESCTR256() throws {
-        let key = Data(repeating: 0x2b, count: 32) // AES-256 key
-        let iv = Data(repeating: 0x00, count: 16)  // Zero IV
+        try assertCTRBasic(keySize: 32)
+    }
+
+    /// Basic AES-CTR round-trip for a given key size using zero IV and two blocks of zero plaintext.
+    /// Verifies ciphertext length and round-trip decryption.
+    private func assertCTRBasic(keySize: Int) throws {
+        let key = Data(repeating: 0x2b, count: keySize)
+        let iv = Data(repeating: 0x00, count: 16)
         let plaintext = Data(repeating: 0x00, count: 32)
         let ciphertext = try AESCTR.encrypt(data: plaintext, key: key, iv: iv)
         #expect(ciphertext.count == plaintext.count)
@@ -81,7 +71,7 @@ struct AESCTRUnitTests {
         // Round-trip integrity
         #expect(decrypted == plaintext)
     }
-    
+
     @Test("AES-CTR invalid key length") func testInvalidKeySize() throws {
         let plaintext = Data("test".utf8)
         let iv = Data(repeating: 0x00, count: 16)
