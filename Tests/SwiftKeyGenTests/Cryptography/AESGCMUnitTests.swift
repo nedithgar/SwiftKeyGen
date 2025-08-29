@@ -15,13 +15,13 @@ struct AESGCMUnitTests {
         for keySize in keySizes {
             // Generate random key and IV
             var key = Data(count: keySize)
-            for i in 0..<keySize {
-                key[i] = UInt8.random(in: 0...255)
+            for keyIndex in 0..<keySize {
+                key[keyIndex] = UInt8.random(in: 0...255)
             }
             
             var iv = Data(count: 16) // Will use first 12 bytes
-            for i in 0..<16 {
-                iv[i] = UInt8.random(in: 0...255)
+            for index in 0..<16 {
+                iv[index] = UInt8.random(in: 0...255)
             }
             
             // Encrypt
