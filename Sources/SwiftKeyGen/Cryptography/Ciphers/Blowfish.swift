@@ -1,10 +1,11 @@
 import Foundation
 
 /// Blowfish block cipher implementation
-/// Based on OpenSSH's blowfish.c implementation
-/// Optimized with Swift 6.2 InlineArray and Span for better performance and memory safety
+/// Based on OpenSSH's `blowfish.c` implementation
+/// Optimized with Swift 6.2 `InlineArray` and `Span` for better performance and memory safety
 struct BlowfishContext {
-    private static let N = 16
+    /// Number of Feistel rounds in Blowfish (fixed at 16)
+    private static let roundCount = 16
     private typealias SBox = InlineArray<256, UInt32>
     private typealias SBoxes = InlineArray<4, SBox>
     private typealias PArray = InlineArray<18, UInt32>
@@ -13,13 +14,13 @@ struct BlowfishContext {
     private var P: PArray
     
     init() {
-        // Initialize with zeros, will be populated by initstate()
+        // Initialize with zeros, will be populated by `initializeState()`
         self.S = SBoxes(repeating: SBox(repeating: 0))
         self.P = PArray(repeating: 0)
     }
     
     /// Initialize with Pi digits
-    mutating func initstate() {
+    mutating func initializeState() {
         // P-box initialization with Pi
         P = [
             0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344,
@@ -300,7 +301,7 @@ struct BlowfishContext {
     }
     
     /// Feistel network function
-    private func F(_ x: UInt32) -> UInt32 {
+    private func f(_ x: UInt32) -> UInt32 {
         let a = S[0][Int((x >> 24) & 0xFF)]
         let b = S[1][Int((x >> 16) & 0xFF)]
         let c = S[2][Int((x >> 8) & 0xFF)]
@@ -317,8 +318,8 @@ struct BlowfishContext {
         
         // 16 rounds
         for i in stride(from: 1, to: 17, by: 2) {
-            Xr ^= F(Xl) ^ P[i]
-            Xl ^= F(Xr) ^ P[i + 1]
+            Xr ^= f(Xl) ^ P[i]
+            Xl ^= f(Xr) ^ P[i + 1]
         }
         
         xl = Xr ^ P[17]
@@ -326,7 +327,7 @@ struct BlowfishContext {
     }
     
     /// Converts byte stream to word
-    private func stream2word(span: Span<UInt8>, offset: inout Int) -> UInt32 {
+    private func streamToWord(span: Span<UInt8>, offset: inout Int) -> UInt32 {
         var temp: UInt32 = 0
         
         for _ in 0..<4 {
@@ -341,19 +342,19 @@ struct BlowfishContext {
     }
     
     /// Expand state with key only
-    mutating func expand0state(key: Span<UInt8>) {
+    mutating func expandKey(key: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
-        for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(span: key, offset: &j)
+        for i in 0..<(Self.roundCount + 2) {
+            P[i] ^= streamToWord(span: key, offset: &j)
         }
         
         // Encrypt zero blocks to update P and S arrays
         var datal: UInt32 = 0
         var datar: UInt32 = 0
         
-        for i in stride(from: 0, to: Self.N + 2, by: 2) {
+        for i in stride(from: 0, to: Self.roundCount + 2, by: 2) {
             encipher(&datal, &datar)
             P[i] = datal
             P[i + 1] = datar
@@ -369,12 +370,12 @@ struct BlowfishContext {
     }
     
     /// Expand state with salt and key
-    mutating func expandstate(salt: Span<UInt8>, key: Span<UInt8>) {
+    mutating func expandSaltAndKey(salt: Span<UInt8>, key: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
-        for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(span: key, offset: &j)
+        for i in 0..<(Self.roundCount + 2) {
+            P[i] ^= streamToWord(span: key, offset: &j)
         }
         
         // Encrypt salt blocks to update P and S arrays
@@ -382,9 +383,9 @@ struct BlowfishContext {
         var datal: UInt32 = 0
         var datar: UInt32 = 0
         
-        for i in stride(from: 0, to: Self.N + 2, by: 2) {
-            datal ^= stream2word(span: salt, offset: &j)
-            datar ^= stream2word(span: salt, offset: &j)
+        for i in stride(from: 0, to: Self.roundCount + 2, by: 2) {
+            datal ^= streamToWord(span: salt, offset: &j)
+            datar ^= streamToWord(span: salt, offset: &j)
             encipher(&datal, &datar)
             P[i] = datal
             P[i + 1] = datar
@@ -392,8 +393,8 @@ struct BlowfishContext {
         
         for i in 0..<4 {
             for k in stride(from: 0, to: 256, by: 2) {
-                datal ^= stream2word(span: salt, offset: &j)
-                datar ^= stream2word(span: salt, offset: &j)
+                datal ^= streamToWord(span: salt, offset: &j)
+                datar ^= streamToWord(span: salt, offset: &j)
                 encipher(&datal, &datar)
                 S[i][k] = datal
                 S[i][k + 1] = datar

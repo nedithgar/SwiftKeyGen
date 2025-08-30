@@ -105,17 +105,17 @@ struct BCryptPBKDF {
         let ciphertext: [UInt8] = Array("OxychromaticBlowfishSwatDynamite".utf8)
         
         // Key expansion
-        state.initstate()
+    state.initializeState()
         sha2salt.withUnsafeBytes { saltBuffer in
             sha2pass.withUnsafeBytes { passBuffer in
                 let saltSpan = Span(_unsafeElements: saltBuffer.bindMemory(to: UInt8.self))
                 let passSpan = Span(_unsafeElements: passBuffer.bindMemory(to: UInt8.self))
-                state.expandstate(salt: saltSpan, key: passSpan)
+                state.expandSaltAndKey(salt: saltSpan, key: passSpan)
                 
                 // 64 rounds of expansion
                 for _ in 0..<64 {
-                    state.expand0state(key: saltSpan)
-                    state.expand0state(key: passSpan)
+                    state.expandKey(key: saltSpan)
+                    state.expandKey(key: passSpan)
                 }
             }
         }

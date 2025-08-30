@@ -27,10 +27,10 @@ struct BlowfishUnitTests {
     
     @Test("Blowfish state initialization produces correct P-array")
     func testInitialPArray() throws {
-        var context = BlowfishContext()
-        context.initstate()
-        var context2 = BlowfishContext()
-        context2.initstate()
+    var context = BlowfishContext()
+    context.initializeState()
+    var context2 = BlowfishContext()
+    context2.initializeState()
         
         // Both contexts should produce identical encryption results
         var data1: [UInt32] = [0x00000000, 0x00000000]
@@ -47,8 +47,8 @@ struct BlowfishUnitTests {
         var context1 = BlowfishContext()
         var context2 = BlowfishContext()
         
-        context1.initstate()
-        context2.initstate()
+    context1.initializeState()
+    context2.initializeState()
         
         // Test that both contexts produce identical output
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -62,14 +62,14 @@ struct BlowfishUnitTests {
     
     // MARK: - Key Expansion Tests
     
-    @Test("Blowfish expand0state with simple key")
+    @Test("Blowfish expandKey (formerly expand0state) with simple key")
     func testExpand0State() throws {
-        var context = BlowfishContext()
-        context.initstate()
+    var context = BlowfishContext()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         // Test that expansion changes the state
@@ -80,24 +80,22 @@ struct BlowfishUnitTests {
         #expect(data != [0x00000000, 0x00000000])
     }
     
-    @Test("Blowfish expand0state with different keys produces different states")
+    @Test("Blowfish expandKey with different keys produces different states")
     func testExpand0StateDifferentKeys() throws {
         var context1 = BlowfishContext()
         var context2 = BlowfishContext()
         
-        context1.initstate()
-        context2.initstate()
+    context1.initializeState()
+    context2.initializeState()
         
         let key1 = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         let key2 = Data([0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01])
         
         withSpan(key1) { keySpan in
-        
-            context1.expand0state(key: keySpan)
-        
+            context1.expandKey(key: keySpan)
         }
         withSpan(key2) { keySpan in
-            context2.expand0state(key: keySpan)
+            context2.expandKey(key: keySpan)
         }
         
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -110,18 +108,16 @@ struct BlowfishUnitTests {
         #expect(data1 != data2)
     }
     
-    @Test("Blowfish expandstate with salt and key")
+    @Test("Blowfish expandSaltAndKey with salt and key")
     func testExpandState() throws {
-        var context = BlowfishContext()
-        context.initstate()
+    var context = BlowfishContext()
+    context.initializeState()
         
         let salt = Data([0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80])
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         
         withSpans(salt, key) { saltSpan, keySpan in
-        
-            context.expandstate(salt: saltSpan, key: keySpan)
-        
+            context.expandSaltAndKey(salt: saltSpan, key: keySpan)
         }
         
         var data: [UInt32] = [0x00000000, 0x00000000]
@@ -130,13 +126,13 @@ struct BlowfishUnitTests {
         #expect(data != [0x00000000, 0x00000000])
     }
     
-    @Test("Blowfish expandstate with different salts produces different states")
+    @Test("Blowfish expandSaltAndKey with different salts produces different states")
     func testExpandStateDifferentSalts() throws {
         var context1 = BlowfishContext()
         var context2 = BlowfishContext()
         
-        context1.initstate()
-        context2.initstate()
+    context1.initializeState()
+    context2.initializeState()
         
         let salt1 = Data([0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80])
         let salt2 = Data([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
@@ -144,11 +140,11 @@ struct BlowfishUnitTests {
         
         withSpans(salt1, key) { saltSpan, keySpan in
         
-            context1.expandstate(salt: saltSpan, key: keySpan)
+            context1.expandSaltAndKey(salt: saltSpan, key: keySpan)
         
         }
         withSpans(salt2, key) { saltSpan, keySpan in
-            context2.expandstate(salt: saltSpan, key: keySpan)
+            context2.expandSaltAndKey(salt: saltSpan, key: keySpan)
         }
         
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -166,11 +162,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encrypts single block")
     func testSingleBlockEncryption() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -186,11 +182,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encrypts multiple blocks")
     func testMultipleBlockEncryption() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [
@@ -217,15 +213,15 @@ struct BlowfishUnitTests {
         var context1 = BlowfishContext()
         var context2 = BlowfishContext()
         
-        context1.initstate()
-        context2.initstate()
+    context1.initializeState()
+    context2.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context1.expand0state(key: keySpan)
+            context1.expandKey(key: keySpan)
         }
         withSpan(key) { keySpan in
-            context2.expand0state(key: keySpan)
+            context2.expandKey(key: keySpan)
         }
         
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -240,11 +236,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encrypts zero blocks")
     func testZeroBlockEncryption() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x00000000, 0x00000000]
@@ -258,11 +254,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encryption produces different output for different inputs")
     func testDifferentInputsProduceDifferentOutputs() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -272,9 +268,9 @@ struct BlowfishUnitTests {
         
         // Reset context for second encryption
         var context2 = BlowfishContext()
-        context2.initstate()
+    context2.initializeState()
         withSpan(key) { keySpan in
-            context2.expand0state(key: keySpan)
+            context2.expandKey(key: keySpan)
         }
         context2.encrypt(data: &data2, blocks: 1)
         
@@ -287,11 +283,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish handles short keys")
     func testShortKey() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -303,7 +299,7 @@ struct BlowfishUnitTests {
     @Test("Blowfish handles long keys")
     func testLongKey() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         // 32-byte key
         let key = Data([
@@ -313,7 +309,7 @@ struct BlowfishUnitTests {
             0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20
         ])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -325,12 +321,12 @@ struct BlowfishUnitTests {
     @Test("Blowfish handles maximum key size (56 bytes)")
     func testMaximumKeySize() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         // 56-byte key (maximum for Blowfish)
         let key = Data(repeating: 0x42, count: 56)
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -344,11 +340,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encryption with all-ones input")
     func testAllOnesInput() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0xffffffff, 0xffffffff]
@@ -361,11 +357,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish encryption with alternating bits")
     func testAlternatingBitsInput() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0xaaaaaaaa, 0x55555555]
@@ -379,12 +375,12 @@ struct BlowfishUnitTests {
     @Test("Blowfish key wrapping behavior")
     func testKeyWrapping() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         // Key shorter than P-array, should wrap around
         let key = Data([0x01, 0x02, 0x03])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         var data: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -399,24 +395,22 @@ struct BlowfishUnitTests {
     func testBCryptIntegration() throws {
         // This tests the specific usage pattern from BCrypt
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let sha2pass = Data(repeating: 0x42, count: 64) // SHA512 hash
         let sha2salt = Data(repeating: 0x43, count: 64) // SHA512 hash
         
         withSpans(sha2salt, sha2pass) { saltSpan, keySpan in
-        
-            context.expandstate(salt: saltSpan, key: keySpan)
-        
+            context.expandSaltAndKey(salt: saltSpan, key: keySpan)
         }
         
         // 64 rounds of expansion (as used in BCrypt)
         for _ in 0..<64 {
             withSpan(sha2salt) { keySpan in
-                context.expand0state(key: keySpan)
+                context.expandKey(key: keySpan)
             }
             withSpan(sha2pass) { keySpan in
-                context.expand0state(key: keySpan)
+                context.expandKey(key: keySpan)
             }
         }
         
@@ -443,7 +437,7 @@ struct BlowfishUnitTests {
     @Test("Blowfish state changes after multiple expansions")
     func testMultipleExpansions() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04])
         
@@ -451,7 +445,7 @@ struct BlowfishUnitTests {
         
         // First expansion and encrypt
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         context.encrypt(data: &data1, blocks: 1)
         let result1 = data1
@@ -459,7 +453,7 @@ struct BlowfishUnitTests {
         // Second expansion and encrypt with same input
         data1 = [0x12345678, 0x9abcdef0]
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         context.encrypt(data: &data1, blocks: 1)
         let result2 = data1
@@ -475,20 +469,18 @@ struct BlowfishUnitTests {
         var context1 = BlowfishContext()
         var context2 = BlowfishContext()
         
-        context1.initstate()
-        context2.initstate()
+    context1.initializeState()
+    context2.initializeState()
         
         // Two keys differing by one bit
         let key1 = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         let key2 = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x09]) // Last byte differs by 1 bit
         
         withSpan(key1) { keySpan in
-        
-            context1.expand0state(key: keySpan)
-        
+            context1.expandKey(key: keySpan)
         }
         withSpan(key2) { keySpan in
-            context2.expand0state(key: keySpan)
+            context2.expandKey(key: keySpan)
         }
         
         var data1: [UInt32] = [0x12345678, 0x9abcdef0]
@@ -510,11 +502,11 @@ struct BlowfishUnitTests {
     @Test("Blowfish demonstrates avalanche effect in plaintext")
     func testPlaintextAvalancheEffect() throws {
         var context = BlowfishContext()
-        context.initstate()
+    context.initializeState()
         
         let key = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
         withSpan(key) { keySpan in
-            context.expand0state(key: keySpan)
+            context.expandKey(key: keySpan)
         }
         
         // Two plaintexts differing by one bit
@@ -524,9 +516,9 @@ struct BlowfishUnitTests {
         context.encrypt(data: &data1, blocks: 1)
         
         var context2 = BlowfishContext()
-        context2.initstate()
+    context2.initializeState()
         withSpan(key) { keySpan in
-            context2.expand0state(key: keySpan)
+            context2.expandKey(key: keySpan)
         }
         context2.encrypt(data: &data2, blocks: 1)
         
