@@ -2,10 +2,21 @@ import Foundation
 
 /// Blowfish block cipher implementation
 /// Based on OpenSSH's blowfish.c implementation
+/// Optimized with Swift 6.2 InlineArray and Span for better performance and memory safety
 struct BlowfishContext {
     private static let N = 16
-    private var S: [[UInt32]] = Array(repeating: Array(repeating: 0, count: 256), count: 4)
-    private var P: [UInt32] = Array(repeating: 0, count: N + 2)
+    private typealias SBox = InlineArray<256, UInt32>
+    private typealias SBoxes = InlineArray<4, SBox>
+    private typealias PArray = InlineArray<18, UInt32>
+    
+    private var S: SBoxes
+    private var P: PArray
+    
+    init() {
+        // Initialize with zeros, will be populated by initstate()
+        self.S = SBoxes(repeating: SBox(repeating: 0))
+        self.P = PArray(repeating: 0)
+    }
     
     /// Initialize with Pi digits
     mutating func initstate() {
@@ -314,7 +325,7 @@ struct BlowfishContext {
         xr = Xl
     }
     
-    /// Converts byte stream to word
+    /// Converts byte stream to word (Data version for backward compatibility)
     private func stream2word(data: Data, offset: inout Int) -> UInt32 {
         var temp: UInt32 = 0
         
@@ -329,13 +340,35 @@ struct BlowfishContext {
         return temp
     }
     
-    /// Expand state with key only
+    /// Converts byte stream to word (Span version - more efficient)
+    private func stream2word(span: Span<UInt8>, offset: inout Int) -> UInt32 {
+        var temp: UInt32 = 0
+        
+        for _ in 0..<4 {
+            if offset >= span.count {
+                offset = 0
+            }
+            temp = (temp << 8) | UInt32(span[offset])
+            offset += 1
+        }
+        
+        return temp
+    }
+    
+    /// Expand state with key only (Data version for backward compatibility)
     mutating func expand0state(key: Data) {
+        key.withUnsafeBytes { bufferPointer in
+            expand0state(keySpan: Span(_unsafeElements: bufferPointer.bindMemory(to: UInt8.self)))
+        }
+    }
+    
+    /// Expand state with key only (Span version - more efficient)
+    mutating func expand0state(keySpan: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
         for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(data: key, offset: &j)
+            P[i] ^= stream2word(span: keySpan, offset: &j)
         }
         
         // Encrypt zero blocks to update P and S arrays
@@ -357,13 +390,24 @@ struct BlowfishContext {
         }
     }
     
-    /// Expand state with salt and key
+    /// Expand state with salt and key (Data version for backward compatibility)
     mutating func expandstate(salt: Data, key: Data) {
+        salt.withUnsafeBytes { saltBuffer in
+            key.withUnsafeBytes { keyBuffer in
+                let saltSpan = Span(_unsafeElements: saltBuffer.bindMemory(to: UInt8.self))
+                let keySpan = Span(_unsafeElements: keyBuffer.bindMemory(to: UInt8.self))
+                expandstate(saltSpan: saltSpan, keySpan: keySpan)
+            }
+        }
+    }
+    
+    /// Expand state with salt and key (Span version - more efficient)
+    mutating func expandstate(saltSpan: Span<UInt8>, keySpan: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
         for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(data: key, offset: &j)
+            P[i] ^= stream2word(span: keySpan, offset: &j)
         }
         
         // Encrypt salt blocks to update P and S arrays
@@ -372,8 +416,8 @@ struct BlowfishContext {
         var datar: UInt32 = 0
         
         for i in stride(from: 0, to: Self.N + 2, by: 2) {
-            datal ^= stream2word(data: salt, offset: &j)
-            datar ^= stream2word(data: salt, offset: &j)
+            datal ^= stream2word(span: saltSpan, offset: &j)
+            datar ^= stream2word(span: saltSpan, offset: &j)
             encipher(&datal, &datar)
             P[i] = datal
             P[i + 1] = datar
@@ -381,8 +425,8 @@ struct BlowfishContext {
         
         for i in 0..<4 {
             for k in stride(from: 0, to: 256, by: 2) {
-                datal ^= stream2word(data: salt, offset: &j)
-                datar ^= stream2word(data: salt, offset: &j)
+                datal ^= stream2word(span: saltSpan, offset: &j)
+                datar ^= stream2word(span: saltSpan, offset: &j)
                 encipher(&datal, &datar)
                 S[i][k] = datal
                 S[i][k + 1] = datar
