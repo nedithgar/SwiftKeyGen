@@ -325,22 +325,7 @@ struct BlowfishContext {
         xr = Xl
     }
     
-    /// Converts byte stream to word (Data version for backward compatibility)
-    private func stream2word(data: Data, offset: inout Int) -> UInt32 {
-        var temp: UInt32 = 0
-        
-        for _ in 0..<4 {
-            if offset >= data.count {
-                offset = 0
-            }
-            temp = (temp << 8) | UInt32(data[offset])
-            offset += 1
-        }
-        
-        return temp
-    }
-    
-    /// Converts byte stream to word (Span version - more efficient)
+    /// Converts byte stream to word
     private func stream2word(span: Span<UInt8>, offset: inout Int) -> UInt32 {
         var temp: UInt32 = 0
         
@@ -355,20 +340,13 @@ struct BlowfishContext {
         return temp
     }
     
-    /// Expand state with key only (Data version for backward compatibility)
-    mutating func expand0state(key: Data) {
-        key.withUnsafeBytes { bufferPointer in
-            expand0state(keySpan: Span(_unsafeElements: bufferPointer.bindMemory(to: UInt8.self)))
-        }
-    }
-    
-    /// Expand state with key only (Span version - more efficient)
-    mutating func expand0state(keySpan: Span<UInt8>) {
+    /// Expand state with key only
+    mutating func expand0state(key: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
         for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(span: keySpan, offset: &j)
+            P[i] ^= stream2word(span: key, offset: &j)
         }
         
         // Encrypt zero blocks to update P and S arrays
@@ -390,24 +368,13 @@ struct BlowfishContext {
         }
     }
     
-    /// Expand state with salt and key (Data version for backward compatibility)
-    mutating func expandstate(salt: Data, key: Data) {
-        salt.withUnsafeBytes { saltBuffer in
-            key.withUnsafeBytes { keyBuffer in
-                let saltSpan = Span(_unsafeElements: saltBuffer.bindMemory(to: UInt8.self))
-                let keySpan = Span(_unsafeElements: keyBuffer.bindMemory(to: UInt8.self))
-                expandstate(saltSpan: saltSpan, keySpan: keySpan)
-            }
-        }
-    }
-    
-    /// Expand state with salt and key (Span version - more efficient)
-    mutating func expandstate(saltSpan: Span<UInt8>, keySpan: Span<UInt8>) {
+    /// Expand state with salt and key
+    mutating func expandstate(salt: Span<UInt8>, key: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
         for i in 0..<(Self.N + 2) {
-            P[i] ^= stream2word(span: keySpan, offset: &j)
+            P[i] ^= stream2word(span: key, offset: &j)
         }
         
         // Encrypt salt blocks to update P and S arrays
@@ -416,8 +383,8 @@ struct BlowfishContext {
         var datar: UInt32 = 0
         
         for i in stride(from: 0, to: Self.N + 2, by: 2) {
-            datal ^= stream2word(span: saltSpan, offset: &j)
-            datar ^= stream2word(span: saltSpan, offset: &j)
+            datal ^= stream2word(span: salt, offset: &j)
+            datar ^= stream2word(span: salt, offset: &j)
             encipher(&datal, &datar)
             P[i] = datal
             P[i + 1] = datar
@@ -425,8 +392,8 @@ struct BlowfishContext {
         
         for i in 0..<4 {
             for k in stride(from: 0, to: 256, by: 2) {
-                datal ^= stream2word(span: saltSpan, offset: &j)
-                datar ^= stream2word(span: saltSpan, offset: &j)
+                datal ^= stream2word(span: salt, offset: &j)
+                datar ^= stream2word(span: salt, offset: &j)
                 encipher(&datal, &datar)
                 S[i][k] = datal
                 S[i][k + 1] = datar

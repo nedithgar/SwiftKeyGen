@@ -106,12 +106,18 @@ struct BCryptPBKDF {
         
         // Key expansion
         state.initstate()
-        state.expandstate(salt: sha2salt, key: sha2pass)
-        
-        // 64 rounds of expansion
-        for _ in 0..<64 {
-            state.expand0state(key: sha2salt)
-            state.expand0state(key: sha2pass)
+        sha2salt.withUnsafeBytes { saltBuffer in
+            sha2pass.withUnsafeBytes { passBuffer in
+                let saltSpan = Span(_unsafeElements: saltBuffer.bindMemory(to: UInt8.self))
+                let passSpan = Span(_unsafeElements: passBuffer.bindMemory(to: UInt8.self))
+                state.expandstate(salt: saltSpan, key: passSpan)
+                
+                // 64 rounds of expansion
+                for _ in 0..<64 {
+                    state.expand0state(key: saltSpan)
+                    state.expand0state(key: passSpan)
+                }
+            }
         }
         
         // Convert ciphertext to UInt32 array
