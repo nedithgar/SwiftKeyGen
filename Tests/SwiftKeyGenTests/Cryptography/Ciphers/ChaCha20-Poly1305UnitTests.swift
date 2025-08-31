@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("ChaCha20-Poly1305 Tests")
-struct ChaCha20Poly1305Tests {
+@Suite("ChaCha20-Poly1305 Unit Tests", .tags(.unit))
+struct ChaCha20Poly1305UnitTests {
     @Test("ChaCha20-Poly1305 basic functionality")
     func testChaCha20Poly1305Basic() throws {
         let key = Data(repeating: 0x42, count: 64) // 64-byte key for OpenSSH
