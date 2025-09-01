@@ -6,7 +6,8 @@ import CommonCrypto
 struct BCryptPBKDF {
     
     private static let bcryptWords = 8
-    private static let bcryptHashSize = bcryptWords * 4
+    private static let bcryptHashSize = bcryptWords * 4 // 32 bytes
+    private typealias BCryptBlock = InlineArray<32, UInt8>
     
     /// Derives a key using bcrypt_pbkdf algorithm
     /// - Parameters:
@@ -45,7 +46,7 @@ struct BCryptPBKDF {
         // Hash the password with SHA512
         let sha2pass = sha512(passwordData)
         
-        // Generate key
+        // Generate key (output buffer)
         var key = Data(repeating: 0, count: outputByteCount)
         var keyOffset = 0
         
@@ -59,20 +60,17 @@ struct BCryptPBKDF {
             // First round: hash countsalt
             let sha2salt = sha512(countsalt)
             
-            // Perform bcrypt hash
+            // Perform bcrypt hash (first round)
             var tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
-            var out = tmpout
+            var out = tmpout // accumulator
             
             // Subsequent rounds
             for _ in 1..<rounds {
-                // Hash previous output
-                let sha2salt = sha512(tmpout)
+                // Hash previous output (convert InlineArray -> Data lazily)
+                let sha2salt = sha512(tmpout.data)
                 tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
-                
-                // XOR with accumulated result
-                for j in 0..<out.count {
-                    out[j] ^= tmpout[j]
-                }
+                // XOR accumulate
+                for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
             
             // Output key material non-linearly
@@ -99,63 +97,66 @@ struct BCryptPBKDF {
         return Data(hash)
     }
     
-    /// Performs bcrypt hash operation
-    private static func bcryptHash(sha2pass: Data, sha2salt: Data) throws -> Data {
+    /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
+    private static func bcryptHash(sha2pass: Data, sha2salt: Data) throws -> BCryptBlock {
         var state = BlowfishContext()
-        let ciphertext: [UInt8] = Array("OxychromaticBlowfishSwatDynamite".utf8)
-        
-        // Key expansion
-    state.initializeState()
-        sha2salt.withUnsafeBytes { saltBuffer in
-            sha2pass.withUnsafeBytes { passBuffer in
-                let saltSpan = Span(_unsafeElements: saltBuffer.bindMemory(to: UInt8.self))
-                let passSpan = Span(_unsafeElements: passBuffer.bindMemory(to: UInt8.self))
-                state.expandSaltAndKey(salt: saltSpan, key: passSpan)
-                
-                // 64 rounds of expansion
-                for _ in 0..<64 {
-                    state.expandKey(key: saltSpan)
-                    state.expandKey(key: passSpan)
-                }
-            }
+        // 32-byte magic ciphertext constant (InlineArray for stack allocation)
+        // InlineArray can be created from array literal (must match capacity 32 exactly)
+        let cipherArray: [UInt8] = Array("OxychromaticBlowfishSwatDynamite".utf8) // 32 bytes
+        precondition(cipherArray.count == 32, "Ciphertext constant must be 32 bytes")
+        var ciphertext = BCryptBlock(repeating: 0)
+        for i in 0..<32 { ciphertext[i] = cipherArray[i] }
+
+        // Key expansion using spans
+        state.initializeState()
+        // Safe borrowed views into Data buffers (no unsafe pointer juggling needed)
+        let saltSpan = sha2salt.span
+        let passSpan = sha2pass.span
+        state.expandSaltAndKey(salt: saltSpan, key: passSpan)
+        for _ in 0..<64 { // 64 rounds of alternating expansion
+            state.expandKey(key: saltSpan)
+            state.expandKey(key: passSpan)
         }
-        
-        // Convert ciphertext to UInt32 array
+
+        // Convert ciphertext to UInt32 array blocks
         var cdata = [UInt32](repeating: 0, count: bcryptWords)
-        var j = 0
+        var idx = 0
+        let cipherSpan: Span<UInt8> = ciphertext.span
         for i in 0..<bcryptWords {
-            cdata[i] = stream2word(data: ciphertext, databytes: UInt16(ciphertext.count), current: &j)
+            cdata[i] = stream2word(span: cipherSpan, databytes: UInt16(cipherSpan.count), current: &idx)
         }
-        
-        // 64 rounds of encryption
-        for _ in 0..<64 {
-            state.encrypt(data: &cdata, blocks: bcryptWords / 2)
-        }
-        
-        // Convert result to bytes (big-endian)
-        var out = Data(repeating: 0, count: bcryptHashSize)
+        // 64 rounds of encryption on ciphertext blocks
+        for _ in 0..<64 { state.encrypt(data: &cdata, blocks: bcryptWords / 2) }
+
+        // Marshal to InlineArray (big-endian words)
+        var out = BCryptBlock(repeating: 0)
         for i in 0..<bcryptWords {
             out[4 * i + 3] = UInt8((cdata[i] >> 24) & 0xff)
             out[4 * i + 2] = UInt8((cdata[i] >> 16) & 0xff)
             out[4 * i + 1] = UInt8((cdata[i] >> 8) & 0xff)
             out[4 * i + 0] = UInt8(cdata[i] & 0xff)
         }
-        
         return out
     }
-    
-    /// Converts byte stream to word
-    private static func stream2word(data: [UInt8], databytes: UInt16, current: inout Int) -> UInt32 {
+
+    /// Converts byte stream (via Span) to 32-bit word (big-endian)
+    private static func stream2word(span: Span<UInt8>, databytes: UInt16, current: inout Int) -> UInt32 {
         var temp: UInt32 = 0
-        
         for _ in 0..<4 {
-            if current >= databytes {
-                current = 0
-            }
-            temp = (temp << 8) | UInt32(data[current])
+            if current >= span.count { current = 0 }
+            temp = (temp << 8) | UInt32(span[current])
             current += 1
         }
-        
         return temp
+    }
+}
+
+// MARK: - Helpers
+private extension InlineArray where Element == UInt8 {
+    /// Data copy of the InlineArray for hashing routines.
+    var data: Data {
+        var copy = [UInt8](repeating: 0, count: self.count)
+        for i in 0..<self.count { copy[i] = self[i] }
+        return Data(copy)
     }
 }
