@@ -1,5 +1,5 @@
 import Foundation
-import CommonCrypto
+import Crypto
 
 /// Full bcrypt_pbkdf implementation for OpenSSH compatibility
 /// Based on OpenSSH's bcrypt_pbkdf.c implementation
@@ -74,10 +74,9 @@ struct BCryptPBKDF {
             
             // Subsequent rounds
             for _ in 1..<rounds {
-                // Hash previous output (convert InlineArray -> Data lazily)
-                let sha2salt = sha512(tmpout.data)
+                // Hash previous output using span view (no intermediate Data copy of entire buffer)
+                let sha2salt = sha512(span: tmpout.span)
                 tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
-                // XOR accumulate
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
             
@@ -96,13 +95,20 @@ struct BCryptPBKDF {
         return key
     }
     
-    /// Performs SHA512 hash
+    /// Performs SHA512 hash over Data using swift-crypto (no manual unsafe pointers)
     private static func sha512(_ data: Data) -> Data {
-        var hash = [UInt8](repeating: 0, count: Int(CC_SHA512_DIGEST_LENGTH))
-        data.withUnsafeBytes { bytes in
-            _ = CC_SHA512(bytes.bindMemory(to: UInt8.self).baseAddress!, CC_LONG(data.count), &hash)
-        }
-        return Data(hash)
+        let digest = SHA512.hash(data: data)
+        return Data(digest)
+    }
+
+    /// Performs SHA512 hash over a Span<UInt8> (copy once into Data for hashing)
+    private static func sha512(span: Span<UInt8>) -> Data {
+        // Convert span to Data via a single copy; span.count is small (32 bytes in this context)
+        var buffer = [UInt8]()
+        buffer.reserveCapacity(span.count)
+        for i in 0..<span.count { buffer.append(span[i]) }
+        let digest = SHA512.hash(data: Data(buffer))
+        return Data(digest)
     }
     
     /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
@@ -155,13 +161,4 @@ struct BCryptPBKDF {
     }
 }
 
-// MARK: - Helpers
-// TODO: Wait?
-private extension InlineArray where Element == UInt8 {
-    /// Data copy of the InlineArray for hashing routines.
-    var data: Data {
-        var copy = [UInt8](repeating: 0, count: self.count)
-        for i in 0..<self.count { copy[i] = self[i] }
-        return Data(copy)
-    }
-}
+// (Removed InlineArray.data helper; hashing now uses span directly.)
