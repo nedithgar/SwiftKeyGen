@@ -8,6 +8,14 @@ struct BCryptPBKDF {
     private static let bcryptWords = 8
     private static let bcryptHashSize = bcryptWords * 4 // 32 bytes
     private typealias BCryptBlock = InlineArray<32, UInt8>
+    /// Magic bcrypt ciphertext constant (ASCII for "OxychromaticBlowfishSwatDynamite").
+    /// Stored as a direct InlineArray literal to avoid any runtime construction.
+    private static let magicCiphertext: BCryptBlock = [
+        0x4F, 0x78, 0x79, 0x63, 0x68, 0x72, 0x6F, 0x6D,
+        0x61, 0x74, 0x69, 0x63, 0x42, 0x6C, 0x6F, 0x77,
+        0x66, 0x69, 0x73, 0x68, 0x53, 0x77, 0x61, 0x74,
+        0x44, 0x79, 0x6E, 0x61, 0x6D, 0x69, 0x74, 0x65
+    ]
     
     /// Derives a key using bcrypt_pbkdf algorithm
     /// - Parameters:
@@ -100,12 +108,8 @@ struct BCryptPBKDF {
     /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
     private static func bcryptHash(sha2pass: Data, sha2salt: Data) throws -> BCryptBlock {
         var state = BlowfishContext()
-        // 32-byte magic ciphertext constant (InlineArray for stack allocation)
-        // InlineArray can be created from array literal (must match capacity 32 exactly)
-        let cipherArray: [UInt8] = Array("OxychromaticBlowfishSwatDynamite".utf8) // 32 bytes
-        precondition(cipherArray.count == 32, "Ciphertext constant must be 32 bytes")
-        var ciphertext = BCryptBlock(repeating: 0)
-        for i in 0..<32 { ciphertext[i] = cipherArray[i] }
+        // Use pre-initialized static magic ciphertext (no per-call array allocation)
+        let ciphertext = Self.magicCiphertext
 
         // Key expansion using spans
         state.initializeState()
@@ -152,6 +156,7 @@ struct BCryptPBKDF {
 }
 
 // MARK: - Helpers
+// TODO: Wait?
 private extension InlineArray where Element == UInt8 {
     /// Data copy of the InlineArray for hashing routines.
     var data: Data {
