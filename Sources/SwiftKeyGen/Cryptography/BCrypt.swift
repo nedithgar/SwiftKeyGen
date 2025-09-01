@@ -52,7 +52,8 @@ struct BCryptPBKDF {
         countsalt.append(contentsOf: [0, 0, 0, 0])
         
         // Hash the password with SHA512
-        let sha2pass = sha512(passwordData)
+        // let sha2pass = sha512(passwordData)
+        let sha2pass = passwordData.sha512
         
         // Generate key (output buffer)
         var key = Data(repeating: 0, count: outputByteCount)
@@ -66,7 +67,7 @@ struct BCryptPBKDF {
             countsalt[salt.count + 3] = UInt8(count & 0xff)
             
             // First round: hash countsalt
-            let sha2salt = sha512(countsalt)
+            let sha2salt = countsalt.sha512
             
             // Perform bcrypt hash (first round)
             var tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
@@ -96,10 +97,10 @@ struct BCryptPBKDF {
     }
     
     /// Performs SHA512 hash over Data using swift-crypto (no manual unsafe pointers)
-    private static func sha512(_ data: Data) -> Data {
-        let digest = SHA512.hash(data: data)
-        return Data(digest)
-    }
+    // private static func sha512(_ data: Data) -> Data {
+    //     let digest = SHA512.hash(data: data)
+    //     return Data(digest)
+    // }
 
     /// Performs SHA512 hash over a Span<UInt8> (copy once into Data for hashing)
     private static func sha512(span: Span<UInt8>) -> Data {
