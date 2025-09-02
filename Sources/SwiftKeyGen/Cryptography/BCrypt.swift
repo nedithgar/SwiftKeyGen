@@ -75,8 +75,7 @@ struct BCryptPBKDF {
             
             // Subsequent rounds
             for _ in 1..<rounds {
-                // Hash previous output using span view (no intermediate Data copy of entire buffer)
-                let sha2salt = sha512(span: tmpout.span)
+                let sha2salt = tmpout.toData()
                 tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
@@ -96,16 +95,6 @@ struct BCryptPBKDF {
         return key
     }
 
-    /// Performs SHA512 hash over a Span<UInt8> (copy once into Data for hashing)
-    private static func sha512(span: Span<UInt8>) -> Data {
-        // Convert span to Data via a single copy; span.count is small (32 bytes in this context)
-        var buffer = [UInt8]()
-        buffer.reserveCapacity(span.count)
-        for i in 0..<span.count { buffer.append(span[i]) }
-        let digest = SHA512.hash(data: Data(buffer))
-        return Data(digest)
-    }
-    
     /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
     private static func bcryptHash(sha2pass: Data, sha2salt: Data) throws -> BCryptBlock {
         var state = BlowfishContext()

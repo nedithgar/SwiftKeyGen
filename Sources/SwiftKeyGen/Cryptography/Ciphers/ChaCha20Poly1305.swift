@@ -367,12 +367,3 @@ private struct Poly1305 {
         return tagInline.toData()
     }
 }
-
-// MARK: - InlineArray helpers
-private extension InlineArray where Element == UInt8 {
-    @inline(__always) func toData() -> Data {
-        var dataBuffer = Data(count: count)
-        for index in 0..<count { dataBuffer[index] = self[index] }
-        return dataBuffer
-    }
-}
