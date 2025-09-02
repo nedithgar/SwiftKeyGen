@@ -26,6 +26,7 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - `Sources/SwiftKeyGen/Certificates/`: SSH certificate signing, parsing, verification
 - `Sources/SwiftKeyGen/Cryptography/`: Cipher + KDF + BCrypt + AES/ChaCha/HMAC primitives
 - `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`)
+- **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating existing helpers. When adding utility methods that extend types, **add them here** for project-wide reuse.
 - `Sources/SwiftKeyGenCLI/`: CLI logic (keep library free of CLI-only concerns)
 - `Tests/SwiftKeyGenTests/`: Organized by domain; use as source of truth for expected behaviors
 
@@ -84,6 +85,7 @@ swift package generate-xcodeproj
 - **Certificate Operations**: Respect separation—`CertificateAuthority` (sign), `CertificateManager` (CRUD + convenience), `CertificateVerifier` (validation).
 - **Type Safety**: Use strongly typed enums for key types, formats, hash/fingerprint algorithms; avoid raw strings.
 - **Immutability**: Prefer immutable structs/value types; mutation only when required (e.g. passphrase changes) via dedicated manager methods.
+- **Extensions First**: Before implementing utility methods on types, **check `Sources/SwiftKeyGen/Extensions/` first**. If the helper doesn't exist, add it there for project-wide reuse rather than scattering utilities across domain-specific files.
 
 ### Error Handling
 - **Central Error Enum**: `SSHKeyError` (extend with case + doc comment if adding). Reuse existing cases before creating new ones.
