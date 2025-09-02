@@ -2,7 +2,8 @@ import Foundation
 import Crypto
 
 extension Data {
-    var sha512: Data {
+    @inlinable
+    func sha512Data() -> Data {
         let digest = SHA512.hash(data: self)
         return Data(digest)
     }
