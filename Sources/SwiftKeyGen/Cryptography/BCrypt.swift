@@ -53,7 +53,7 @@ struct BCryptPBKDF {
         
         // Hash the password with SHA512
         // let sha2pass = sha512(passwordData)
-        let sha2pass = passwordData.sha512Data()
+        let sha512HashedPassword = passwordData.sha512Data()
         
         // Generate key (output buffer)
         var key = Data(repeating: 0, count: outputByteCount)
@@ -70,13 +70,13 @@ struct BCryptPBKDF {
             let sha2salt = countsalt.sha512Data()
             
             // Perform bcrypt hash (first round)
-            var tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
+            var tmpout = try bcryptHash(sha2pass: sha512HashedPassword, sha2salt: sha2salt)
             var out = tmpout // accumulator
             
             // Subsequent rounds
             for _ in 1..<rounds {
                 let sha2salt = tmpout.toData()
-                tmpout = try bcryptHash(sha2pass: sha2pass, sha2salt: sha2salt)
+                tmpout = try bcryptHash(sha2pass: sha512HashedPassword, sha2salt: sha2salt)
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
             
