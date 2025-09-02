@@ -70,13 +70,13 @@ struct BCryptPBKDF {
             let sha2salt = countsalt.sha512Data()
             
             // Perform bcrypt hash (first round)
-            var tmpout = try bcryptHash(sha2pass: sha512HashedPassword, sha2salt: sha2salt)
+            var tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: sha2salt)
             var out = tmpout // accumulator
             
             // Subsequent rounds
             for _ in 1..<rounds {
-                let sha2salt = tmpout.toData()
-                tmpout = try bcryptHash(sha2pass: sha512HashedPassword, sha2salt: sha2salt)
+                let hashedSalt = tmpout.toData()
+                tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: hashedSalt)
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
             
@@ -96,7 +96,7 @@ struct BCryptPBKDF {
     }
 
     /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
-    private static func bcryptHash(sha2pass: Data, sha2salt: Data) throws -> BCryptBlock {
+    private static func bcryptHash(hashedPassword: Data, hashedSalt: Data) throws -> BCryptBlock {
         var state = BlowfishContext()
         // Use pre-initialized static magic ciphertext (no per-call array allocation)
         let ciphertext = Self.magicCiphertext
@@ -104,8 +104,8 @@ struct BCryptPBKDF {
         // Key expansion using spans
         state.initializeState()
         // Safe borrowed views into Data buffers (no unsafe pointer juggling needed)
-        let saltSpan = sha2salt.span
-        let passSpan = sha2pass.span
+        let saltSpan = hashedSalt.span
+        let passSpan = hashedPassword.span
         state.expandSaltAndKey(salt: saltSpan, key: passSpan)
         for _ in 0..<64 { // 64 rounds of alternating expansion
             state.expandKey(key: saltSpan)
@@ -117,7 +117,7 @@ struct BCryptPBKDF {
         var idx = 0
         let cipherSpan: Span<UInt8> = ciphertext.span
         for i in 0..<bcryptWords {
-            cdata[i] = stream2word(span: cipherSpan, databytes: UInt16(cipherSpan.count), current: &idx)
+            cdata[i] = streamToWord(span: cipherSpan, databytes: UInt16(cipherSpan.count), current: &idx)
         }
         // 64 rounds of encryption on ciphertext blocks
         for _ in 0..<64 { state.encrypt(data: &cdata, blocks: bcryptWords / 2) }
@@ -134,7 +134,7 @@ struct BCryptPBKDF {
     }
 
     /// Converts byte stream (via Span) to 32-bit word (big-endian)
-    private static func stream2word(span: Span<UInt8>, databytes: UInt16, current: inout Int) -> UInt32 {
+    private static func streamToWord(span: Span<UInt8>, databytes: UInt16, current: inout Int) -> UInt32 {
         var temp: UInt32 = 0
         for _ in 0..<4 {
             if current >= span.count { current = 0 }
