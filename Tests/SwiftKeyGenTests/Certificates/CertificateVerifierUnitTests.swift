@@ -396,7 +396,7 @@ struct CertificateVerifierUnitTests {
         #expect(publicResult == .valid)
     }
 
-    @Test("All key type combinations", .disabled("Causing signal 5 crash - needs investigation"))
+    @Test("All key type combinations", .tags(.slow, .rsa))
     func testAllKeyTypeCombinations() throws {
         let caKeys: [(any SSHKey, String)] = [
             (try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-ca"), "Ed25519"),
