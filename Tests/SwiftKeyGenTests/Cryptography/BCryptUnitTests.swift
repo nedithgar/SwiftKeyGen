@@ -2,8 +2,8 @@ import Testing
 @testable import SwiftKeyGen
 import Foundation
 
-@Suite("BCrypt PBKDF Tests")
-struct BCryptTests {
+@Suite("BCrypt PBKDF Tests", .tags(.unit))
+struct BCryptUnitTests {
     
     @Test("BCrypt PBKDF key derivation")
     func testKeyDerivation() throws {
