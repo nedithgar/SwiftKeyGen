@@ -214,8 +214,8 @@ struct CertificateAuthorityTests {
         #expect(rsaCert.certificate.signatureType == "rsa-sha2-512")
     }
 
-    @Test("Default signature algorithm for different key types")
-    func testDefaultSignatureAlgorithms() throws {
+    @Test("Default signature algorithm for different key types except RSA")
+    func testDefaultSignatureAlgorithmsExceptRSA() throws {
         let ed25519CA = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let ed25519User = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
 
