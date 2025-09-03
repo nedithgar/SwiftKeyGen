@@ -325,29 +325,14 @@ struct BlowfishContext {
         xl = Xr ^ P[17]
         xr = Xl
     }
-    
-    /// Converts byte stream to word
-    private func streamToWord(span: Span<UInt8>, offset: inout Int) -> UInt32 {
-        var temp: UInt32 = 0
         
-        for _ in 0..<4 {
-            if offset >= span.count {
-                offset = 0
-            }
-            temp = (temp << 8) | UInt32(span[offset])
-            offset += 1
-        }
-        
-        return temp
-    }
-    
     /// Expand state with key only
     mutating func expandKey(key: Span<UInt8>) {
         var j = 0
         
         // XOR key with P array
         for i in 0..<(Self.roundCount + 2) {
-            P[i] ^= streamToWord(span: key, offset: &j)
+            P[i] ^= key.readUInt32Cyclic(offset: &j)
         }
         
         // Encrypt zero blocks to update P and S arrays
@@ -375,7 +360,7 @@ struct BlowfishContext {
         
         // XOR key with P array
         for i in 0..<(Self.roundCount + 2) {
-            P[i] ^= streamToWord(span: key, offset: &j)
+            P[i] ^= key.readUInt32Cyclic(offset: &j)
         }
         
         // Encrypt salt blocks to update P and S arrays
@@ -384,8 +369,8 @@ struct BlowfishContext {
         var datar: UInt32 = 0
         
         for i in stride(from: 0, to: Self.roundCount + 2, by: 2) {
-            datal ^= streamToWord(span: salt, offset: &j)
-            datar ^= streamToWord(span: salt, offset: &j)
+            datal ^= salt.readUInt32Cyclic(offset: &j)
+            datar ^= salt.readUInt32Cyclic(offset: &j)
             encipher(&datal, &datar)
             P[i] = datal
             P[i + 1] = datar
@@ -393,8 +378,8 @@ struct BlowfishContext {
         
         for i in 0..<4 {
             for k in stride(from: 0, to: 256, by: 2) {
-                datal ^= streamToWord(span: salt, offset: &j)
-                datar ^= streamToWord(span: salt, offset: &j)
+                datal ^= salt.readUInt32Cyclic(offset: &j)
+                datar ^= salt.readUInt32Cyclic(offset: &j)
                 encipher(&datal, &datar)
                 S[i][k] = datal
                 S[i][k + 1] = datar

@@ -117,7 +117,7 @@ struct BCryptPBKDF {
         var idx = 0
         let cipherSpan: Span<UInt8> = ciphertext.span
         for i in 0..<bcryptWords {
-            cdata[i] = streamToWord(span: cipherSpan, databytes: UInt16(cipherSpan.count), current: &idx)
+            cdata[i] = cipherSpan.readUInt32Cyclic(offset: &idx)
         }
         // 64 rounds of encryption on ciphertext blocks
         for _ in 0..<64 { state.encrypt(data: &cdata, blocks: bcryptWords / 2) }
@@ -131,16 +131,5 @@ struct BCryptPBKDF {
             out[4 * i + 0] = UInt8(cdata[i] & 0xff)
         }
         return out
-    }
-
-    /// Converts byte stream (via Span) to 32-bit word (big-endian)
-    private static func streamToWord(span: Span<UInt8>, databytes: UInt16, current: inout Int) -> UInt32 {
-        var temp: UInt32 = 0
-        for _ in 0..<4 {
-            if current >= span.count { current = 0 }
-            temp = (temp << 8) | UInt32(span[current])
-            current += 1
-        }
-        return temp
     }
 }
