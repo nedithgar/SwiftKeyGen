@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("Certificate Authority Tests")
-struct CertificateAuthorityTests {
+@Suite("Certificate Authority Unit Tests")
+struct CertificateAuthorityUnitTests {
 
     @Test("Create and sign user certificate")
     func testCreateUserCertificate() throws {

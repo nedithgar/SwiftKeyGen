@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("Certificate Manager Tests")
-struct CertificateManagerTests {
+@Suite("Certificate Manager Unit Tests")
+struct CertificateManagerUnitTests {
 
     @Test("Certificate wildcard principal matching")
     func testWildcardPrincipalMatching() throws {

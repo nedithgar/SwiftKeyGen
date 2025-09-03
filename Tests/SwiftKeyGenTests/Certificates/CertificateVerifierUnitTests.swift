@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("Certificate Verifier Tests", .tags(.unit))
-struct CertificateVerifierTests {
+@Suite("Certificate Verifier Unit Tests", .tags(.unit))
+struct CertificateVerifierUnitTests {
 
     @Test("Certificate verification - valid")
     func testCertificateVerificationValid() throws {
@@ -333,7 +333,7 @@ struct CertificateVerifierTests {
         }
     }
 
-    @Test("RSA CA signing Ed25519 user certificate")
+    @Test("RSA CA signing Ed25519 user certificate", .tags(.slow, .rsa))
     func testRSACASigningEd25519UserCertificate() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
@@ -354,7 +354,7 @@ struct CertificateVerifierTests {
         #expect(publicResult == .valid)
     }
 
-    @Test("ECDSA P256 CA signing RSA user certificate")
+    @Test("ECDSA P256 CA signing RSA user certificate", .tags(.slow, .rsa))
     func testECDSAP256CASigningRSAUserCertificate() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa-ca@example.com") as! ECDSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "user@example.com") as! RSAKey

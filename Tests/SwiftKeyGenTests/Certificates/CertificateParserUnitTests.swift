@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("Certificate Parser Tests", .tags(.unit))
-struct CertificateParserTests {
+@Suite("Certificate Parser Unit Tests", .tags(.unit))
+struct CertificateParserUnitTests {
 
     @Test("Parse Ed25519 certificate string round-trip")
     func testParseEd25519CertificateStringRoundTrip() throws {
