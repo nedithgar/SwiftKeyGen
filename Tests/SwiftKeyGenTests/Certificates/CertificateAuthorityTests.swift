@@ -149,7 +149,7 @@ struct CertificateAuthorityTests {
         #expect(cert.certificate.extensions.contains("no-touch-required"))
     }
 
-    @Test("RSA certificate with different signature algorithms")
+    @Test("RSA certificate with different signature algorithms", .tags(.rsa, .slow))
     func testRSACertificateSignatureAlgorithms() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca") as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "user@test") as! RSAKey
@@ -174,7 +174,7 @@ struct CertificateAuthorityTests {
         }
     }
 
-    @Test("RSA certificate with incompatible signature algorithm")
+    @Test("RSA certificate with incompatible signature algorithm", .tags(.rsa, .slow))
     func testRSACertificateIncompatibleAlgorithm() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
@@ -200,8 +200,8 @@ struct CertificateAuthorityTests {
         }
     }
 
-    @Test("Default signature algorithm for different key types")
-    func testDefaultSignatureAlgorithms() throws {
+    @Test("Default signature algorithm for RSA", .tags(.rsa, .slow))
+    func testDefaultSignatureAlgorithmRSA() throws {
         let rsaCA = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         let rsaUser = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
 
@@ -212,7 +212,10 @@ struct CertificateAuthorityTests {
             principals: ["testuser"]
         )
         #expect(rsaCert.certificate.signatureType == "rsa-sha2-512")
+    }
 
+    @Test("Default signature algorithm for different key types")
+    func testDefaultSignatureAlgorithms() throws {
         let ed25519CA = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let ed25519User = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
 
@@ -236,4 +239,3 @@ struct CertificateAuthorityTests {
         #expect(ecdsaCert.certificate.signatureType == "ecdsa-sha2-nistp256")
     }
 }
-
