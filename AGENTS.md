@@ -102,19 +102,9 @@ swift package generate-xcodeproj
 - **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when size is static or when only a view is needed. This reduces allocations and improves cache locality while keeping memory safety.
 
 #### InlineArray & Span Usage (Swift 6.2)
-Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code. Follow these rules:
+Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code.
 
-- Use `InlineArray<Element, N>` for small, fixed-capacity working buffers (e.g. block cipher state, digest partial blocks, temporary key schedule scratch). This avoids dynamic heap allocation present in standard `Array`.
-- Use `Span<Element>` (or a mutable variant when mutation is required) for read/write windows into existing storage instead of `Unsafe[Mutable]BufferPointer` or pointer + length pairs.
-- Only fall back to regular `[T]` when length is genuinely dynamic or needs CoW semantics externally.
-- Do not retain `Span` past the lifetime of its backing storage; design APIs so the span is consumed synchronously. (The type's compile‑time guarantees already prevent dangling use—keep APIs simple so those guarantees remain obvious.)
-- Prefer conversion patterns: existing `Array`/`Data` → create a `Span` view for algorithm steps; avoid copying into temporary buffers unless mutation + CoW avoidance demands `InlineArray`.
-- Keep fixed sizes in a single source of truth (e.g. a `static let blockSize = 16`) and reference via generic parameter `N` when constructing an `InlineArray` to prevent mismatches.
-- When interoperating with C APIs that require raw pointers, confine `withUnsafeBytes` / `withUnsafeMutableBytes` to the narrowest scope and immediately wrap the memory in a `Span` for internal processing.
-
-**Reference docs**: see `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` (standard `Data` bridging + span helpers) for the generated symbol documentation of initializers, indexing, and slicing helpers.
-
-**Rationale**: These abstractions give predictable performance (no surprise allocations), eliminate classes of pointer lifetime bugs (use‑after‑free, double free), and keep code closer to pure Swift value semantics.
+Refer to `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` for full guidance.
 
 ### CLI Extensions
 - CLI logic lives in `Sources/SwiftKeyGenCLI/`. Keep library free of CLI-only concerns (argument parsing, stdout formatting).
