@@ -123,7 +123,7 @@ Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, no
 ## Testing Instructions
 
 ### Test Organization
-- Put tests in the nearest domain folder (`Tests/SwiftKeyGenTests/<Domain>`).
+- Place tests in the nearest domain folder (`Tests/SwiftKeyGenTests/<Domain>`), mirroring corresponding source file locations.
 - Follow existing naming: `<Feature>Tests.swift` or `<Format>ParserTests.swift`.
 - Use current test examples (e.g. `RSABitSizeTest`, `PEMParserTests`) for structure—focused, data-driven, explicit assertions.
 - **Single Test Target**: Keep all tests in one target (`SwiftKeyGenTests`); use tags to organize by type rather than creating separate targets.
