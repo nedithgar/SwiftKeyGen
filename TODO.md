@@ -84,7 +84,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 ## ❌ Not Implemented
 
 ### Key Generation
-- [ ] Generate DSA keys (legacy, 1024 bits)
+~~- [ ] Generate DSA keys (legacy, 1024 bits)~~
 - [ ] Generate XMSS keys
 
 ### Key Conversion
@@ -107,14 +107,14 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 ### Format Support
 - [x] RFC4716 format
-- [ ] SSH1 format (legacy)
+~~- [ ] SSH1 format (legacy)~~
 
 ### Output Options
 - [ ] Bubble babble format for fingerprints
 
 ### Compatibility Features
-- [ ] SSH1 protocol support (deprecated)
-- [ ] Legacy key type support (DSA)
+~~- [ ] SSH1 protocol support (deprecated)~~
+~~- [ ] Legacy key type support (DSA)~~
 
 ### Integration Features
 - [ ] SSH agent integration
