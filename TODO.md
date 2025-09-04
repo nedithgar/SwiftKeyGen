@@ -89,7 +89,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 ### Key Conversion
 - [x] Import keys from other SSH implementations (RFC4716 format)
-- [ ] Convert SSH1 keys to SSH2 format (legacy, not implemented)
+~~- [ ] Convert SSH1 keys to SSH2 format (legacy, not implemented)~~
 - [x] Read keys from standard input
 - [x] Output keys to standard output
 
