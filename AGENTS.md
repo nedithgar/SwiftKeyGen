@@ -38,12 +38,15 @@ swift build
 ```
 
 ### Testing
-```bash
-# Run all tests
-swift test
 
-# Run specific test file
-swift test --filter <TestName>
+> Important: Do NOT run the full test suite with `swift test` in this repository. Many tests exercise cryptography‑heavy paths (large key generation, KDFs, ciphers, integration flows) and can take a long time. Prefer targeted runs using filters or tags.
+
+```bash
+# Recommended: run a specific test or subset by name/regex
+swift test --filter <TestNameOrRegex>
+
+# Not recommended here — full suite is slow and unnecessary
+# swift test
 ```
 
 ### Running CLI
@@ -166,6 +169,8 @@ struct CertificateIntegrationTests {
   xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration,performance
   ```
 - **SPM (swift test)**: Tag filtering is **not yet supported** in SPM command-line tools (tracked as [swift-testing #591](https://github.com/swiftlang/swift-testing/issues/591)). Current workaround: use `--filter` with regex patterns matching test names
+
+> Local guidance: Because this is a cryptography‑focused project, avoid running `swift test` without filters. Use `swift test --filter <TestNameOrRegex>` to run only the relevant unit/integration tests. In Xcode, prefer running by tag (e.g., only `.unit` or `.critical`).
 
 **Recommended tags for this project:**
 - `.unit` — Fast, focused tests of individual functions/types
