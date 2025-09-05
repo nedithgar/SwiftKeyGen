@@ -39,7 +39,7 @@ swift build
 
 ### Testing
 
-> Important: Do NOT run the full test suite with `swift test` in this repository. Many tests exercise cryptography‑heavy paths (large key generation, KDFs, ciphers, integration flows) and can take a long time. Prefer targeted runs using filters or tags.
+> **Important**: Do NOT run the full test suite with `swift test` in this repository. Many tests exercise cryptography‑heavy paths (large key generation, KDFs, ciphers, integration flows) and can take a long time. Prefer targeted runs using filters or tags.
 
 ```bash
 # Recommended: run a specific test or subset by name/regex
