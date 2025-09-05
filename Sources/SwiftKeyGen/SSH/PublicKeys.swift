@@ -327,58 +327,28 @@ public struct ECDSAPublicKey: SSHPublicKey {
         let r = try sigDecoder.decodeData()
         let s = try sigDecoder.decodeData()
         
-        // Ensure r and s are the correct size
-        // BigInt encoding may add/remove bytes, so we need to handle both cases
-        let paddedR: Data
-        let paddedS: Data
-        
+        // Ensure r and s are the correct size (mpint can add/remove leading 0x00)
         switch publicKey {
         case .p256(let key):
             // P256 uses 32-byte values
-            paddedR = padToLength(r, targetLength: 32)
-            paddedS = padToLength(s, targetLength: 32)
-            
-            var combined = Data()
-            combined.append(paddedR)
-            combined.append(paddedS)
+            let combined = ECDSAEncoding.rawSignature(r: r, s: s, componentLength: 32)
             
             let signature = try P256.Signing.ECDSASignature(rawRepresentation: combined)
             return key.isValidSignature(signature, for: data)
             
         case .p384(let key):
             // P384 uses 48-byte values
-            paddedR = padToLength(r, targetLength: 48)
-            paddedS = padToLength(s, targetLength: 48)
-            
-            var combined = Data()
-            combined.append(paddedR)
-            combined.append(paddedS)
+            let combined = ECDSAEncoding.rawSignature(r: r, s: s, componentLength: 48)
             
             let signature = try P384.Signing.ECDSASignature(rawRepresentation: combined)
             return key.isValidSignature(signature, for: data)
             
         case .p521(let key):
             // P521 uses 66-byte values
-            paddedR = padToLength(r, targetLength: 66)
-            paddedS = padToLength(s, targetLength: 66)
-            
-            var combined = Data()
-            combined.append(paddedR)
-            combined.append(paddedS)
+            let combined = ECDSAEncoding.rawSignature(r: r, s: s, componentLength: 66)
             
             let signature = try P521.Signing.ECDSASignature(rawRepresentation: combined)
             return key.isValidSignature(signature, for: data)
-        }
-    }
-    
-    private func padToLength(_ data: Data, targetLength: Int) -> Data {
-        if data.count >= targetLength {
-            // If data is too long, trim from the beginning (remove leading zeros)
-            return data.suffix(targetLength)
-        } else {
-            // If data is too short, pad with zeros at the beginning
-            let padding = Data(repeating: 0, count: targetLength - data.count)
-            return padding + data
         }
     }
 }
