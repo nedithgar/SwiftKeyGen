@@ -240,24 +240,40 @@ public struct ECDSAKey: SSHKey {
         let r = try decoder.decodeData()
         let s = try decoder.decodeData()
         
-        // Combine r and s into raw signature format
-        let rawSignature = r + s
-        
+        // Ensure r and s are fixed-size for the curve (mpint may add/remove a leading 0x00)
+        func padToLength(_ data: Data, targetLength: Int) -> Data {
+            if data.count >= targetLength {
+                return data.suffix(targetLength)
+            } else {
+                let padding = Data(repeating: 0, count: targetLength - data.count)
+                return padding + data
+            }
+        }
+
         switch privateKeyStorage {
         case .p256(let key):
-            guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
-                return false
-            }
+            let rr = padToLength(r, targetLength: 32)
+            let ss = padToLength(s, targetLength: 32)
+            var raw = Data()
+            raw.append(rr)
+            raw.append(ss)
+            guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: raw) else { return false }
             return key.publicKey.isValidSignature(ecdsaSignature, for: data)
         case .p384(let key):
-            guard let ecdsaSignature = try? P384.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
-                return false
-            }
+            let rr = padToLength(r, targetLength: 48)
+            let ss = padToLength(s, targetLength: 48)
+            var raw = Data()
+            raw.append(rr)
+            raw.append(ss)
+            guard let ecdsaSignature = try? P384.Signing.ECDSASignature(rawRepresentation: raw) else { return false }
             return key.publicKey.isValidSignature(ecdsaSignature, for: data)
         case .p521(let key):
-            guard let ecdsaSignature = try? P521.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
-                return false
-            }
+            let rr = padToLength(r, targetLength: 66)
+            let ss = padToLength(s, targetLength: 66)
+            var raw = Data()
+            raw.append(rr)
+            raw.append(ss)
+            guard let ecdsaSignature = try? P521.Signing.ECDSASignature(rawRepresentation: raw) else { return false }
             return key.publicKey.isValidSignature(ecdsaSignature, for: data)
         }
     }
