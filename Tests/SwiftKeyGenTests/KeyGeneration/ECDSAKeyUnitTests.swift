@@ -158,6 +158,30 @@ struct ECDSAKeyUnitTests {
         #expect(ok)
     }
 
+    @Test("Raw signature round-trip (P-384)")
+    func testRawSignatureVerificationP384() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa384) as! ECDSAKey
+        let msg = Data("raw-sig-p384".utf8)
+
+        let rawSig = try key.rawSignature(for: msg)
+        #expect(rawSig.count > 0)
+
+        let ok = try key.verifyRawSignature(rawSig, for: msg)
+        #expect(ok)
+    }
+
+    @Test("Raw signature round-trip (P-521)")
+    func testRawSignatureVerificationP521() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa521) as! ECDSAKey
+        let msg = Data("raw-sig-p521".utf8)
+
+        let rawSig = try key.rawSignature(for: msg)
+        #expect(rawSig.count > 0)
+
+        let ok = try key.verifyRawSignature(rawSig, for: msg)
+        #expect(ok)
+    }
+
     // MARK: - Generator dispatch
     @Test("ECDSAKeyGenerator.generate dispatch and unsupported type")
     func testGeneratorDispatch() throws {
@@ -175,4 +199,3 @@ struct ECDSAKeyUnitTests {
         }
     }
 }
-
