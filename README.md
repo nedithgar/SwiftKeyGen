@@ -612,7 +612,7 @@ let canVerify = try publicKey.verify(signature: signature, for: messageData)
 
 - [x] SSH certificate generation and signing
 - [x] Full signature verification (RSA, ECDSA, Ed25519)
-- [ ] DSA key support (legacy)
+~~- [ ] DSA key support (legacy)~~
 - [ ] KRL (Key Revocation List) support
 - [ ] FIDO/U2F security key support
 - [ ] Moduli generation for DH groups
