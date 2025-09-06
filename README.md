@@ -1,6 +1,6 @@
 # SwiftKeyGen
 
-A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms and Linux.
+A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms.
 
 ## Features
 
@@ -29,8 +29,7 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 - ✅ Full signature verification (Ed25519, RSA, ECDSA)
 - ✅ RSA signatures: ssh-rsa (SHA1), rsa-sha2-256, rsa-sha2-512
 - ✅ ECDSA signatures: P-256 (SHA256), P-384 (SHA384), P-521 (SHA512)
-- ✅ Cross-platform support (macOS, iOS, Linux)
-- ✅ No external dependencies (uses Swift Crypto)
+- ✅ Apple platforms support (see `Package.swift` for minimum versions)
 
 ## Installation
 
@@ -88,7 +87,7 @@ try KeyFileManager.generateKeyPairFiles(
 // RSA key (3072 bits by default)
 let rsaKey = try SwiftKeyGen.generateKeyPair(type: .rsa)
 
-// RSA with standard sizes (hardware accelerated)
+// RSA with standard sizes
 let rsa2048 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 2048)
 let rsa4096 = try SwiftKeyGen.generateKeyPair(type: .rsa, bits: 4096)
 
@@ -168,8 +167,7 @@ let isValid = KeyManager.verifyPassphrase(
 - Wide compatibility
 - Supported sizes: Any size from 1024 to 16384 bits (must be multiple of 8)
 - Default: 3072 bits (following OpenSSH 9.0+)
-- Uses hardware-accelerated CryptoExtras for standard sizes (2048, 3072, 4096)
-- Arbitrary key sizes use pure Swift implementation
+- Pure Swift big-integer implementation (generation). Signing/verification compatible with OpenSSH
 
 ### ECDSA
 - Good performance
@@ -180,17 +178,13 @@ let isValid = KeyManager.verifyPassphrase(
 
 - Private keys are written with `0600` permissions (owner read/write only)
 - Public keys are written with `0644` permissions (owner write, all read)
-- Uses secure random number generation from Swift Crypto
+- Uses secure random number generation
 - Memory is properly managed by Swift's ARC
 
 ## Platform Support
 
-- macOS 13.0+
-- iOS 16.0+
-- tvOS 16.0+
-- watchOS 9.0+
-- visionOS 1.0+
-- Linux (with Swift 6.1+)
+- Apple platforms only (see `Package.swift` for current minimums). The package is configured for contemporary SDKs/toolchains (Swift 6.2).
+- Linux support is currently experimental and may require adjustments (some internals use Apple-specific randomness APIs).
 
 ### Passphrase Protection
 
@@ -219,7 +213,7 @@ try KeyManager.removePassphrase(
 // Update key comment
 try KeyManager.updateComment(
     keyPath: "~/.ssh/id_ed25519",
-    passphrase: "pass", // optional if key is encrypted
+    passphrase: "pass", // required if key is encrypted; optional otherwise
     newComment: "new-comment@example.com"
 )
 ```
@@ -318,9 +312,9 @@ MHcCAQEEIIGLlamZU9Z83D3g8VsmdqKhu5u47L4RjSXNe3zxQNXPoAoGCCqGSM49
 let ecdsaPrivateKey = try PEMParser.parseECDSAPrivateKey(ecdsaPrivatePEM)
 print(ecdsaPrivateKey.publicKeyString()) // Extract public key
 
-// Note: Ed25519 private key PEM parsing is NOT supported by Swift Crypto
-// Use OpenSSH format for Ed25519 keys instead:
-let ed25519OpenSSH = try OpenSSHPrivateKey.parse(from: ed25519OpenSSHData)
+// Ed25519 private key PEM parsing is supported (including unencrypted);
+// encrypted PEM requires proper headers and a passphrase.
+let ed25519Private = try PEMParser.parseEd25519PrivateKey(ed25519PEM)
 
 // Parse ECDSA public key from PKCS8 format
 let ecdsaPKCS8 = """
@@ -408,6 +402,10 @@ let allTypes = try await BatchKeyGenerator.generateAllTypes(
     outputDirectory: "~/.ssh/"
 )
 ```
+
+Note:
+- Programmatic conversion to PEM/PKCS#8 requires a private key instance (as shown above).
+- The CLI `convert` command currently performs conversions for public key formats (OpenSSH <-> RFC4716). Converting PEM/PKCS#8 via CLI is not supported because it requires private key material.
 
 ### SSH Certificate Operations
 
