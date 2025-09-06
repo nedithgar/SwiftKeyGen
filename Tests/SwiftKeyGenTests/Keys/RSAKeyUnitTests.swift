@@ -2,9 +2,11 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-struct RSATests {
+@Suite("RSA Key Unit Tests", .tags(.unit, .rsa, .slow))
+struct RSAKeyUnitTests {
     
-    @Test func generateRSAKey() throws {
+    @Test("Generate 2048-bit RSA key and verify components")
+    func generateRSAKey() throws {
         // Generate a 2048-bit RSA key
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa@example.com") as! RSAKey
         
@@ -35,8 +37,9 @@ struct RSATests {
         // Modulus should be approximately 256 bytes for 2048-bit key
         #expect(modulus.count >= 255 && modulus.count <= 257)
     }
-    
-    @Test func rsaFingerprint() throws {
+
+    @Test("RSA key fingerprint generation")
+    func rsaFingerprint() throws {
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         
         // Test fingerprints
@@ -47,7 +50,8 @@ struct RSATests {
         #expect(md5Fingerprint.contains(":"))
     }
     
-    @Test func invalidKeySize() throws {
+    @Test("Invalid RSA key size")
+    func invalidKeySize() throws {
         // Test invalid key sizes according to OpenSSH standards
         let invalidSizes = [
             512,    // Too small (< 1024)
