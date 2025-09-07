@@ -111,12 +111,12 @@ Extensions/
 
 Moves and Renames (Old → New)
 
-Core
+<!-- Core
 - Sources/SwiftKeyGen/Core/KeyGeneration.swift → Core/KeyGeneration.swift
 - Sources/SwiftKeyGen/Core/KeyManager.swift → Core/KeyManager.swift
 - Sources/SwiftKeyGen/Core/KeyPair.swift → Core/KeyPair.swift
 - Sources/SwiftKeyGen/Core/KeyType.swift → Core/KeyType.swift
-- Sources/SwiftKeyGen/Core/SSHKeyError.swift → Core/SSHKeyError.swift
+- Sources/SwiftKeyGen/Core/SSHKeyError.swift → Core/SSHKeyError.swift -->
 
 Keys
 - Sources/SwiftKeyGen/Keys/SSHKey.swift → Keys/Protocols/SSHKey.swift
@@ -126,12 +126,12 @@ Keys
 - Sources/SwiftKeyGen/SSH/PublicKeys.swift → Keys/Public/SSHPublicKeys.swift
   - Additionally extract `SSHPublicKey` protocol to Keys/Protocols/SSHPublicKey.swift
 
-Certificates
+<!-- Certificates
 - Sources/SwiftKeyGen/SSH/SSHCertificate.swift → Certificates/Models/SSHCertificate.swift
 - Sources/SwiftKeyGen/Certificates/CertificateAuthority.swift → Certificates/Authority/CertificateAuthority.swift
 - Sources/SwiftKeyGen/Certificates/CertificateParser.swift → Certificates/Parser/CertificateParser.swift
 - Sources/SwiftKeyGen/Certificates/CertificateVerifier.swift → Certificates/Verifier/CertificateVerifier.swift
-- Sources/SwiftKeyGen/Certificates/CertificateManager.swift → Certificates/Manager/CertificateManager.swift
+- Sources/SwiftKeyGen/Certificates/CertificateManager.swift → Certificates/Manager/CertificateManager.swift -->
 
 Formats
 - Sources/SwiftKeyGen/SSH/SSHEncoding.swift → Formats/SSH/SSHEncoding.swift
