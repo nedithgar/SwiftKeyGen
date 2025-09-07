@@ -133,7 +133,7 @@ Keys
 - Sources/SwiftKeyGen/Certificates/CertificateVerifier.swift → Certificates/Verifier/CertificateVerifier.swift
 - Sources/SwiftKeyGen/Certificates/CertificateManager.swift → Certificates/Manager/CertificateManager.swift -->
 
-Formats
+<!-- Formats
 - Sources/SwiftKeyGen/SSH/SSHEncoding.swift → Formats/SSH/SSHEncoding.swift
 - Sources/SwiftKeyGen/Formats/OpenSSH/OpenSSHPrivateKey.swift → Formats/OpenSSH/OpenSSHPrivateKey.swift
 - Sources/SwiftKeyGen/Formats/PEM/PEMParser.swift → Formats/PEM/PEMParser.swift
@@ -146,13 +146,13 @@ Formats
 - Sources/SwiftKeyGen/Formats/ASN1/ASN1Parser.swift → Formats/ASN1/ASN1Parser.swift
 - Sources/SwiftKeyGen/Utilities/KeyParser.swift → Formats/Common/PublicKeyParser.swift
   - Option A (preferred): split into `Formats/OpenSSH/OpenSSHPublicKeyParser.swift` and `Formats/RFC4716/RFC4716Parser.swift`, with `Formats/Common/PublicKeyParser.swift` as a façade.
-  - Option B (minimal diff): move as-is to `Formats/Common/PublicKeyParser.swift` and adjust call sites.
+  - Option B (minimal diff): move as-is to `Formats/Common/PublicKeyParser.swift` and adjust call sites. -->
 
-Conversion
+<!-- Conversion
 - Sources/SwiftKeyGen/Conversion/KeyConversionManager.swift → Conversion/KeyConversionManager.swift
-- Sources/SwiftKeyGen/Conversion/KeyConversion.swift → Conversion/KeyConverter.swift
+- Sources/SwiftKeyGen/Conversion/KeyConversion.swift → Conversion/KeyConverter.swift -->
 
-Cryptography
+<!-- Cryptography
 - Sources/SwiftKeyGen/Cryptography/Blowfish.swift → Cryptography/Primitives/Blowfish/Blowfish.swift
 - Sources/SwiftKeyGen/Cryptography/BCrypt.swift → Cryptography/KDF/BCryptPBKDF.swift
 - Sources/SwiftKeyGen/Cryptography/Ciphers/Cipher.swift → Cryptography/Ciphers/Cipher.swift
@@ -162,7 +162,7 @@ Cryptography
 - Sources/SwiftKeyGen/Cryptography/Ciphers/AES/AESGCM.swift → Cryptography/Ciphers/AES/AESGCM.swift
 - Sources/SwiftKeyGen/Cryptography/Ciphers/ChaCha20Poly1305.swift → Cryptography/Ciphers/ChaCha20Poly1305.swift
 - Sources/SwiftKeyGen/Cryptography/Ciphers/TripleDESCBC.swift → Cryptography/Ciphers/TripleDESCBC.swift
-- Sources/SwiftKeyGen/Extensions/Insecure+RSA.swift → Cryptography/Primitives/RSA/InsecureRSA.swift
+- Sources/SwiftKeyGen/Extensions/Insecure+RSA.swift → Cryptography/Primitives/RSA/InsecureRSA.swift -->
 
 SSH
 - Sources/SwiftKeyGen/SSH/KnownHosts.swift → SSH/KnownHosts/KnownHosts.swift
