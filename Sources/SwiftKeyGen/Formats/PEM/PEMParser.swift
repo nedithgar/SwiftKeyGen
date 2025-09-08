@@ -600,6 +600,42 @@ public struct PEMParser {
         
         return nil
     }
+
+    /// Parse a generic PEM block and return its declared type and decoded payload bytes.
+    /// - Returns: Tuple of `(type, data)` where `type` is the header type between BEGIN/END markers,
+    ///            and `data` is the base64-decoded payload between the markers (headers like Proc-Type/DEK-Info are skipped).
+    public static func parsePEM(_ pemString: String) throws -> (type: String, data: Data) {
+        guard let pemType = detectPEMType(pemString) else {
+            throw SSHKeyError.invalidFormat
+        }
+
+        let lines = pemString.components(separatedBy: .newlines)
+        var base64Lines: [String] = []
+        var inBody = false
+
+        for raw in lines {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.hasPrefix("-----BEGIN ") {
+                inBody = true
+                continue
+            }
+            if line.hasPrefix("-----END ") {
+                break
+            }
+            guard inBody else { continue }
+            if line.isEmpty { continue }
+            // Skip OpenSSL PEM encryption headers
+            if line.hasPrefix("Proc-Type:") { continue }
+            if line.hasPrefix("DEK-Info:") { continue }
+            base64Lines.append(line)
+        }
+
+        let base64Joined = base64Lines.joined()
+        guard let data = Data(base64Encoded: base64Joined) else {
+            throw SSHKeyError.invalidBase64
+        }
+        return (pemType, data)
+    }
     
     /// Check if PEM contains a private key
     public static func isPrivateKey(_ pemString: String) -> Bool {

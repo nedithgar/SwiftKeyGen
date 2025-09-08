@@ -5,21 +5,23 @@ import Foundation
 @Suite("PEM Parser Tests")
 struct PEMParserTests {
     
-    @Test("Parse PEM structure")
-    func testParsePEMStructure() throws {
+    @Test("Generic parsePEM returns type and payload")
+    func testGenericParsePEM() throws {
         let pemString = """
         -----BEGIN RSA PUBLIC KEY-----
-        MIIBCgKCAQEA1234567890abcdef
-        ghijklmnopqrstuvwxyz
+        MIIBCgKCAQEAxG6eSjsaTT+PPHobLU5fanucnQ4fKjtMXWadqZGjKnKz1o1hFSb6
+        QpXW5vVphJ/bCZ2dcSflWnvCpmEQbRhJZBV+hG8n9CL2d6TqJmzR8fK3U2Sk4SJy
+        GCufmBPkNPPmiWwxWKIQqRoKELnGHEOhm3IsJGE2auOiY2Jbc6aY3bA1U4dliGRz
+        FCMEm4j7xr0a7HTQ1Cp7s5g7FTfIdcaBZscCKN7DQ8F6pJ0T8B5OkKkHe8XJ9krG
+        sWNcEC6VMpNQQfiBr3dt9AH3MmWGqNW7SwvJdL8jIvP1qTr3le8rOqg4vBGg4taG
+        AwfYI8jiKyw6TRx8k7FY8rwIx3x0LqEDNQIDAQAB
         -----END RSA PUBLIC KEY-----
         """
-        
-        // let (type, data) = try PEMParser.parsePEM(pemString)
-        // #expect(type == "RSA PUBLIC KEY")
-        // #expect(!data.isEmpty)
-        // TODO: Implement parsePEM method in PEMParser
+
+        let (type, data) = try PEMParser.parsePEM(pemString)
+        #expect(type == "RSA PUBLIC KEY")
+        #expect(!data.isEmpty)
     }
-    
     @Test("Detect PEM format")
     func testDetectPEMFormat() {
         let rsaPublicPEM = """
