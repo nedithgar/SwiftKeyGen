@@ -164,15 +164,15 @@ Keys
 - Sources/SwiftKeyGen/Cryptography/Ciphers/TripleDESCBC.swift → Cryptography/Ciphers/TripleDESCBC.swift
 - Sources/SwiftKeyGen/Extensions/Insecure+RSA.swift → Cryptography/Primitives/RSA/InsecureRSA.swift -->
 
-SSH
-- Sources/SwiftKeyGen/SSH/KnownHosts.swift → SSH/KnownHosts/KnownHosts.swift
+<!-- SSH
+- Sources/SwiftKeyGen/SSH/KnownHosts.swift → SSH/KnownHosts/KnownHosts.swift -->
 
-Utilities
+<!-- Utilities
 - Sources/SwiftKeyGen/Utilities/ECDSAEncoding.swift → Utilities/Encoding/ECDSAEncoding.swift
 - Sources/SwiftKeyGen/Utilities/KeyFileManager.swift → Utilities/IO/KeyFileManager.swift
 - Sources/SwiftKeyGen/Utilities/BubbleBabble.swift → Utilities/Fingerprints/BubbleBabble.swift
 - Sources/SwiftKeyGen/Utilities/RandomArt.swift → Utilities/Fingerprints/RandomArt.swift
-- Sources/SwiftKeyGen/Utilities/BatchKeyGenerator.swift → Utilities/Batch/BatchKeyGenerator.swift
+- Sources/SwiftKeyGen/Utilities/BatchKeyGenerator.swift → Utilities/Batch/BatchKeyGenerator.swift -->
 
 Extensions
 - Sources/SwiftKeyGen/Extensions/Data.swift → Extensions/Data.swift
