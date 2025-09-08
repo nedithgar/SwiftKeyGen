@@ -2,12 +2,6 @@ import Foundation
 import Crypto
 import BigInt
 
-/// Protocol for public-only SSH keys
-public protocol SSHPublicKey: SSHKey {
-    func verify(signature: Data, for data: Data) throws -> Bool
-}
-
-
 /// Ed25519 public key (no private key operations)
 public struct Ed25519PublicKey: SSHPublicKey {
     public let keyType = KeyType.ed25519
