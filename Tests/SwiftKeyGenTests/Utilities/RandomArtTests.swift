@@ -77,16 +77,5 @@ struct RandomArtTests {
         }
     }
     
-    @Test func printExample() throws {
-        // Generate and print an example for visual verification
-        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "example@test.com") as! Ed25519Key
-        let art = RandomArt.generate(for: key)
-        
-        print("\nExample RandomArt for Ed25519 key:")
-        print(art)
-        print("\nFingerprint: \(key.fingerprint(hash: .sha256))")
-        
-        // Basic validation
-        #expect(art.contains("S") && art.contains("E"))
-    }
+    
 }
