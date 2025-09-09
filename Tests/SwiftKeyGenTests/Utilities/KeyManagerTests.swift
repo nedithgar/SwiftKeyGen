@@ -179,7 +179,7 @@ struct KeyManagerTests {
         #expect(updatedKey.comment == newComment)
         
         // Verify public key file was also updated
-        let publicKeyContent = try String(contentsOf: URL(fileURLWithPath: publicKeyPath))
+        let publicKeyContent = try String(contentsOf: URL(fileURLWithPath: publicKeyPath), encoding: .utf8)
         #expect(publicKeyContent.contains(newComment))
     }
     
