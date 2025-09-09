@@ -173,7 +173,7 @@ func testExportKeyFilesWithEncryption() throws {
     
     // Read and verify PEM file
     if let pemPath = results[.pem] {
-        let pemContent = try String(contentsOfFile: pemPath)
+        let pemContent = try String(contentsOfFile: pemPath, encoding: .utf8)
         #expect(pemContent.contains("Proc-Type: 4,ENCRYPTED"))
         #expect(pemContent.contains("DEK-Info:"))
         #expect(pemContent.contains("BEGIN EC PRIVATE KEY"))
@@ -181,7 +181,7 @@ func testExportKeyFilesWithEncryption() throws {
     
     // Read and verify PKCS8 file
     if let pkcs8Path = results[.pkcs8] {
-        let pkcs8Content = try String(contentsOfFile: pkcs8Path)
+        let pkcs8Content = try String(contentsOfFile: pkcs8Path, encoding: .utf8)
         #expect(pkcs8Content.contains("BEGIN ENCRYPTED PRIVATE KEY"))
     }
     

@@ -72,7 +72,7 @@ func testECDSAExportFormatsMatchSSHKeygen() throws {
     
     // Read PEM format file
     if let pemPath = results[.pem] {
-        let pemContent = try String(contentsOfFile: pemPath)
+        let pemContent = try String(contentsOfFile: pemPath, encoding: .utf8)
         #expect(pemContent.contains("BEGIN EC PRIVATE KEY"))
     } else {
         Issue.record("PEM format not exported")
@@ -80,7 +80,7 @@ func testECDSAExportFormatsMatchSSHKeygen() throws {
     
     // Read PKCS8 format file
     if let pkcs8Path = results[.pkcs8] {
-        let pkcs8Content = try String(contentsOfFile: pkcs8Path)
+        let pkcs8Content = try String(contentsOfFile: pkcs8Path, encoding: .utf8)
         #expect(pkcs8Content.contains("BEGIN PRIVATE KEY"))
     } else {
         Issue.record("PKCS8 format not exported")

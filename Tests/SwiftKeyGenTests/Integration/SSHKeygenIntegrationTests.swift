@@ -162,7 +162,7 @@ func testCompareFormatsWithSSHKeygen() throws {
     try FileManager.default.moveItem(atPath: pemKeyPath, toPath: pemPath)
     
     // Read the PEM file and verify structure
-    let pemContent = try String(contentsOfFile: pemPath)
+    let pemContent = try String(contentsOfFile: pemPath, encoding: .utf8)
     #expect(pemContent.contains("BEGIN EC PRIVATE KEY"), "ssh-keygen PEM should be SEC1 format")
     #expect(pemContent.contains("Proc-Type: 4,ENCRYPTED"), "ssh-keygen PEM should be encrypted")
     #expect(pemContent.contains("DEK-Info:"), "ssh-keygen PEM should have DEK-Info header")
@@ -191,7 +191,7 @@ func testCompareFormatsWithSSHKeygen() throws {
     try FileManager.default.moveItem(atPath: pkcs8KeyPath, toPath: pkcs8Path)
     
     // Read the PKCS8 file and verify structure
-    let pkcs8Content = try String(contentsOfFile: pkcs8Path)
+    let pkcs8Content = try String(contentsOfFile: pkcs8Path, encoding: .utf8)
     #expect(pkcs8Content.contains("BEGIN ENCRYPTED PRIVATE KEY"), "ssh-keygen PKCS8 should be encrypted")
     #expect(!pkcs8Content.contains("Proc-Type"), "PKCS8 should not have PEM encryption headers")
     

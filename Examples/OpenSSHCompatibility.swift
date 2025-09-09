@@ -54,7 +54,7 @@ func testOpenSSHCompatibility() throws {
     print("Public key saved to: \(testKeyPath).pub\n")
     
     // Read and display the public key
-    if let publicKeyContent = try? String(contentsOfFile: testKeyPath + ".pub") {
+    if let publicKeyContent = try? String(contentsOfFile: testKeyPath + ".pub", encoding: .utf8) {
         print("Public key file content:")
         print(publicKeyContent)
     }
