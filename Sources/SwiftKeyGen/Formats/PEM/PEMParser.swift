@@ -432,7 +432,9 @@ public struct PEMParser {
             throw SSHKeyError.invalidKeyData
         }
         
-        let curveType = try determineCurveTypeFromOID(curveOID)
+        // Validate the curve OID without retaining the value; parsing of the
+        // embedded SEC1 structure will independently derive the curve.
+        _ = try determineCurveTypeFromOID(curveOID)
         
         // Skip to end of algorithm sequence
         parser.offset = algSeqEnd
