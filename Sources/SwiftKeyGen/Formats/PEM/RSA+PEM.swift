@@ -44,7 +44,6 @@ extension PEMParser {
         // Use components(separatedBy:) instead of split() to preserve empty lines
         let lines = pemString.components(separatedBy: "\n")
         
-        var procType: String?
         var dekInfo: String?
         var base64Lines: [String] = []
         var inBody = false
@@ -55,7 +54,8 @@ extension PEMParser {
             } else if line.hasPrefix("-----END") {
                 break
             } else if line.hasPrefix("Proc-Type:") {
-                procType = line.replacingOccurrences(of: "Proc-Type:", with: "").trimmingCharacters(in: .whitespaces)
+                // Ignore Proc-Type header; DEK-Info is authoritative for parameters
+                continue
             } else if line.hasPrefix("DEK-Info:") {
                 dekInfo = line.replacingOccurrences(of: "DEK-Info:", with: "").trimmingCharacters(in: .whitespaces)
             } else if line.isEmpty {
@@ -124,7 +124,7 @@ extension PEMParser {
         _ = try parser.parseLength()
         
         // Parse version (should be 0)
-        guard let versionData = try parser.parseInteger() else {
+        guard let _ = try parser.parseInteger() else {
             throw SSHKeyError.invalidKeyData
         }
         
@@ -216,6 +216,4 @@ extension PEMParser {
         return base64Lines.joined()
     }
 }
-
-
 
