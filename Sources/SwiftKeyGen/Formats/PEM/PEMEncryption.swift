@@ -1,5 +1,4 @@
 import Foundation
-import CommonCrypto
 import Crypto
 
 /// PEM encryption support for OpenSSL compatibility
@@ -50,14 +49,10 @@ public struct PEMEncryption {
         while derived.count < (keyLen + ivLen) {
             // First iteration: MD5(password + salt)
             // Subsequent iterations: MD5(previous_block + password + salt)
-            var toHash = block + passwordData + salt
+            let toHash = block + passwordData + salt
             
             // Use MD5 (required for OpenSSL compatibility)
-            var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-            toHash.withUnsafeBytes { bytes in
-                _ = CC_MD5(bytes.baseAddress, CC_LONG(toHash.count), &digest)
-            }
-            
+            let digest = Insecure.MD5.hash(data: toHash)
             block = Data(digest)
             derived.append(block)
         }
@@ -214,4 +209,3 @@ extension Data {
         return map { String(format: "%02X", $0) }.joined()
     }
 }
-
