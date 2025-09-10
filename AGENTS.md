@@ -19,16 +19,26 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - Format support: OpenSSH, PEM, PKCS, ASN.1, DER
 
 ### Key Directory Map
-- `Sources/SwiftKeyGen/Core/`: High-level APIs (`KeyGeneration`, `KeyManager`, `KeyPair`, error types)
-- `Sources/SwiftKeyGen/Keys/`: Concrete key type models (`RSAKey`, `Ed25519Key`, `ECDSAKey`, `SSHKey`)
-- `Sources/SwiftKeyGen/Formats/`: Format parsing & encoding (OpenSSH, PEM, PKCS, ASN.1, DER)
-- `Sources/SwiftKeyGen/Utilities/`: Helpers (random art, bubble babble, batch gen, file IO, parsing)
-- `Sources/SwiftKeyGen/Certificates/`: SSH certificate signing, parsing, verification
-- `Sources/SwiftKeyGen/Cryptography/`: Cipher + KDF + BCrypt + AES/ChaCha/HMAC primitives
-- `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`)
-- **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating existing helpers. When adding utility methods that extend types, **add them here** for project-wide reuse.
-- `Sources/SwiftKeyGenCLI/`: CLI logic (keep library free of CLI-only concerns)
-- `Tests/SwiftKeyGenTests/`: Organized by domain; use as source of truth for expected behaviors
+- `Sources/SwiftKeyGen/Core/`: High-level APIs (`KeyGeneration`, `KeyManager`, `KeyPair`, `KeyType`, `SSHKeyError`).
+- `Sources/SwiftKeyGen/Keys/`: Concrete key types and public key models (`RSAKey`, `Ed25519Key`, `ECDSAKey`, `PublicKeys`); protocols live in `Keys/Protocols/` (`SSHKey`, `SSHPublicKey`).
+- `Sources/SwiftKeyGen/Formats/`: Format parsing and encoding. Subfolders: `OpenSSH/`, `RFC4716/`, `PEM/`, `PKCS/`, `DER/`, `ASN1/`, `SSH/`, `Common/`.
+- `Sources/SwiftKeyGen/SSH/`: SSH-specific helpers and data (e.g., `KnownHosts/`).
+- `Sources/SwiftKeyGen/Utilities/`: Helpers and tooling:
+  - `IO/` (file I/O, e.g., `KeyFileManager`)
+  - `Fingerprints/` (random art, bubble babble)
+  - `Batch/` (batch key generation)
+  - `Encoding/` (e.g., `ECDSAEncoding`)
+- `Sources/SwiftKeyGen/Certificates/`: SSH certificate signing, parsing, verification, and models (`Models/SSHCertificate.swift`).
+- `Sources/SwiftKeyGen/Cryptography/`: Cipher + KDF + primitives:
+  - `Ciphers/` (AES, ChaCha20-Poly1305, 3DES)
+  - `KDF/` (`BCrypt`)
+  - `Primitives/` (`Blowfish`, RSA helpers)
+- `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`, `KeyConversion`).
+- **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating helpers. Add new cross-cutting extensions here for project-wide reuse.
+- `Sources/SwiftKeyGenCLI/`: Main CLI logic (argument parsing, stdout formatting).
+- `Sources/HMACVerifyTool/`: Auxiliary CLI for HMAC verification.
+- `Sources/CCommonCryptoShims/`: C shims for CommonCrypto (internal bridging headers).
+- `Tests/SwiftKeyGenTests/`: Organized by domain (e.g., `Keys/`, `Cryptography/`, `FormatConversion/`, `Integration/`, `Utilities/`, `Certificates/`).
 
 ## Build and Test Commands
 
