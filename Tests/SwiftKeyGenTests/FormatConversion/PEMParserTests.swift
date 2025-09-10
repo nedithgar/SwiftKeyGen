@@ -46,24 +46,6 @@ struct PEMParserTests {
     
     @Test("Parse RSA public key from PEM")
     func testParseRSAPublicKeyPEM() throws {
-        // Use a real RSA public key in PKCS#1 format
-        // This is a 2048-bit RSA public key
-        let pemString = """
-        -----BEGIN RSA PUBLIC KEY-----
-        MIIBCgKCAQEAx0eaGmBoZGjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjI
-        yMwIDAQAB
-        -----END RSA PUBLIC KEY-----
-        """
-        
         // Since Swift Crypto requires valid RSA keys, we'll test with a properly generated key
         let rsaKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         
@@ -106,16 +88,7 @@ struct PEMParserTests {
         try pemString.write(to: tempFile, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: tempFile) }
         
-        // Convert to OpenSSH format
-        let options = KeyConversionManager.ConversionOptions(
-            toFormat: .openssh,
-            fromFormat: .pem,
-            input: tempFile.path,
-            output: "-"
-        )
-        
-        // Capture output (in real usage, this would go to stdout)
-        var outputData = Data()
+        // Convert to OpenSSH format (options/output not used in this test)
         
         // We can't easily test stdout, so let's test the parsing directly
         #expect(try KeyConversionManager.detectFormat(from: pemString) == .pem)
@@ -136,13 +109,11 @@ struct PEMParserTests {
         """
         
         #expect(throws: Error.self) {
-            // _ = try PEMParser.parsePEM(invalidPEM1)
-            throw SSHKeyError.invalidKeyData // Placeholder
+            _ = try PEMParser.parsePEM(invalidPEM1)
         }
         
         #expect(throws: Error.self) {
-            // _ = try PEMParser.parsePEM(invalidPEM2)
-            throw SSHKeyError.invalidKeyData // Placeholder
+            _ = try PEMParser.parsePEM(invalidPEM2)
         }
     }
     
