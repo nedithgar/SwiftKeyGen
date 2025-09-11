@@ -19,14 +19,6 @@ extension Data {
             return Data(repeating: 0, count: length - self.count) + self
         }
     }
-    
-    // @inlinable
-    // static func generateSecureRandomBytes(count: Int) -> Data {
-    //     var bytes = [UInt8](repeating: 0, count: count)
-    //     let result = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
-    //     precondition(result == errSecSuccess, "Failed to generate secure random bytes")
-    //     return Data(bytes)
-    // }
 
     @inlinable
     static func generateSecureRandomBytes(count: Int) throws -> Data {
