@@ -39,10 +39,6 @@ let package = Package(
         .executableTarget(
             name: "SwiftKeyGenCLI",
             dependencies: ["SwiftKeyGen"]
-        ),
-        .executableTarget(
-            name: "HMACVerifyTool",
-            dependencies: ["SwiftKeyGen"]
-        ),
+        )
     ]
 )
