@@ -24,9 +24,9 @@ extension Insecure {
                 attempts += 1
                 
                 // Generate two large prime numbers
-                let p = generatePrime(bitSize: bitSize / 2)
-                let q = generatePrime(bitSize: bitSize / 2)
-                
+                let p = try generatePrime(bitSize: bitSize / 2)
+                let q = try generatePrime(bitSize: bitSize / 2)
+
                 // Calculate n = p * q
                 let n = p * q
                 
@@ -423,19 +423,15 @@ extension Insecure {
         // MARK: - Helper Functions
         
         /// Generate a prime number with specified bit size
-        private static func generatePrime(bitSize: Int) -> BigUInt {
+        private static func generatePrime(bitSize: Int) throws -> BigUInt {
             let maxAttempts = 10000 // Prevent infinite loops
             var attempts = 0
             
             while attempts < maxAttempts {
                 attempts += 1
                 
-                var randomBytes = Data(count: bitSize / 8)
-                randomBytes.withUnsafeMutableBytes { bytes in
-                    guard let baseAddress = bytes.baseAddress else { return }
-                    _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, baseAddress)
-                }
-                
+                var randomBytes = try Data.generateSecureRandomBytes(count: bitSize / 8)
+                                
                 // Ensure the number has the correct bit size
                 randomBytes[0] |= 0x80  // Set MSB
                 randomBytes[randomBytes.count - 1] |= 0x01  // Ensure odd
@@ -580,11 +576,7 @@ extension Insecure {
             
             if forEncryption {
                 // Random non-zero padding for encryption
-                var padding = Data(count: paddingLength)
-                padding.withUnsafeMutableBytes { bytes in
-                    guard let baseAddress = bytes.baseAddress else { return }
-                    _ = SecRandomCopyBytes(kSecRandomDefault, paddingLength, baseAddress)
-                }
+                var padding = try Data.generateSecureRandomBytes(count: paddingLength)
                 // Ensure no zero bytes
                 for i in 0..<padding.count {
                     if padding[i] == 0 {
@@ -698,7 +690,7 @@ extension Data {
 }
 
 // MARK: - Hash Functions (using CryptoKit)
-
+// TODO: Remove duplicatation
 fileprivate enum SHA256 {
     static func hash(data: Data) -> Data {
         let digest = Crypto.SHA256.hash(data: data)

@@ -53,13 +53,7 @@ public struct PKCS8Encryption {
         let ivSize = 16
         
         // Generate random IV
-        var iv = Data(count: ivSize)
-        let ivResult = iv.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(kSecRandomDefault, ivSize, bytes.baseAddress!)
-        }
-        guard ivResult == errSecSuccess else {
-            throw SSHKeyError.randomGenerationFailed
-        }
+        let iv = try Data.generateSecureRandomBytes(count: ivSize)
         
         // Derive key using PBKDF2
         let key = try pbkdf2(

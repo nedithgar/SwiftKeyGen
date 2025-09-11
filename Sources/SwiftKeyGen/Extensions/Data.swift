@@ -19,4 +19,31 @@ extension Data {
             return Data(repeating: 0, count: length - self.count) + self
         }
     }
+    
+    // @inlinable
+    // static func generateSecureRandomBytes(count: Int) -> Data {
+    //     var bytes = [UInt8](repeating: 0, count: count)
+    //     let result = SecRandomCopyBytes(kSecRandomDefault, count, &bytes)
+    //     precondition(result == errSecSuccess, "Failed to generate secure random bytes")
+    //     return Data(bytes)
+    // }
+
+    @inlinable
+    static func generateSecureRandomBytes(count: Int) throws -> Data {
+        guard count >= 0 else { throw SecureRandomError.negativeCount }
+
+        var data = Data(count: count)
+        let status = data.withUnsafeMutableBytes { bytes in 
+            guard let baseAddress = bytes.baseAddress else { return errSecAllocate }
+            return SecRandomCopyBytes(kSecRandomDefault, bytes.count, baseAddress)
+        }
+        guard status == errSecSuccess else { throw SecureRandomError.generationFailed(status) }
+        return data
+    }
+
+    public enum SecureRandomError: Error {
+        case negativeCount
+        case generationFailed(OSStatus)
+    }
+
 }

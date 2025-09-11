@@ -66,16 +66,7 @@ public struct PEMEncryption {
     
     /// Generate a random salt
     static func generateSalt() throws -> Data {
-        var salt = Data(count: 8)
-        let result = salt.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(kSecRandomDefault, 8, bytes.baseAddress!)
-        }
-        
-        guard result == errSecSuccess else {
-            throw SSHKeyError.randomGenerationFailed
-        }
-        
-        return salt
+        return try Data.generateSecureRandomBytes(count: 8)
     }
     
     /// Apply PKCS#7 padding
@@ -117,13 +108,7 @@ public struct PEMEncryption {
     static func encrypt(data: Data, passphrase: String, cipher: PEMCipher) throws -> (encryptedData: Data, iv: Data) {
         // Generate random IV (not salt)
         // Traditional OpenSSL PEM format uses a random IV stored in DEK-Info
-        var iv = Data(count: cipher.ivSize)
-        let ivResult = iv.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(kSecRandomDefault, cipher.ivSize, bytes.baseAddress!)
-        }
-        guard ivResult == errSecSuccess else {
-            throw SSHKeyError.randomGenerationFailed
-        }
+        let iv = try Data.generateSecureRandomBytes(count: cipher.ivSize)
         
         // Derive key from password using the IV as salt
         // Traditional OpenSSL PEM uses the first 8 bytes of IV as salt for key derivation
