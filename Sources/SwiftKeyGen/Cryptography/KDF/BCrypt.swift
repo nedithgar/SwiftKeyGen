@@ -103,7 +103,6 @@ struct BCryptPBKDF {
 
         // Key expansion using spans
         state.initializeState()
-        // Safe borrowed views into Data buffers (no unsafe pointer juggling needed)
         let saltSpan = hashedSalt.span
         let passSpan = hashedPassword.span
         state.expandSaltAndKey(salt: saltSpan, key: passSpan)
