@@ -170,7 +170,7 @@ public struct PEMEncryption {
     ) -> String {
         var pem = "-----BEGIN \(type)-----\n"
         pem += "Proc-Type: 4,ENCRYPTED\n"
-        pem += "DEK-Info: \(cipher.rawValue),\(salt.hexEncodedString())\n"
+        pem += "DEK-Info: \(cipher.rawValue),\(salt.hexEncodedString(uppercase: true))\n"
         pem += "\n"
         
         // Base64 encode with 64-character lines
@@ -187,10 +187,3 @@ public struct PEMEncryption {
 }
 
 // MARK: - Helper Extensions
-
-extension Data {
-    /// Convert data to uppercase hex string
-    func hexEncodedString() -> String {
-        return map { String(format: "%02X", $0) }.joined()
-    }
-}

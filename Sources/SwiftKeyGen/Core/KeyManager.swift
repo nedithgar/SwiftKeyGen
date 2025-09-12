@@ -230,8 +230,7 @@ public struct KeyManager {
         
         public var fingerprint: String {
             let digest = SHA256.hash(data: publicKeyData)
-            let base64 = Data(digest).base64EncodedString()
-                .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+            let base64 = Data(digest).base64EncodedStringStrippingPadding()
             return "SHA256:" + base64
         }
     }

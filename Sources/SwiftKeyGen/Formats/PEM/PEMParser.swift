@@ -166,7 +166,7 @@ public struct PEMParser {
     
     /// Determine curve type from OID
     private static func determineCurveTypeFromOID(_ oid: Data) throws -> KeyType {
-        let oidHex = oid.map { String(format: "%02x", $0) }.joined()
+        let oidHex = oid.hexEncodedString()
         
         switch oidHex {
         case "2a8648ce3d030107":  // 1.2.840.10045.3.1.7 (secp256r1/P-256)
@@ -663,22 +663,3 @@ public struct PEMParser {
 }
 
 // MARK: - Data Extensions
-
-extension Data {
-    init?(hexString: String) {
-        let hex = hexString.replacingOccurrences(of: " ", with: "")
-        guard hex.count % 2 == 0 else { return nil }
-        
-        var data = Data()
-        var index = hex.startIndex
-        
-        while index < hex.endIndex {
-            let nextIndex = hex.index(index, offsetBy: 2)
-            guard let byte = UInt8(hex[index..<nextIndex], radix: 16) else { return nil }
-            data.append(byte)
-            index = nextIndex
-        }
-        
-        self = data
-    }
-}

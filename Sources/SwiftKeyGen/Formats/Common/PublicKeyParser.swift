@@ -106,20 +106,17 @@ public struct PublicKeyParser {
         switch hash {
         case .md5:
             let digest = Insecure.MD5.hash(data: keyData)
-            return digest.map { String(format: "%02x", $0) }.joined(separator: ":")
+            return Data(digest).hexEncodedString(separator: ":")
 
         case .sha256:
             let digest = SHA256.hash(data: keyData)
-            let base64 = Data(digest).base64EncodedString()
-                .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+            let base64 = Data(digest).base64EncodedStringStrippingPadding()
             return "SHA256:" + base64
 
         case .sha512:
             let digest = SHA512.hash(data: keyData)
-            let base64 = Data(digest).base64EncodedString()
-                .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+            let base64 = Data(digest).base64EncodedStringStrippingPadding()
             return "SHA512:" + base64
         }
     }
 }
-

@@ -2,6 +2,7 @@ import Foundation
 import Crypto
 
 extension Data {
+    // MARK: - Hashes
     @inlinable
     func sha1DataInsecure() -> Data {
         let digest = Insecure.SHA1.hash(data: self)
@@ -26,6 +27,48 @@ extension Data {
         return Data(digest)
     }
 
+    // MARK: - Hex Encoding/Decoding
+    /// Return a hex string for this data.
+    /// - Parameters:
+    ///   - uppercase: Whether alphabetic hex digits are uppercased. Defaults to lowercase.
+    ///   - separator: Optional separator inserted between bytes (e.g. ":" for MD5 fingerprints).
+    /// - Returns: The hex string.
+    @inlinable
+    func hexEncodedString(uppercase: Bool = false, separator: String? = nil) -> String {
+        if let sep = separator, !sep.isEmpty {
+            return self.map { String(format: uppercase ? "%02X" : "%02x", $0) }.joined(separator: sep)
+        } else {
+            return self.map { String(format: uppercase ? "%02X" : "%02x", $0) }.joined()
+        }
+    }
+
+    /// Initialize from a hex string. Whitespace is permitted and ignored.
+    @inlinable
+    init?(hexString: String) {
+        let hex = hexString.replacingOccurrences(of: " ", with: "")
+        guard hex.count % 2 == 0 else { return nil }
+
+        var data = Data()
+        var index = hex.startIndex
+
+        while index < hex.endIndex {
+            let nextIndex = hex.index(index, offsetBy: 2)
+            guard let byte = UInt8(hex[index..<nextIndex], radix: 16) else { return nil }
+            data.append(byte)
+            index = nextIndex
+        }
+
+        self = data
+    }
+
+    // MARK: - Base64 helpers
+    /// Base64-encode this data and strip any padding characters ('='). Useful for SSH fingerprints.
+    @inlinable
+    func base64EncodedStringStrippingPadding() -> String {
+        return self.base64EncodedString().trimmingCharacters(in: CharacterSet(charactersIn: "="))
+    }
+
+    // MARK: - Padding
     @inlinable
     func leftPadded(to size: Int) -> Data {
         guard count < size else { return self }

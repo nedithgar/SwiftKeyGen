@@ -65,14 +65,13 @@ public struct RSAKey: SSHKey {
         switch format {
         case .hex:
             if hash == .md5 {
-                return digestData.map { String(format: "%02x", $0) }.joined(separator: ":")
+                return digestData.hexEncodedString(separator: ":")
             } else {
-                return prefix + digestData.map { String(format: "%02x", $0) }.joined()
+                return prefix + digestData.hexEncodedString()
             }
-            
+
         case .base64:
-            let base64 = digestData.base64EncodedString()
-                .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+            let base64 = digestData.base64EncodedStringStrippingPadding()
             return prefix + base64
             
         case .bubbleBabble:
@@ -173,4 +172,3 @@ public struct RSAKeyGenerator: SSHKeyGenerator {
         return RSAKey(privateKey: privateKey, comment: comment)
     }
 }
-
