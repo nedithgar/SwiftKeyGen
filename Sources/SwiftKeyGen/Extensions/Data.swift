@@ -3,6 +3,12 @@ import Crypto
 
 extension Data {
     @inlinable
+    func sha1DataInsecure() -> Data {
+        let digest = Insecure.SHA1.hash(data: self)
+        return Data(digest)
+    }
+
+    @inlinable
     func sha256Data() -> Data {
         let digest = SHA256.hash(data: self)
         return Data(digest)

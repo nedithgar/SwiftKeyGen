@@ -192,17 +192,13 @@ extension Insecure {
             let hash: Data
             switch hashAlgorithm {
             case .sha1:
-                let digest = Insecure.SHA1.hash(data: message)
-                hash = Data(digest)
+                hash = message.sha1DataInsecure()
             case .sha256:
-                let digest = SHA256.hash(data: message)
-                hash = Data(digest)
+                hash = message.sha256Data()
             case .sha384:
-                let digest = SHA384.hash(data: message)
-                hash = Data(digest)
+                hash = message.sha384Data()
             case .sha512:
-                let digest = SHA512.hash(data: message)
-                hash = Data(digest)
+                hash = message.sha512Data()
             }
             
             // Create DigestInfo structure
@@ -242,17 +238,13 @@ extension Insecure {
             let expectedHash: Data
             switch hashAlgorithm {
             case .sha1:
-                let digest = Insecure.SHA1.hash(data: message)
-                expectedHash = Data(digest)
+                expectedHash = message.sha1DataInsecure()
             case .sha256:
-                let digest = SHA256.hash(data: message)
-                expectedHash = Data(digest)
+                expectedHash = message.sha256Data()
             case .sha384:
-                let digest = SHA384.hash(data: message)
-                expectedHash = Data(digest)
+                expectedHash = message.sha384Data()
             case .sha512:
-                let digest = SHA512.hash(data: message)
-                expectedHash = Data(digest)
+                expectedHash = message.sha512Data()
             }
             
             // Verify: m = s^e mod n
@@ -686,28 +678,5 @@ extension Data {
     fileprivate func leftPadded(to size: Int) -> Data {
         guard count < size else { return self }
         return Data(repeating: 0, count: size - count) + self
-    }
-}
-
-// MARK: - Hash Functions (using CryptoKit)
-// TODO: Remove duplicatation
-fileprivate enum SHA256 {
-    static func hash(data: Data) -> Data {
-        let digest = Crypto.SHA256.hash(data: data)
-        return Data(digest)
-    }
-}
-
-fileprivate enum SHA384 {
-    static func hash(data: Data) -> Data {
-        let digest = Crypto.SHA384.hash(data: data)
-        return Data(digest)
-    }
-}
-
-fileprivate enum SHA512 {
-    static func hash(data: Data) -> Data {
-        let digest = Crypto.SHA512.hash(data: data)
-        return Data(digest)
     }
 }
