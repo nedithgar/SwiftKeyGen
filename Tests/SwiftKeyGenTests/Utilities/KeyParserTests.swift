@@ -2,12 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-struct KeyParserTests {
-
-    // TODO: Further micro-optimizations if aggregate suite time regresses
-    // MARK: Approx timings before optimization: `detectKeyTypes` 2000s, `validateKeyData` 500s, `multipleHashTypes` 800s
-    //       `multipleHashTypes` now split into fast (Ed25519) + minimal RSA-only to cut runtime.
-    
+@Suite("KeyParser Tests")
+struct KeyParserTests {    
     @Test func detectKeyTypesNonRSA() throws {
         // Faster path – exclude RSA (expensive) to keep core detection coverage
         let keyTypes: [KeyType] = [.ed25519, .ecdsa256, .ecdsa384, .ecdsa521]
