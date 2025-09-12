@@ -174,49 +174,16 @@ extension Curve25519.Signing.PrivateKey {
     /// The PEM representation of the private key
     public var pemRepresentation: String {
         let derData = pkcs8DERRepresentation
-        let base64 = derData.base64EncodedString()
-        
-        // Format base64 with 64-character lines
-        var formattedBase64 = ""
-        var index = base64.startIndex
-        while index < base64.endIndex {
-            let endIndex = base64.index(index, offsetBy: 64, limitedBy: base64.endIndex) ?? base64.endIndex
-            formattedBase64 += base64[index..<endIndex]
-            if endIndex < base64.endIndex {
-                formattedBase64 += "\n"
-            }
-            index = endIndex
-        }
-        
+        let formattedBase64 = derData.base64EncodedString(wrappedAt: 64)
         return "-----BEGIN PRIVATE KEY-----\n\(formattedBase64)\n-----END PRIVATE KEY-----"
     }
     
     /// Initialize a private key from PEM representation
     public init(pemRepresentation: String) throws {
-        let lines = pemRepresentation.components(separatedBy: .newlines)
-        
-        // Find the base64 content between the PEM boundaries
-        var base64Content = ""
-        var inKey = false
-        
-        for line in lines {
-            if line.contains("BEGIN") && line.contains("PRIVATE KEY") {
-                inKey = true
-                continue
-            }
-            if line.contains("END") && line.contains("PRIVATE KEY") {
-                break
-            }
-            if inKey && !line.isEmpty {
-                base64Content += line
-            }
-        }
-        
-        guard !base64Content.isEmpty,
+        guard let base64Content = pemRepresentation.pemBody(type: "PRIVATE KEY"),
               let derData = Data(base64Encoded: base64Content) else {
             throw CryptoKitError.incorrectParameterSize
         }
-        
         try self.init(pkcs8DERRepresentation: derData)
     }
 }
@@ -309,49 +276,16 @@ extension Curve25519.Signing.PublicKey {
     /// The PEM representation of the public key
     public var pemRepresentation: String {
         let derData = spkiDERRepresentation
-        let base64 = derData.base64EncodedString()
-        
-        // Format base64 with 64-character lines
-        var formattedBase64 = ""
-        var index = base64.startIndex
-        while index < base64.endIndex {
-            let endIndex = base64.index(index, offsetBy: 64, limitedBy: base64.endIndex) ?? base64.endIndex
-            formattedBase64 += base64[index..<endIndex]
-            if endIndex < base64.endIndex {
-                formattedBase64 += "\n"
-            }
-            index = endIndex
-        }
-        
+        let formattedBase64 = derData.base64EncodedString(wrappedAt: 64)
         return "-----BEGIN PUBLIC KEY-----\n\(formattedBase64)\n-----END PUBLIC KEY-----"
     }
     
     /// Initialize a public key from PEM representation
     public init(pemRepresentation: String) throws {
-        let lines = pemRepresentation.components(separatedBy: .newlines)
-        
-        // Find the base64 content between the PEM boundaries
-        var base64Content = ""
-        var inKey = false
-        
-        for line in lines {
-            if line.contains("BEGIN") && line.contains("PUBLIC KEY") {
-                inKey = true
-                continue
-            }
-            if line.contains("END") && line.contains("PUBLIC KEY") {
-                break
-            }
-            if inKey && !line.isEmpty {
-                base64Content += line
-            }
-        }
-        
-        guard !base64Content.isEmpty,
+        guard let base64Content = pemRepresentation.pemBody(type: "PUBLIC KEY"),
               let derData = Data(base64Encoded: base64Content) else {
             throw CryptoKitError.incorrectParameterSize
         }
-        
         try self.init(spkiDERRepresentation: derData)
     }
 }

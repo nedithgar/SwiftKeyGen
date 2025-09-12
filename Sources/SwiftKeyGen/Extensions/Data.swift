@@ -68,6 +68,13 @@ extension Data {
         return self.base64EncodedString().trimmingCharacters(in: CharacterSet(charactersIn: "="))
     }
 
+    /// Base64-encode this data and wrap lines at the requested column width.
+    /// Does not include a trailing newline.
+    @inlinable
+    func base64EncodedString(wrappedAt columns: Int) -> String {
+        return self.base64EncodedString().wrapped(every: columns)
+    }
+
     // MARK: - Padding
     @inlinable
     func leftPadded(to size: Int) -> Data {

@@ -28,12 +28,11 @@ extension PEMParser {
     
     /// Parse unencrypted RSA private key
     private static func parseUnencryptedRSAPrivateKey(_ pemString: String) throws -> RSAKey {
-        // Extract base64 content
-        let base64Content = extractBase64FromPEM(pemString, type: "RSA PRIVATE KEY")
-        guard let derData = Data(base64Encoded: base64Content) else {
+        // Extract base64 content between PEM markers
+        guard let base64Content = pemString.pemBody(type: "RSA PRIVATE KEY"),
+              let derData = Data(base64Encoded: base64Content) else {
             throw SSHKeyError.invalidKeyData
         }
-        
         // Parse PKCS#1 format
         return try parseRSAPrivateKeyFromDER(derData)
     }
@@ -193,27 +192,5 @@ extension PEMParser {
         return RSAKey(privateKey: privateKey)
     }
     
-    /// Extract base64 content from PEM
-    private static func extractBase64FromPEM(_ pemString: String, type: String) -> String {
-        let beginMarker = "-----BEGIN \(type)-----"
-        let endMarker = "-----END \(type)-----"
-        
-        let lines = pemString.split(separator: "\n").map { String($0) }
-        var base64Lines: [String] = []
-        var inBody = false
-        
-        for line in lines {
-            if line.contains(beginMarker) {
-                inBody = true
-                continue
-            } else if line.contains(endMarker) {
-                break
-            } else if inBody && !line.isEmpty {
-                base64Lines.append(line)
-            }
-        }
-        
-        return base64Lines.joined()
-    }
+    
 }
-

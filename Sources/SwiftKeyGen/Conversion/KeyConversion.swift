@@ -62,14 +62,7 @@ public struct KeyConverter {
         output += "Comment: \"\(comment)\"\n"
         
         // Base64 encode with 70-character line width
-        let base64 = publicKeyData.base64EncodedString()
-        var index = base64.startIndex
-        
-        while index < base64.endIndex {
-            let endIndex = base64.index(index, offsetBy: 70, limitedBy: base64.endIndex) ?? base64.endIndex
-            output += String(base64[index..<endIndex]) + "\n"
-            index = endIndex
-        }
+        output += publicKeyData.base64EncodedString(wrappedAt: 70) + "\n"
         
         output += SSH_COM_PUBLIC_END
         
