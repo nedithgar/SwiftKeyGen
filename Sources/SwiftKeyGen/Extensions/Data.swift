@@ -25,6 +25,12 @@ extension Data {
         let digest = SHA512.hash(data: self)
         return Data(digest)
     }
+
+    @inlinable
+    func leftPadded(to size: Int) -> Data {
+        guard count < size else { return self }
+        return Data(repeating: 0, count: size - count) + self
+    }
     
     /// Returns this data left-padded with 0x00 to the requested length.
     /// If the data is longer than the length, returns the suffix of that length.

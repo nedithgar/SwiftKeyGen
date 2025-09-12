@@ -3,14 +3,6 @@ import Crypto
 import _CryptoExtras
 import BigInt
 
-// MARK: - Data Extension
-private extension Data {
-    func leftPadded(to size: Int) -> Data {
-        guard count < size else { return self }
-        return Data(repeating: 0, count: size - count) + self
-    }
-}
-
 public struct OpenSSHPrivateKey {
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"

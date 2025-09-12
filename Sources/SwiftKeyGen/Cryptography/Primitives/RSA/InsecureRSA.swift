@@ -670,13 +670,3 @@ extension Insecure {
         }
     }
 }
-
-// MARK: - Data Extensions
-
-extension Data {
-    /// Left pad data to specified size
-    fileprivate func leftPadded(to size: Int) -> Data {
-        guard count < size else { return self }
-        return Data(repeating: 0, count: size - count) + self
-    }
-}
