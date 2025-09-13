@@ -119,6 +119,9 @@ Refer to `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` for full guidance.
 - CLI logic lives in `Sources/SwiftKeyGenCLI/`. Keep library free of CLI-only concerns (argument parsing, stdout formatting).
 - Reuse library APIs; do not duplicate logic in CLI.
 
+### Documentation (DocC)
+- Use DocC formatting for documentation.
+
 ## Testing Instructions
 
 ### Test Organization
