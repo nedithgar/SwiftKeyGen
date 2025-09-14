@@ -6,7 +6,7 @@ import Foundation
 struct RandomArtUnitTests {
     
     // Fast: does not generate keys
-    @Test("Renders art from MD5 fingerprint with header")
+    @Test("Renders art from MD5 fingerprint with header", .tags(.rsa))
     func fromFingerprintRendersHeaderAndBody() throws {
         // Test with MD5 fingerprint
         let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
@@ -53,7 +53,7 @@ struct RandomArtUnitTests {
         }
     }
 
-    @Test("Header centering for RSA label")
+    @Test("Header centering for RSA label", .tags(.rsa))
     func headerCenteringForRSAFingerprint() {
         let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
         let label = "RSA"
