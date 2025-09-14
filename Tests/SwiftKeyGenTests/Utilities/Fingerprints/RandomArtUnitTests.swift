@@ -23,11 +23,10 @@ struct RandomArtUnitTests {
         #expect(fieldContent.contains("E"))
     }
 
-    @Test("Header centering across label lengths")
-    func headerCenteringAcrossLabels() {
+    @Test("Header centering across non-RSA labels")
+    func headerCenteringAcrossNonRSALabels() {
         let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
         let cases: [(String, Int)] = [
-            ("RSA", 2048),
             ("ED25519", 256),
             ("ECDSA", 256),
             ("ECDSA", 521)
@@ -52,6 +51,30 @@ struct RandomArtUnitTests {
             // Footer length matches header length
             #expect(lines[0].count == lines[10].count)
         }
+    }
+
+    @Test("Header centering for RSA label")
+    func headerCenteringForRSAFingerprint() {
+        let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
+        let label = "RSA"
+        let bits = 2048
+        let header = "[\(label) \(bits)]"
+        let art = RandomArt.generate(from: md5Fingerprint, keyType: label, keySize: bits)
+        let lines = art.split(separator: "\n")
+        #expect(lines.count == 11)
+        let line = String(lines[0])
+        #expect(line.hasPrefix("+"))
+        #expect(line.hasSuffix("+"))
+        guard let range = line.range(of: header) else {
+            Issue.record("Header not found in random art header line for \(header)")
+            return
+        }
+        let leftPart = line[line.index(after: line.startIndex)..<range.lowerBound]
+        let rightPart = line[range.upperBound..<line.index(before: line.endIndex)]
+        let leftHyphens = leftPart.filter { $0 == "-" }.count
+        let rightHyphens = rightPart.filter { $0 == "-" }.count
+        #expect(abs(leftHyphens - rightHyphens) <= 1)
+        #expect(lines[0].count == lines[10].count)
     }
 
     @Test("Renders art from SHA256 base64 fingerprint")
