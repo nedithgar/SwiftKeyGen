@@ -6,7 +6,8 @@ import Foundation
 struct RandomArtUnitTests {
     
     // Fast: does not generate keys
-    @Test func generateFromFingerprint() throws {
+    @Test("Renders art from MD5 fingerprint with header")
+    func fromFingerprintRendersHeaderAndBody() throws {
         // Test with MD5 fingerprint
         let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
         let art = RandomArt.generate(from: md5Fingerprint, keyType: "RSA", keySize: 2048)
@@ -16,10 +17,15 @@ struct RandomArtUnitTests {
         // Verify the art is generated
         let lines = art.split(separator: "\n")
         #expect(lines.count == 11)
+        // Start/End markers always present
+        let fieldContent = lines[1...9].joined()
+        #expect(fieldContent.contains("S"))
+        #expect(fieldContent.contains("E"))
     }
     
     // Single key generation
-    @Test func generateRandomArt() throws {
+    @Test("Generates art structure for ED25519 key")
+    func generatesArtStructureForEd25519() throws {
         let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let art = RandomArt.generate(for: key)
         
@@ -32,7 +38,7 @@ struct RandomArtUnitTests {
             return
         }
         
-        // Verify header contains key type
+        // Verify header contains key type/size
         #expect(lines[0].contains("[ED25519 256]"))
         
         // Verify borders
@@ -55,7 +61,8 @@ struct RandomArtUnitTests {
     }
     
     // Two key generations (heavier)
-    @Test func differentKeysProduceDifferentArt() throws {
+    @Test("Distinct keys produce distinct random art")
+    func differentKeysYieldDifferentArt() throws {
         let key1 = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let key2 = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         
@@ -66,7 +73,8 @@ struct RandomArtUnitTests {
     }
     
     // Multiple key types (heaviest)
-    @Test func differentKeyTypes() throws {
+    @Test("Header reflects key type and size")
+    func headerReflectsKeyTypeAndSize() throws {
         let keyTypes: [(KeyType, String, Int)] = [
             (.ed25519, "ED25519", 256),
             (.ecdsa256, "ECDSA", 256),
