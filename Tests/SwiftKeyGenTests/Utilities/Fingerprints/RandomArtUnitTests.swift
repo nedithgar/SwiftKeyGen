@@ -5,6 +5,20 @@ import Foundation
 @Suite("Random Art Unit Tests", .tags(.unit))
 struct RandomArtUnitTests {
     
+    // Fast: does not generate keys
+    @Test func generateFromFingerprint() throws {
+        // Test with MD5 fingerprint
+        let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
+        let art = RandomArt.generate(from: md5Fingerprint, keyType: "RSA", keySize: 2048)
+        
+        #expect(art.contains("[RSA 2048]"))
+        
+        // Verify the art is generated
+        let lines = art.split(separator: "\n")
+        #expect(lines.count == 11)
+    }
+    
+    // Single key generation
     @Test func generateRandomArt() throws {
         let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let art = RandomArt.generate(for: key)
@@ -40,6 +54,7 @@ struct RandomArtUnitTests {
         #expect(fieldContent.contains("E"))
     }
     
+    // Two key generations (heavier)
     @Test func differentKeysProduceDifferentArt() throws {
         let key1 = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         let key2 = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
@@ -50,18 +65,7 @@ struct RandomArtUnitTests {
         #expect(art1 != art2)
     }
     
-    @Test func generateFromFingerprint() throws {
-        // Test with MD5 fingerprint
-        let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
-        let art = RandomArt.generate(from: md5Fingerprint, keyType: "RSA", keySize: 2048)
-        
-        #expect(art.contains("[RSA 2048]"))
-        
-        // Verify the art is generated
-        let lines = art.split(separator: "\n")
-        #expect(lines.count == 11)
-    }
-    
+    // Multiple key types (heaviest)
     @Test func differentKeyTypes() throws {
         let keyTypes: [(KeyType, String, Int)] = [
             (.ed25519, "ED25519", 256),
