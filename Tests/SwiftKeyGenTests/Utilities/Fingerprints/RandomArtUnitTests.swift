@@ -2,7 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-struct RandomArtTests {
+@Suite("Random Art Unit Tests", .tags(.unit))
+struct RandomArtUnitTests {
     
     @Test func generateRandomArt() throws {
         let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key

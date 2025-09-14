@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("BubbleBabble Unit", .tags(.unit))
+@Suite("BubbleBabble Unit Tests", .tags(.unit))
 struct BubbleBabbleUnitTests {
     @Test("Empty input encodes to xexax")
     func emptyInputVector() {
