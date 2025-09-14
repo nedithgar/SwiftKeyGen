@@ -37,4 +37,24 @@ extension Span where Element == UInt8 {
         }
         return value
     }
+
+    /// Read 4 successive bytes starting at `index` as a big-endian `UInt32`.
+    ///
+    /// Unlike ``readUInt32Cyclic(offset:)`` this does not wrap; the caller must
+    /// ensure that `index + 4 <= count`. This is a convenience for non-cyclic
+    /// binary decoding (e.g. SSH length fields) to centralize the big-endian
+    /// accumulation logic and keep call sites concise.
+    ///
+    /// - Parameter index: Starting byte index (must satisfy `index + 4 <= count`).
+    /// - Returns: The big-endian 32-bit unsigned integer composed of 4 bytes.
+    /// - Precondition: `index >= 0 && index + 4 <= count`.
+    @inlinable
+    public func readUInt32BigEndian(at index: Int) -> UInt32 {
+        precondition(index >= 0 && index + 4 <= count, "Index out of range for 4-byte read")
+        let b0 = UInt32(self[index])
+        let b1 = UInt32(self[index + 1])
+        let b2 = UInt32(self[index + 2])
+        let b3 = UInt32(self[index + 3])
+        return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+    }
 }

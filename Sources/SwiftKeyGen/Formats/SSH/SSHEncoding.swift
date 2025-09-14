@@ -65,12 +65,7 @@ struct SSHDecoder {
         // existing big‑endian semantics.
         let span = data.span
         guard offset + 4 <= span.count else { throw SSHKeyError.invalidKeyData }
-        // Manual big‑endian accumulation (matches network byte order)
-        let b0 = UInt32(span[offset])
-        let b1 = UInt32(span[offset + 1])
-        let b2 = UInt32(span[offset + 2])
-        let b3 = UInt32(span[offset + 3])
-        let value = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+        let value = span.readUInt32BigEndian(at: offset)
         offset += 4
         return value
     }
