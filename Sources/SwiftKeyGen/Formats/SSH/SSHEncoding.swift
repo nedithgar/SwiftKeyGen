@@ -59,14 +59,18 @@ struct SSHDecoder {
     }
     
     mutating func decodeUInt32() throws -> UInt32 {
-        guard offset + 4 <= data.count else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        let value = data.subdata(in: offset..<offset+4).withUnsafeBytes { bytes in
-            return UInt32(bigEndian: bytes.load(as: UInt32.self))
-        }
-        
+        // Use `Span` to avoid allocating an intermediate 4‑byte Data slice
+        // and an extra bounds check performed by `subdata(in:)`. This keeps
+        // the read branch‑predictable and inlinable while maintaining the
+        // existing big‑endian semantics.
+        let span = data.span
+        guard offset + 4 <= span.count else { throw SSHKeyError.invalidKeyData }
+        // Manual big‑endian accumulation (matches network byte order)
+        let b0 = UInt32(span[offset])
+        let b1 = UInt32(span[offset + 1])
+        let b2 = UInt32(span[offset + 2])
+        let b3 = UInt32(span[offset + 3])
+        let value = (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
         offset += 4
         return value
     }
