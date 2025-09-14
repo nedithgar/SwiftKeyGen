@@ -22,6 +22,49 @@ struct RandomArtUnitTests {
         #expect(fieldContent.contains("S"))
         #expect(fieldContent.contains("E"))
     }
+
+    @Test("Header centering across label lengths")
+    func headerCenteringAcrossLabels() {
+        let md5Fingerprint = "43:51:43:a1:b5:fc:8b:b7:0a:3a:a9:b1:0f:66:73:a8"
+        let cases: [(String, Int)] = [
+            ("RSA", 2048),
+            ("ED25519", 256),
+            ("ECDSA", 256),
+            ("ECDSA", 521)
+        ]
+        for (label, bits) in cases {
+            let header = "[\(label) \(bits)]"
+            let art = RandomArt.generate(from: md5Fingerprint, keyType: label, keySize: bits)
+            let lines = art.split(separator: "\n")
+            #expect(lines.count == 11)
+            let line = String(lines[0])
+            #expect(line.hasPrefix("+"))
+            #expect(line.hasSuffix("+"))
+            guard let range = line.range(of: header) else {
+                Issue.record("Header not found in random art header line for \(header)")
+                continue
+            }
+            let leftPart = line[line.index(after: line.startIndex)..<range.lowerBound]
+            let rightPart = line[range.upperBound..<line.index(before: line.endIndex)]
+            let leftHyphens = leftPart.filter { $0 == "-" }.count
+            let rightHyphens = rightPart.filter { $0 == "-" }.count
+            #expect(abs(leftHyphens - rightHyphens) <= 1)
+            // Footer length matches header length
+            #expect(lines[0].count == lines[10].count)
+        }
+    }
+
+    @Test("Renders art from SHA256 base64 fingerprint")
+    func fromSHA256FingerprintRenders() {
+        let bytes = Data((0..<32).map(UInt8.init))
+        let fp = "SHA256:\(bytes.base64EncodedString())"
+        let art = RandomArt.generate(from: fp, keyType: "ED25519", keySize: 256)
+        let lines = art.split(separator: "\n")
+        #expect(lines.count == 11)
+        let content = lines[1...9].joined()
+        #expect(content.contains("S"))
+        #expect(content.contains("E"))
+    }
     
     // Single key generation
     @Test("Generates art structure for ED25519 key")
@@ -73,7 +116,7 @@ struct RandomArtUnitTests {
     }
     
     // Multiple key types (heaviest)
-    @Test("Header reflects key type and size")
+    @Test("Header reflects key type/size; structure holds for all")
     func headerReflectsKeyTypeAndSize() throws {
         let keyTypes: [(KeyType, String, Int)] = [
             (.ed25519, "ED25519", 256),
@@ -87,6 +130,17 @@ struct RandomArtUnitTests {
             let art = RandomArt.generate(for: key)
             
             #expect(art.contains("[\(expectedName) \(expectedSize)]"))
+            // Structure checks for each type
+            let lines = art.split(separator: "\n")
+            #expect(lines.count == 11)
+            for i in 1...9 {
+                #expect(lines[i].hasPrefix("|"))
+                #expect(lines[i].hasSuffix("|"))
+                #expect(lines[i].count == 19)
+            }
+            let field = lines[1...9].joined()
+            #expect(field.contains("S"))
+            #expect(field.contains("E"))
         }
     }
     
