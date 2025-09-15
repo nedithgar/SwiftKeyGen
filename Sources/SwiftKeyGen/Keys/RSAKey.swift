@@ -29,8 +29,11 @@ public struct RSAKey: SSHKey {
     ///
     /// Note: Full OpenSSH private key serialization is handled elsewhere.
     public func privateKeyData() -> Data {
-        // TODO: Implement DER encoding for RSA keys
-        // Full OpenSSH format will be implemented later
+        // Return PKCS#1 DER-encoded RSA private key (RSAPrivateKey)
+        // OpenSSH private key container serialization is handled in Formats/OpenSSH
+        if let der = try? privateKey.pkcs1DERRepresentation() {
+            return der
+        }
         return Data()
     }
     

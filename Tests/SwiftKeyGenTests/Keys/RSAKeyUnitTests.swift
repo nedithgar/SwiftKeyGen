@@ -107,4 +107,64 @@ struct RSAKeyUnitTests {
         let fingerprint = key.fingerprint(hash: .sha256)
         #expect(fingerprint.hasPrefix("SHA256:"))
     }
+
+    @Test("RSA privateKeyData DER round-trip via PEM", .timeLimit(.minutes(2)))
+    func rsaPrivateKeyDataDERRoundTrip() throws {
+        // Generate a 1024-bit RSA key to keep runtime bounded
+        let original = try SwiftKeyGen.generateKey(type: .rsa, bits: 1024, comment: "der-roundtrip") as! RSAKey
+
+        // Obtain PKCS#1 DER from the key under test
+        let der = original.privateKeyData()
+        #expect(der.count > 0)
+        #expect(der[0] == 0x30) // SEQUENCE tag sanity
+
+        // Cross-check with direct helper to ensure consistency
+        if let directDER = try? original.privateKey.pkcs1DERRepresentation() {
+            #expect(der == directDER)
+        }
+
+        // Wrap DER as PKCS#1 PEM
+        let base64 = der.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+        let pem = """
+        -----BEGIN RSA PRIVATE KEY-----
+        \(base64)-----END RSA PRIVATE KEY-----
+        """
+
+        // Sanity: PEM detection and body extraction should succeed and round-trip
+        #expect(PEMParser.isPEMFormat(pem))
+        #expect(PEMParser.detectPEMType(pem) == "RSA PRIVATE KEY")
+        let body = pem.pemBody(type: "RSA PRIVATE KEY")
+        #expect(body != nil)
+        if let body = body, let decoded = Data(base64Encoded: body) {
+            #expect(decoded == der)
+        }
+
+        // Extra sanity: the DER should contain the expected number of INTEGERs
+        var sanity = ASN1Parser(data: der)
+        #expect(try sanity.parseSequence() != nil) // outer sequence present
+        sanity = ASN1Parser(data: der)
+        #expect(der[0] == 0x30)
+        sanity.offset = 1
+        _ = try sanity.parseLength()
+        #expect(try sanity.parseInteger() != nil) // version
+        #expect(try sanity.parseInteger() != nil) // n
+        #expect(try sanity.parseInteger() != nil) // e
+        #expect(try sanity.parseInteger() != nil) // d
+        #expect(try sanity.parseInteger() != nil) // p
+        #expect(try sanity.parseInteger() != nil) // q
+        #expect(try sanity.parseInteger() != nil) // dP
+        #expect(try sanity.parseInteger() != nil) // dQ
+        #expect(try sanity.parseInteger() != nil) // qInv
+
+        // Parse back via existing PEM parser
+        let parsed = try PEMParser.parseRSAPrivateKey(pem)
+
+        // Public portions must match exactly
+        #expect(parsed.publicKeyData() == original.publicKeyData())
+
+        // Verify private material by signing and cross-verifying
+        let msg = Data("rsa-der-roundtrip".utf8)
+        let sig = try parsed.sign(data: msg)
+        #expect(try original.verify(signature: sig, for: msg))
+    }
 }
