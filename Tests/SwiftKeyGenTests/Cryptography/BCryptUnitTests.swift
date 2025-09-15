@@ -2,7 +2,7 @@ import Testing
 @testable import SwiftKeyGen
 import Foundation
 
-@Suite("BCrypt PBKDF Tests", .tags(.unit))
+@Suite("BCrypt PBKDF Unit Tests", .tags(.unit))
 struct BCryptUnitTests {
     // MARK: Shared Fixtures
     private enum Fixture {
