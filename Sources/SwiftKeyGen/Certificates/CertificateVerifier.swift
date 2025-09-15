@@ -2,33 +2,46 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Result of certificate verification
+/// Result of certificate verification.
 public enum CertificateVerificationResult: Equatable {
+    /// The certificate is valid under the provided options.
     case valid
+    /// The signature on the certificate could not be verified.
     case invalidSignature
+    /// The certificate is expired at the verification time.
     case expired
+    /// The certificate is not yet valid at the verification time.
     case notYetValid
+    /// The principals do not satisfy the verification options.
     case invalidPrincipal
+    /// The certificate type does not match the expected type.
     case invalidCertificateType
+    /// The provided CA key does not match the one embedded in the certificate.
     case caKeyMismatch
+    /// A non‑structured error occurred with a diagnostic message.
     case error(String)
 }
 
-/// Certificate verification options
+/// Options controlling certificate verification behavior.
 public struct CertificateVerificationOptions {
+    /// Require that at least one allowed principal matches.
     public var requirePrincipal: Bool = false
+    /// Allowed principals (usernames or hostnames) to match.
     public var allowedPrincipals: [String] = []
+    /// The time at which to evaluate validity.
     public var verifyTime: Date = Date()
+    /// If set, require the certificate to be of this type.
     public var expectedCertificateType: SSHCertificateType?
+    /// Whether wildcard principals (e.g. `*.example.com`) are matched.
     public var wildcardPrincipalMatching: Bool = true
     
     public init() {}
 }
 
-/// Certificate verifier
+/// Certificate verifier.
 public struct CertificateVerifier {
     
-    /// Verify a certificate
+    /// Verify a certificate.
     public static func verifyCertificate(
         _ certifiedKey: CertifiedKey,
         caKey: (any SSHKey)? = nil,

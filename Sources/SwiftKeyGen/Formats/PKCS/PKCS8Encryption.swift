@@ -5,7 +5,7 @@ import Crypto
 /// PKCS#8 encryption support using PBES2 (Password-Based Encryption Scheme 2)
 public struct PKCS8Encryption {
     
-    /// Default parameters matching OpenSSL
+    /// Default PBKDF2 iteration count matching common OpenSSL defaults.
     public static let defaultIterations = 2048
     static let defaultPRF = "hmacWithSHA1"  // OpenSSL default for PBES2
     static let defaultCipher = "aes-128-cbc"

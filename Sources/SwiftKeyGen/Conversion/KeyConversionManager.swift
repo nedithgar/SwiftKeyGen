@@ -1,22 +1,28 @@
 import Foundation
 import Crypto
 
-/// Centralized manager for key format conversions
+/// Centralized manager for key format conversions.
 public struct KeyConversionManager {
     
-    /// Input/output options for conversion
+    /// Input/output options for conversion.
     public struct ConversionOptions {
+        /// Input source; use "-" to read from stdin.
         public var input: String = "-"      // Default to stdin
+        /// Output destination; use "-" to write to stdout.
         public var output: String = "-"     // Default to stdout
+        /// Explicit input format. If `nil`, the manager auto‑detects the format.
         public var fromFormat: KeyFormat?   // Auto-detect if nil
+        /// Target format to convert to.
         public var toFormat: KeyFormat
+        /// Optional passphrase for formats supporting encryption.
         public var passphrase: String?
         
+        /// Create a new set of conversion options.
         public init(toFormat: KeyFormat, 
-                   fromFormat: KeyFormat? = nil,
-                   input: String = "-",
-                   output: String = "-",
-                   passphrase: String? = nil) {
+                    fromFormat: KeyFormat? = nil,
+                    input: String = "-",
+                    output: String = "-",
+                    passphrase: String? = nil) {
             self.toFormat = toFormat
             self.fromFormat = fromFormat
             self.input = input
@@ -25,7 +31,7 @@ public struct KeyConversionManager {
         }
     }
     
-    /// Convert a key between formats
+    /// Convert a key between formats.
     public static func convertKey(options: ConversionOptions) throws {
         // Read input
         let inputString: String
@@ -123,7 +129,7 @@ public struct KeyConversionManager {
         }
     }
     
-    /// Detect the format of key data
+    /// Detect the format of key data.
     public static func detectFormat(from keyString: String) throws -> KeyFormat {
         let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
         

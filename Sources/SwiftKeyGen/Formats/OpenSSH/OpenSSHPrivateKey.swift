@@ -3,6 +3,7 @@ import Crypto
 import _CryptoExtras
 import BigInt
 
+/// Utilities to serialize private keys to the OpenSSH proprietary format.
 public struct OpenSSHPrivateKey {
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
@@ -10,6 +11,7 @@ public struct OpenSSHPrivateKey {
     private static let AUTH_MAGIC = "openssh-key-v1\0"
     private static let SALT_LEN = 16
     private static let DEFAULT_CIPHER = Cipher.defaultCipher
+    /// Default bcrypt PBKDF rounds used by OpenSSH for key derivation.
     public static let DEFAULT_ROUNDS = 24
     private static let KDFNAME = "bcrypt"
     

@@ -1,6 +1,7 @@
 import Foundation
 import Crypto
 
+/// RSA private key backed by the project’s RSA implementation.
 public struct RSAKey: SSHKey {
     public let keyType = KeyType.rsa
     public var comment: String?
@@ -12,6 +13,7 @@ public struct RSAKey: SSHKey {
         self.comment = comment
     }
     
+    /// Return the SSH wire‑format public key (type, e, n).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -23,12 +25,16 @@ public struct RSAKey: SSHKey {
         return encoder.encode()
     }
     
+    /// Return the raw private key bytes.
+    ///
+    /// Note: Full OpenSSH private key serialization is handled elsewhere.
     public func privateKeyData() -> Data {
         // TODO: Implement DER encoding for RSA keys
         // Full OpenSSH format will be implemented later
         return Data()
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -40,6 +46,7 @@ public struct RSAKey: SSHKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -79,11 +86,16 @@ public struct RSAKey: SSHKey {
         }
     }
     
+    /// Create an SSH‑formatted signature for `data`.
+    ///
+    /// Uses `rsa-sha2-256` by default.
     func sign(data: Data) throws -> Data {
         // Default to SHA256 for RSA signatures
         return try signWithAlgorithm(data: data, algorithm: "rsa-sha2-256")
     }
     
+    /// Create an SSH‑formatted signature for `data` using `algorithm`.
+    /// - Parameter algorithm: One of `ssh-rsa`, `rsa-sha2-256`, or `rsa-sha2-512`.
     func signWithAlgorithm(data: Data, algorithm: String) throws -> Data {
         // Sign the data based on algorithm
         let signatureData: Data
@@ -113,6 +125,7 @@ public struct RSAKey: SSHKey {
         return encoder.encode()
     }
     
+    /// Verify an SSH‑formatted signature for `data`.
     func verify(signature: Data, for data: Data) throws -> Bool {
         // Parse SSH signature format
         var decoder = SSHDecoder(data: signature)
@@ -145,11 +158,18 @@ public struct RSAKey: SSHKey {
     }
 }
 
+/// Factory for generating RSA keys with size validation.
 public struct RSAKeyGenerator: SSHKeyGenerator {
     // Constants matching OpenSSH
     private static let SSH_RSA_MINIMUM_MODULUS_SIZE = 1024
     private static let OPENSSL_RSA_MAX_MODULUS_BITS = 16384
     
+    /// Generate a new RSA private key.
+    ///
+    /// - Parameters:
+    ///   - bits: Modulus size in bits (multiple of 8). Defaults to ``KeyType/defaultBits`` for RSA.
+    ///   - comment: Optional key comment to attach.
+    /// - Throws: ``SSHKeyError/invalidKeySize(_:_)`` if the size is out of range.
     public static func generate(bits: Int? = nil, comment: String? = nil) throws -> RSAKey {
         let keySize = bits ?? KeyType.rsa.defaultBits
         

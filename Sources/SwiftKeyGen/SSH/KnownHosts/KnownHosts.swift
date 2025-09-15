@@ -2,10 +2,15 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
+/// A single entry in an OpenSSH `known_hosts` file.
 public struct KnownHostsEntry {
+    /// Host pattern (hostname, `[host]:port`, wildcard, or hashed form).
     public let hostPattern: String
+    /// Key algorithm for the entry.
     public let keyType: KeyType
+    /// SSH wire‑format public key data.
     public let publicKey: Data
+    /// Optional comment if present on the line.
     public let comment: String?
     
     public init(hostPattern: String, keyType: KeyType, publicKey: Data, comment: String? = nil) {
@@ -49,7 +54,7 @@ public struct KnownHostsEntry {
         )
     }
     
-    /// Convert to known_hosts line format
+    /// Convert to a `known_hosts` line format.
     public func toLine() -> String {
         var line = "\(hostPattern) \(keyType.rawValue) \(publicKey.base64EncodedString())"
         if let comment = comment {
@@ -59,6 +64,7 @@ public struct KnownHostsEntry {
     }
 }
 
+/// Read, write, and verify entries in a `known_hosts` file.
 public struct KnownHostsManager {
     private let filePath: String
     
@@ -66,7 +72,7 @@ public struct KnownHostsManager {
         self.filePath = filePath ?? NSString(string: "~/.ssh/known_hosts").expandingTildeInPath
     }
     
-    /// Read all entries from known_hosts file
+    /// Read all entries from the `known_hosts` file.
     public func readEntries() throws -> [KnownHostsEntry] {
         guard FileManager.default.fileExists(atPath: filePath) else {
             return []
@@ -84,7 +90,7 @@ public struct KnownHostsManager {
         return entries
     }
     
-    /// Add a new host key
+    /// Add a new host key.
     public func addHost(hostname: String, port: Int? = nil, key: any SSHKey) throws {
         let hostPattern: String
         if let port = port, port != 22 {
@@ -102,7 +108,7 @@ public struct KnownHostsManager {
         try addEntry(entry)
     }
     
-    /// Add an entry to the file
+    /// Add an entry to the file.
     public func addEntry(_ entry: KnownHostsEntry) throws {
         var content = ""
         
@@ -118,7 +124,7 @@ public struct KnownHostsManager {
         try content.write(toFile: filePath, atomically: true, encoding: .utf8)
     }
     
-    /// Remove entries for a hostname
+    /// Remove entries for a hostname.
     public func removeHost(_ hostname: String) throws {
         let entries = try readEntries()
         let filtered = entries.filter { entry in
@@ -128,7 +134,7 @@ public struct KnownHostsManager {
         try writeEntries(filtered)
     }
     
-    /// Find entries for a hostname
+    /// Find entries for a hostname.
     public func findHost(_ hostname: String) throws -> [KnownHostsEntry] {
         let entries = try readEntries()
         return entries.filter { entry in
@@ -136,7 +142,7 @@ public struct KnownHostsManager {
         }
     }
     
-    /// Check if a key matches any known host
+    /// Check if a key matches any known host.
     public func verifyHost(_ hostname: String, key: any SSHKey) throws -> VerificationResult {
         let entries = try findHost(hostname)
         
@@ -156,7 +162,7 @@ public struct KnownHostsManager {
         return .mismatch
     }
     
-    /// Hash all hostnames (like ssh-keygen -H)
+    /// Hash all hostnames (like `ssh-keygen -H`).
     public func hashHostnames() throws {
         let entries = try readEntries()
         var hashedEntries: [KnownHostsEntry] = []
@@ -267,9 +273,13 @@ public struct KnownHostsManager {
         return Data(hmac) == expectedHash
     }
     
+    /// Result of verifying a host’s public key against `known_hosts`.
     public enum VerificationResult {
+        /// A matching entry exists for the host and key.
         case valid
+        /// The host exists but the key does not match (possible MITM or rotation).
         case mismatch
+        /// No entry exists for the host.
         case unknown
     }
 }

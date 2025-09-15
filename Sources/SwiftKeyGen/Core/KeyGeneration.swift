@@ -1,18 +1,38 @@
 import Foundation
 import Crypto
 
+/// High-level factory for generating and converting SSH keys.
+///
+/// This type exposes the public entry points used by the CLI and library
+/// consumers to generate key material and perform common conversions.
 public struct SwiftKeyGen {
     
-    /// Convert RSA key to PEM format
+    /// Convert an RSA private key to PKCS#1 PEM.
+    ///
+    /// - Parameter key: The RSA key to export.
+    /// - Returns: A PEM string beginning with "-----BEGIN RSA PRIVATE KEY-----".
+    /// - Throws: ``SSHKeyError`` if encoding fails.
     public static func rsaToPEM(_ key: RSAKey) throws -> String {
         return try key.privateKey.pkcs1PEMRepresentation()
     }
     
-    /// Convert RSA public key to PEM format
+    /// Convert an RSA public key to PKCS#1 PEM.
+    ///
+    /// - Parameter key: The RSA key whose public component will be exported.
+    /// - Returns: A PEM string beginning with "-----BEGIN RSA PUBLIC KEY-----".
+    /// - Throws: ``SSHKeyError`` if encoding fails.
     public static func rsaPublicKeyToPEM(_ key: RSAKey) throws -> String {
         return try key.privateKey.publicKey.pkcs1PEMRepresentation()
     }
     
+    /// Generate a new private key of the requested type.
+    ///
+    /// - Parameters:
+    ///   - type: Desired key algorithm.
+    ///   - bits: Optional size override for algorithms that support it (e.g. RSA).
+    ///   - comment: Optional key comment that will be appended in public output.
+    /// - Returns: A concrete type conforming to ``SSHKey``.
+    /// - Throws: ``SSHKeyError`` if the generation parameters are invalid.
     public static func generateKey(type: KeyType, bits: Int? = nil, comment: String? = nil) throws -> any SSHKey {
         switch type {
         case .ed25519:
@@ -36,6 +56,14 @@ public struct SwiftKeyGen {
         }
     }
     
+    /// Generate a new key pair.
+    ///
+    /// - Parameters:
+    ///   - type: Desired key algorithm.
+    ///   - bits: Optional size override for algorithms that support it (e.g. RSA).
+    ///   - comment: Optional key comment that will be appended in public output.
+    /// - Returns: A ``KeyPair`` wrapper containing both private and public material.
+    /// - Throws: ``SSHKeyError`` if the generation parameters are invalid.
     public static func generateKeyPair(type: KeyType, bits: Int? = nil, comment: String? = nil) throws -> KeyPair {
         let key = try generateKey(type: type, bits: bits, comment: comment)
         return KeyPair(privateKey: key)

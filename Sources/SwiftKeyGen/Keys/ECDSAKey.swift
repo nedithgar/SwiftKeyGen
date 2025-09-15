@@ -1,6 +1,7 @@
 import Foundation
 import Crypto
 
+/// ECDSA private key (P-256/P-384/P-521) using CryptoKit.
 public struct ECDSAKey: SSHKey {
     public let keyType: KeyType
     public var comment: String?
@@ -31,6 +32,7 @@ public struct ECDSAKey: SSHKey {
         self.comment = comment
     }
     
+    /// Return the SSH wire‑format public key (type, curve, point).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -57,6 +59,7 @@ public struct ECDSAKey: SSHKey {
         return encoder.encode()
     }
     
+    /// Return the raw private key bytes for the selected curve.
     public func privateKeyData() -> Data {
         // Return raw private key data for now
         switch privateKeyStorage {
@@ -69,6 +72,7 @@ public struct ECDSAKey: SSHKey {
         }
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -80,6 +84,7 @@ public struct ECDSAKey: SSHKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -119,6 +124,7 @@ public struct ECDSAKey: SSHKey {
         }
     }
     
+    /// Create an SSH‑formatted signature for `data`.
     func sign(data: Data) throws -> Data {
         // Sign the data (CryptoKit handles hashing internally based on curve)
         let ecdsaSignature: Data
@@ -169,13 +175,14 @@ public struct ECDSAKey: SSHKey {
         return encoder.encode()
     }
     
+    /// Verify a signature for `data`.
     func verify(signature: Data, for data: Data) throws -> Bool {
         // Create a public-only version of this key and use it for verification
         let publicOnlyKey = self.publicOnlyKey() as! ECDSAPublicKey
         return try publicOnlyKey.verify(signature: signature, for: data)
     }
     
-    /// Get raw signature without SSH formatting (for internal use)
+    /// Get raw signature without SSH formatting (for internal use).
     func rawSignature(for data: Data) throws -> Data {
         // Get the raw ECDSA signature
         let ecdsaSignature: Data
@@ -220,7 +227,7 @@ public struct ECDSAKey: SSHKey {
         return sigEncoder.encode()
     }
     
-    /// PEM representation of the private key in PKCS#8 format
+    /// PEM representation of the private key in PKCS#8 format.
     public var pemRepresentation: String {
         switch privateKeyStorage {
         case .p256(let key):
@@ -232,7 +239,7 @@ public struct ECDSAKey: SSHKey {
         }
     }
     
-    /// Verify raw signature without SSH formatting (for internal use)
+    /// Verify raw signature without SSH formatting (for internal use).
     func verifyRawSignature(_ signature: Data, for data: Data) throws -> Bool {
         // Parse the SSH encoded signature (r, s components)
         var decoder = SSHDecoder(data: signature)
@@ -256,22 +263,27 @@ public struct ECDSAKey: SSHKey {
     }
 }
 
+/// Factory for generating ECDSA keys.
 public struct ECDSAKeyGenerator {
+    /// Generate a P‑256 private key.
     public static func generateP256(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P256.Signing.PrivateKey()
         return ECDSAKey(p256Key: privateKey, comment: comment)
     }
     
+    /// Generate a P‑384 private key.
     public static func generateP384(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P384.Signing.PrivateKey()
         return ECDSAKey(p384Key: privateKey, comment: comment)
     }
     
+    /// Generate a P‑521 private key.
     public static func generateP521(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P521.Signing.PrivateKey()
         return ECDSAKey(p521Key: privateKey, comment: comment)
     }
     
+    /// Generate an ECDSA key for the requested curve type.
     public static func generate(curve: KeyType, comment: String? = nil) throws -> ECDSAKey {
         switch curve {
         case .ecdsa256:

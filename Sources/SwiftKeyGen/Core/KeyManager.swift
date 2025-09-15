@@ -223,11 +223,16 @@ public struct KeyManager {
     }
     
     public struct KeyInfo {
+        /// Detected key algorithm.
         public let keyType: KeyType
+        /// Whether the private key is encrypted at rest.
         public let isEncrypted: Bool
+        /// Cipher name used for encryption (if any).
         public let cipherName: String?
+        /// SSH wire‑format public key bytes.
         public let publicKeyData: Data
         
+        /// OpenSSH‑style SHA‑256 fingerprint for the public key.
         public var fingerprint: String {
             let digest = SHA256.hash(data: publicKeyData)
             let base64 = Data(digest).base64EncodedStringStrippingPadding()

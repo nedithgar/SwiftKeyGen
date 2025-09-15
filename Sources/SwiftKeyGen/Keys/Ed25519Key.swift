@@ -2,6 +2,7 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
+/// Ed25519 private key using CryptoKit.
 public struct Ed25519Key: SSHKey {
     public let keyType = KeyType.ed25519
     public var comment: String?
@@ -13,6 +14,7 @@ public struct Ed25519Key: SSHKey {
         self.comment = comment
     }
     
+    /// Initialize from a 32‑byte raw private key seed.
     public init(privateKeyData: Data, comment: String? = nil) throws {
         guard privateKeyData.count == 32 else {
             throw SSHKeyError.invalidKeyData
@@ -21,6 +23,7 @@ public struct Ed25519Key: SSHKey {
         self.comment = comment
     }
     
+    /// Return the SSH wire‑format public key (type, 32‑byte key).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -28,12 +31,13 @@ public struct Ed25519Key: SSHKey {
         return encoder.encode()
     }
     
+    /// Return the raw 32‑byte private key seed.
     public func privateKeyData() -> Data {
-        // This returns the raw 32-byte private key seed
         // For full OpenSSH format, we'll implement that separately
         return privateKey.rawRepresentation
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -45,6 +49,7 @@ public struct Ed25519Key: SSHKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -84,6 +89,7 @@ public struct Ed25519Key: SSHKey {
         }
     }
     
+    /// Create an SSH‑formatted signature for `data`.
     func sign(data: Data) throws -> Data {
         let signature = try privateKey.signature(for: data)
         
@@ -94,6 +100,9 @@ public struct Ed25519Key: SSHKey {
         return encoder.encode()
     }
     
+    /// Verify a signature for `data`.
+    ///
+    /// Accepts either raw Ed25519 signatures or SSH‑formatted signatures.
     func verify(signature: Data, for data: Data) throws -> Bool {
         // Parse SSH signature format if needed
         if signature.count > 4 {
@@ -111,7 +120,9 @@ public struct Ed25519Key: SSHKey {
     }
 }
 
+/// Factory for generating Ed25519 keys.
 public struct Ed25519KeyGenerator: SSHKeyGenerator {
+    /// Generate a new Ed25519 private key. The `bits` parameter is ignored.
     public static func generate(bits: Int? = nil, comment: String? = nil) throws -> Ed25519Key {
         // Ed25519 has a fixed key size, ignore bits parameter
         let privateKey = Curve25519.Signing.PrivateKey()

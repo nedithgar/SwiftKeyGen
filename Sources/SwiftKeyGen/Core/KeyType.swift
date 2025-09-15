@@ -1,5 +1,6 @@
 import Foundation
 
+/// Supported SSH key algorithms.
 public enum KeyType: String, CaseIterable {
     case rsa = "ssh-rsa"
     case ed25519 = "ssh-ed25519"
@@ -7,6 +8,7 @@ public enum KeyType: String, CaseIterable {
     case ecdsa384 = "ecdsa-sha2-nistp384"
     case ecdsa521 = "ecdsa-sha2-nistp521"
     
+    /// Default bit size for this algorithm.
     public var defaultBits: Int {
         switch self {
         case .rsa:
@@ -22,6 +24,7 @@ public enum KeyType: String, CaseIterable {
         }
     }
     
+    /// A human‑readable algorithm family name.
     public var algorithmName: String {
         switch self {
         case .rsa:

@@ -5,16 +5,24 @@ import Darwin
 import Glibc
 #endif
 
+/// File I/O helpers for reading and writing SSH keys.
 public struct KeyFileManager {
     
+    /// Key file type to write.
     public enum FileType {
         case privateKey
         case publicKey
     }
     
     // Special filename for stdin/stdout
+    /// Special filename that indicates stdin/stdout should be used.
     public static let STDIN_STDOUT_FILENAME = "-"
     
+    /// Write a key to a file or stdout.
+    /// - Parameters:
+    ///   - keyPair: The key pair to write.
+    ///   - path: Destination path or "-" for stdout.
+    ///   - type: Whether to write the private or public key.
     public static func writeKey(_ keyPair: KeyPair, to path: String, type: FileType) throws {
         // Check for stdout
         if path == STDIN_STDOUT_FILENAME {
@@ -85,12 +93,21 @@ public struct KeyFileManager {
         #endif
     }
     
+    /// Generate a key pair and write both files to disk.
+    ///
+    /// - Parameters:
+    ///   - type: Key algorithm to generate.
+    ///   - privatePath: Destination for the OpenSSH private key.
+    ///   - publicPath: Optional destination for the public key (defaults to `<private>.pub`).
+    ///   - bits: Optional size override (RSA only).
+    ///   - comment: Optional public key comment.
+    ///   - passphrase: Optional passphrase to encrypt the private key on disk.
     public static func generateKeyPairFiles(type: KeyType, 
-                                          privatePath: String,
-                                          publicPath: String? = nil,
-                                          bits: Int? = nil,
-                                          comment: String? = nil,
-                                          passphrase: String? = nil) throws {
+                                            privatePath: String,
+                                            publicPath: String? = nil,
+                                            bits: Int? = nil,
+                                            comment: String? = nil,
+                                            passphrase: String? = nil) throws {
         // Generate the key pair
         let keyPair = try SwiftKeyGen.generateKeyPair(type: type, bits: bits, comment: comment)
         

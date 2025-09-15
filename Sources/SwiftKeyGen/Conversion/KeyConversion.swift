@@ -2,6 +2,7 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
+/// Supported key serialization formats.
 public enum KeyFormat {
     case openssh
     case pem
@@ -9,13 +10,14 @@ public enum KeyFormat {
     case rfc4716
 }
 
+/// Stateless helpers for converting keys between formats.
 public struct KeyConverter {
     
     // RFC4716 format constants
     private static let SSH_COM_PUBLIC_BEGIN = "---- BEGIN SSH2 PUBLIC KEY ----"
     private static let SSH_COM_PUBLIC_END = "---- END SSH2 PUBLIC KEY ----"
     
-    /// Convert a key to PEM format
+    /// Convert a key to PEM format.
     public static func toPEM(key: any SSHKey, passphrase: String? = nil) throws -> String {
         switch key {
         case let ed25519Key as Ed25519Key:
@@ -32,7 +34,7 @@ public struct KeyConverter {
         }
     }
     
-    /// Convert a key to PKCS#8 format
+    /// Convert a key to PKCS#8 format.
     public static func toPKCS8(key: any SSHKey, passphrase: String? = nil) throws -> Data {
         switch key {
         case let ed25519Key as Ed25519Key:
@@ -49,7 +51,7 @@ public struct KeyConverter {
         }
     }
     
-    /// Convert a public key to RFC4716 format
+    /// Convert a public key to RFC4716 format.
     public static func toRFC4716(key: any SSHKey) throws -> String {
         // Get the public key data
         let publicKeyData = key.publicKeyData()
@@ -146,7 +148,11 @@ public struct KeyConverter {
         return Data(pem.utf8)
     }
     
-    /// Export a key in multiple formats
+    /// Export a key in multiple formats and write the results to disk.
+    ///
+    /// The `.openssh` case writes the OpenSSH private key to `basePath`. Other
+    /// formats write to files with appropriate extensions (e.g. `.pem`, `.p8`, `.rfc`).
+    /// - Returns: A map of format to the path written.
     public static func exportKey(
         _ key: any SSHKey,
         formats: Set<KeyFormat>,

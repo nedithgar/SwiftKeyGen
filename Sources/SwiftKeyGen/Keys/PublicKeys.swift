@@ -9,6 +9,10 @@ public struct Ed25519PublicKey: SSHPublicKey {
     
     private let publicKey: Curve25519.Signing.PublicKey
     
+    /// Initialize from a 32‑byte raw public key.
+    /// - Parameters:
+    ///   - publicKeyData: The 32‑byte Ed25519 public key.
+    ///   - comment: Optional comment appended to the public key string.
     public init(publicKeyData: Data, comment: String? = nil) throws {
         guard publicKeyData.count == 32 else {
             throw SSHKeyError.invalidKeyData
@@ -17,6 +21,7 @@ public struct Ed25519PublicKey: SSHPublicKey {
         self.comment = comment
     }
     
+    /// Return the SSH wire‑format public key (type, 32‑byte key).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -29,6 +34,7 @@ public struct Ed25519PublicKey: SSHPublicKey {
         return Data()
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -40,6 +46,7 @@ public struct Ed25519PublicKey: SSHPublicKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -79,6 +86,7 @@ public struct Ed25519PublicKey: SSHPublicKey {
         }
     }
     
+    /// Verify a raw Ed25519 signature for `data`.
     public func verify(signature: Data, for data: Data) throws -> Bool {
         // Ed25519 signatures are 64 bytes raw
         guard signature.count == 64 else {
@@ -96,12 +104,14 @@ public struct RSAPublicKey: SSHPublicKey {
     
     private let publicKey: Insecure.RSA.PublicKey
     
+    /// Initialize from big‑endian modulus (`n`) and exponent (`e`).
     public init(modulus: Data, exponent: Data, comment: String? = nil) throws {
         // Create Insecure.RSA.PublicKey from modulus and exponent
         self.publicKey = try Insecure.RSA.PublicKey(modulus: modulus, exponent: exponent)
         self.comment = comment
     }
     
+    /// Return the SSH wire‑format public key (type, e, n).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -115,6 +125,7 @@ public struct RSAPublicKey: SSHPublicKey {
         return Data()
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -126,6 +137,7 @@ public struct RSAPublicKey: SSHPublicKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -165,6 +177,7 @@ public struct RSAPublicKey: SSHPublicKey {
         }
     }
     
+    /// Verify an SSH‑formatted RSA signature for `data`.
     public func verify(signature: Data, for data: Data) throws -> Bool {
         // Parse SSH signature format
         var decoder = SSHDecoder(data: signature)
@@ -200,6 +213,12 @@ public struct ECDSAPublicKey: SSHPublicKey {
     }
     private let publicKey: PublicKeyStorage?
     
+    /// Initialize from a curve name and uncompressed EC point in X9.63 format.
+    /// - Parameters:
+    ///   - keyType: Must be one of ``KeyType/ecdsa256``, ``KeyType/ecdsa384``, or ``KeyType/ecdsa521``.
+    ///   - curveName: OpenSSH curve identifier (e.g. "nistp256").
+    ///   - publicKeyPoint: Uncompressed point bytes starting with 0x04.
+    ///   - comment: Optional comment appended to the public key string.
     public init(keyType: KeyType, curveName: String, publicKeyPoint: Data, comment: String? = nil) throws {
         guard [.ecdsa256, .ecdsa384, .ecdsa521].contains(keyType) else {
             throw SSHKeyError.unsupportedKeyType
@@ -235,6 +254,7 @@ public struct ECDSAPublicKey: SSHPublicKey {
         }
     }
     
+    /// Return the SSH wire‑format public key (type, curve, point).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -248,6 +268,7 @@ public struct ECDSAPublicKey: SSHPublicKey {
         return Data()
     }
     
+    /// Return the OpenSSH public key string for `authorized_keys`.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -259,6 +280,7 @@ public struct ECDSAPublicKey: SSHPublicKey {
         return result
     }
     
+    /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -298,6 +320,7 @@ public struct ECDSAPublicKey: SSHPublicKey {
         }
     }
     
+    /// Verify an SSH‑formatted ECDSA signature for `data`.
     public func verify(signature: Data, for data: Data) throws -> Bool {
         guard let publicKey = publicKey else {
             throw SSHKeyError.invalidKeyData
@@ -347,6 +370,7 @@ public struct ECDSAPublicKey: SSHPublicKey {
 // MARK: - Extensions
 
 extension SSHKey {
+    /// Create a public‑only key value from a private key.
     public func publicOnlyKey() -> any SSHPublicKey {
         switch self {
         case let ed25519Key as Ed25519Key:

@@ -1,11 +1,18 @@
 import Foundation
 
+/// Configuration for batch key generation.
 public struct BatchKeyConfiguration {
+    /// Key algorithm to generate for each item.
     public let keyType: KeyType
+    /// Number of keys to generate.
     public let count: Int
+    /// Optional size override (RSA only).
     public let bits: Int?
+    /// Optional base comment (index is appended per key).
     public let baseComment: String?
+    /// Base filename used to derive outputs per key.
     public let baseFilename: String
+    /// Optional passphrase applied to private keys at rest.
     public let passphrase: String?
     
     public init(
@@ -25,6 +32,7 @@ public struct BatchKeyConfiguration {
     }
 }
 
+/// Result for a single generated key in a batch.
 public struct BatchKeyResult {
     public let index: Int
     public let privateKeyPath: String
@@ -33,9 +41,10 @@ public struct BatchKeyResult {
     public let error: Error?
 }
 
+/// Utilities to generate many keys and write them to disk.
 public struct BatchKeyGenerator {
     
-    /// Generate multiple keys in batch
+    /// Generate multiple keys in batch.
     public static func generateBatch(
         configuration: BatchKeyConfiguration,
         progress: ((Int, Int) -> Void)? = nil
@@ -88,7 +97,7 @@ public struct BatchKeyGenerator {
         return results
     }
     
-    /// Generate keys for multiple hosts
+    /// Generate keys for multiple hosts.
     public static func generateForHosts(
         hosts: [String],
         keyType: KeyType = .ed25519,
@@ -139,7 +148,7 @@ public struct BatchKeyGenerator {
         return results
     }
     
-    /// Generate multiple key types for a single identity
+    /// Generate multiple key types for a single identity.
     public static func generateAllTypes(
         identity: String,
         outputDirectory: String,

@@ -1,6 +1,7 @@
 import Foundation
 import Crypto
 
+/// Helpers to detect and parse public keys across supported text formats.
 public struct PublicKeyParser {
     /// Detect if a string is in RFC4716 format
     public static func isRFC4716Format(_ keyString: String) -> Bool {
