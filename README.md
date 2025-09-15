@@ -244,7 +244,7 @@ let paths = try KeyConverter.exportKey(
 let keyData = try KeyFileManager.readFromStdin()
 
 // Write key to stdout
-try KeyFileManager.writeStringToStdout(key.publicKeyString())
+KeyFileManager.writeStringToStdout(key.publicKeyString())
 
 // Use "-" as filename for stdin/stdout
 try KeyFileManager.writeKey(keyPair, to: "-", type: .publicKey)
@@ -589,23 +589,26 @@ for (host, certPath) in results {
 SwiftKeyGen supports full signature verification for all key types:
 
 ```swift
-// RSA signature verification (supports multiple algorithms)
-let rsaKey = try RSAKeyGenerator.generate(bits: 2048)
-let signature = try rsaKey.sign(data: messageData)
+// Prepare message data
+let messageData: Data = ...
 
-// Verify with different RSA signature algorithms
-let isValid = try rsaKey.verify(signature: signature, for: messageData)
+// RSA public-key verification (SSH-formatted signature)
+let rsaKey = try RSAKeyGenerator.generate(bits: 2048)
+let rsaPublic = rsaKey.publicOnlyKey() // any SSHPublicKey
+// 'signatureFromPeer' must be SSH-formatted (type + blob), e.g. "rsa-sha2-256"
+let rsaValid = try rsaPublic.verify(signature: signatureFromPeer, for: messageData)
 // Supports: ssh-rsa (SHA1), rsa-sha2-256, rsa-sha2-512
 
-// ECDSA signature verification
+// ECDSA public-key verification (SSH-formatted signature)
 let ecdsaKey = try ECDSAKeyGenerator.generateP256()
-let ecdsaSignature = try ecdsaKey.sign(data: messageData)
-let ecdsaValid = try ecdsaKey.verify(signature: ecdsaSignature, for: messageData)
+let ecdsaPublic = ecdsaKey.publicOnlyKey() // any SSHPublicKey
+// 'signatureFromPeerECDSA' must be SSH-formatted with r,s and matching curve type
+let ecdsaValid = try ecdsaPublic.verify(signature: signatureFromPeerECDSA, for: messageData)
 // Supports: P-256 (SHA256), P-384 (SHA384), P-521 (SHA512)
 
-// Public-key-only verification (for certificates)
-let publicKey = rsaKey.publicOnlyKey()
-let canVerify = try publicKey.verify(signature: signature, for: messageData)
+// Public-key-only verification (generic)
+let pub: any SSHPublicKey = rsaKey.publicOnlyKey()
+let canVerify = try pub.verify(signature: signatureFromPeer, for: messageData)
 ```
 
 ## Roadmap
