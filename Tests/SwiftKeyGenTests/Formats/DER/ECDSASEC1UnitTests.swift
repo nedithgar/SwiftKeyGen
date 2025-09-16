@@ -171,4 +171,82 @@ struct ECDSASEC1UnitTests {
         #expect(parsed.privateKeyData() == original.privateKeyData())
         #expect(parsed.publicKeyData() == original.publicKeyData())
     }
+
+    // MARK: - Consolidated tests from FormatConversion/ECDSASEC1Tests.swift
+    @Test
+    func ecdsaSEC1PEMHeadersForCurves() throws {
+        let p256Key = try ECDSAKeyGenerator.generateP256(comment: "test-p256")
+        let p384Key = try ECDSAKeyGenerator.generateP384(comment: "test-p384")
+        let p521Key = try ECDSAKeyGenerator.generateP521(comment: "test-p521")
+
+        let p256PEM = p256Key.sec1PEMRepresentation
+        #expect(p256PEM.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(p256PEM.contains("-----END EC PRIVATE KEY-----"))
+        #expect(!p256PEM.contains("-----BEGIN PRIVATE KEY-----"))
+
+        let p384PEM = p384Key.sec1PEMRepresentation
+        #expect(p384PEM.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(p384PEM.contains("-----END EC PRIVATE KEY-----"))
+        #expect(!p384PEM.contains("-----BEGIN PRIVATE KEY-----"))
+
+        let p521PEM = p521Key.sec1PEMRepresentation
+        #expect(p521PEM.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(p521PEM.contains("-----END EC PRIVATE KEY-----"))
+        #expect(!p521PEM.contains("-----BEGIN PRIVATE KEY-----"))
+    }
+
+    @Test
+    func ecdsaFormatCompatibilityPEMvsPKCS8() throws {
+        let key = try ECDSAKeyGenerator.generateP256(comment: "format-test")
+        let sec1PEM = key.sec1PEMRepresentation
+        let pkcs8PEM = key.pkcs8PEMRepresentation
+
+        #expect(sec1PEM.contains("BEGIN EC PRIVATE KEY"))
+        #expect(pkcs8PEM.contains("BEGIN PRIVATE KEY"))
+        #expect(sec1PEM != pkcs8PEM)
+    }
+
+    @Test
+    func ecdsaKeyConverterFormatSelection() throws {
+        let key = try ECDSAKeyGenerator.generateP384()
+        let pemString = try KeyConverter.toPEM(key: key)
+        #expect(pemString.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(pemString.contains("-----END EC PRIVATE KEY-----"))
+
+        let pkcs8Data = try KeyConverter.toPKCS8(key: key)
+        let pkcs8String = String(data: pkcs8Data, encoding: .utf8)!
+        #expect(pkcs8String.contains("-----BEGIN PRIVATE KEY-----"))
+        #expect(pkcs8String.contains("-----END PRIVATE KEY-----"))
+    }
+}
+
+@Suite("ECDSA SEC1 Integration Tests", .tags(.integration))
+struct ECDSASEC1IntegrationTests {
+    @Test
+    func ecdsaExportFormatsMatchSSHKeygen() throws {
+        let key = try ECDSAKeyGenerator.generateP521()
+        let formats: Set<KeyFormat> = [.pem, .pkcs8]
+        let tempDir = FileManager.default.temporaryDirectory
+        let basePath = tempDir.appendingPathComponent("test_ecdsa_\(UUID().uuidString)").path
+
+        let results = try KeyConverter.exportKey(key, formats: formats, basePath: basePath)
+
+        if let pemPath = results[.pem] {
+            let pemContent = try String(contentsOfFile: pemPath, encoding: .utf8)
+            #expect(pemContent.contains("BEGIN EC PRIVATE KEY"))
+        } else {
+            Issue.record("PEM format not exported")
+        }
+
+        if let pkcs8Path = results[.pkcs8] {
+            let pkcs8Content = try String(contentsOfFile: pkcs8Path, encoding: .utf8)
+            #expect(pkcs8Content.contains("BEGIN PRIVATE KEY"))
+        } else {
+            Issue.record("PKCS8 format not exported")
+        }
+
+        // Cleanup
+        try? FileManager.default.removeItem(atPath: basePath + ".pem")
+        try? FileManager.default.removeItem(atPath: basePath + ".p8")
+    }
 }
