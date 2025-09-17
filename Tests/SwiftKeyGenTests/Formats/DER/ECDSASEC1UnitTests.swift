@@ -6,7 +6,7 @@ import Crypto
 @Suite("ECDSA SEC1 Unit Tests", .tags(.unit))
 struct ECDSASEC1UnitTests {
     // MARK: - SEC1 DER structure tests
-    @Test
+    @Test("SEC1 DER structure (P-256)")
     func sec1DERStructure_P256() throws {
         let key = P256.Signing.PrivateKey()
         let der = key.sec1DERRepresentation
@@ -45,7 +45,7 @@ struct ECDSASEC1UnitTests {
         #expect(publicKeyBitString == key.publicKey.x963Representation)
     }
 
-    @Test
+    @Test("SEC1 DER structure (P-384)")
     func sec1DERStructure_P384() throws {
         let key = P384.Signing.PrivateKey()
         let der = key.sec1DERRepresentation
@@ -84,7 +84,7 @@ struct ECDSASEC1UnitTests {
         #expect(publicKeyBitString == key.publicKey.x963Representation)
     }
 
-    @Test
+    @Test("SEC1 DER structure (P-521)")
     func sec1DERStructure_P521() throws {
         let key = P521.Signing.PrivateKey()
         let der = key.sec1DERRepresentation
@@ -124,7 +124,7 @@ struct ECDSASEC1UnitTests {
     }
 
     // MARK: - PEM wrapping tests
-    @Test
+    @Test("SEC1 PEM wraps exact DER (P-256)")
     func sec1PEMWrapsDER_P256() throws {
         let key = try ECDSAKeyGenerator.generateP256(comment: "wrap-test")
         let pem = key.sec1PEMRepresentation
@@ -146,7 +146,7 @@ struct ECDSASEC1UnitTests {
     }
 
     // MARK: - Encrypted SEC1 PEM round-trip tests
-    @Test
+    @Test("Encrypted SEC1 PEM round-trip (AES-128-CBC)")
     func encryptedSEC1PEMRoundTrip_AES128CBC() throws {
         let original = try ECDSAKeyGenerator.generateP384(comment: "enc-aes128")
         let passphrase = "p@ssw0rd-AES128"
@@ -159,7 +159,7 @@ struct ECDSASEC1UnitTests {
         #expect(parsed.publicKeyData() == original.publicKeyData())
     }
 
-    @Test
+    @Test("Encrypted SEC1 PEM round-trip (3DES)")
     func encryptedSEC1PEMRoundTrip_3DES() throws {
         let original = try ECDSAKeyGenerator.generateP521(comment: "enc-3des")
         let passphrase = "p@ssw0rd-3DES"
@@ -171,7 +171,7 @@ struct ECDSASEC1UnitTests {
         #expect(parsed.privateKeyData() == original.privateKeyData())
         #expect(parsed.publicKeyData() == original.publicKeyData())
     }
-    @Test
+    @Test("SEC1 PEM headers for ECDSA curves")
     func ecdsaSEC1PEMHeadersForCurves() throws {
         let p256Key = try ECDSAKeyGenerator.generateP256(comment: "test-p256")
         let p384Key = try ECDSAKeyGenerator.generateP384(comment: "test-p384")
