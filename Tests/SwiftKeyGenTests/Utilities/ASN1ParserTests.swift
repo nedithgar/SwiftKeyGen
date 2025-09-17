@@ -3,6 +3,7 @@ import Foundation
 import _CryptoExtras
 @testable import SwiftKeyGen
 
+@Suite("ASN1 Parser Integration", .tags(.integration, .rsa))
 struct ASN1ParserTests {
     
     @Test func parseRSAPublicKey() throws {
