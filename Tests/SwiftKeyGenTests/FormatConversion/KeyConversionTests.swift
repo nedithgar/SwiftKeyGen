@@ -19,7 +19,7 @@ struct KeyConversionTests {
         #expect(rfc4716.contains("Comment: \"test@example.com\""))
         
         // Verify it can be parsed back
-        let parsed = try KeyParser.parseRFC4716(rfc4716)
+        let parsed = try PublicKeyParser.parseRFC4716(rfc4716)
         #expect(parsed.type == .ed25519)
         #expect(parsed.comment == "test@example.com")
         #expect(parsed.data == key.publicKeyData())
@@ -34,12 +34,12 @@ struct KeyConversionTests {
         ---- END SSH2 PUBLIC KEY ----
         """
         
-        let parsed = try KeyParser.parseRFC4716(rfc4716String)
+        let parsed = try PublicKeyParser.parseRFC4716(rfc4716String)
         #expect(parsed.type == .ed25519)
         #expect(parsed.comment == "user@host")
         
         // Verify the key data is valid
-        try KeyParser.validatePublicKeyData(parsed.data, type: parsed.type)
+        try PublicKeyParser.validatePublicKeyData(parsed.data, type: parsed.type)
     }
     
     @Test("RFC4716 with long lines")
@@ -61,7 +61,7 @@ struct KeyConversionTests {
         }
         
         // Parse it back
-        let parsed = try KeyParser.parseRFC4716(rfc4716)
+        let parsed = try PublicKeyParser.parseRFC4716(rfc4716)
         #expect(parsed.type == .rsa)
         #expect(parsed.data == key.publicKeyData())
     }
@@ -95,12 +95,12 @@ struct KeyConversionTests {
         
         // Test OpenSSH format
         let opensshFormat = key.publicKeyString()
-        let parsedOpenSSH = try KeyParser.parseAnyFormat(opensshFormat)
+        let parsedOpenSSH = try PublicKeyParser.parseAnyFormat(opensshFormat)
         #expect(parsedOpenSSH.data == key.publicKeyData())
         
         // Test RFC4716 format
         let rfc4716Format = try KeyConverter.toRFC4716(key: key)
-        let parsedRFC4716 = try KeyParser.parseAnyFormat(rfc4716Format)
+        let parsedRFC4716 = try PublicKeyParser.parseAnyFormat(rfc4716Format)
         #expect(parsedRFC4716.data == key.publicKeyData())
     }
     
@@ -153,7 +153,7 @@ struct KeyConversionTests {
             
             // Verify output file exists and is valid RFC4716
             let outputContent = try String(contentsOfFile: result.output, encoding: .utf8)
-            #expect(KeyParser.isRFC4716Format(outputContent))
+            #expect(PublicKeyParser.isRFC4716Format(outputContent))
         }
     }
     
@@ -162,31 +162,31 @@ struct KeyConversionTests {
         // Test Ed25519
         let ed25519 = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-test") as! Ed25519Key
         let ed25519RFC = try KeyConverter.toRFC4716(key: ed25519)
-        let ed25519Parsed = try KeyParser.parseRFC4716(ed25519RFC)
+        let ed25519Parsed = try PublicKeyParser.parseRFC4716(ed25519RFC)
         #expect(ed25519Parsed.type == .ed25519)
         
         // Test RSA
         let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-test") as! RSAKey
         let rsaRFC = try KeyConverter.toRFC4716(key: rsa)
-        let rsaParsed = try KeyParser.parseRFC4716(rsaRFC)
+        let rsaParsed = try PublicKeyParser.parseRFC4716(rsaRFC)
         #expect(rsaParsed.type == .rsa)
         
         // Test ECDSA P-256
         let ecdsa256 = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa256-test") as! ECDSAKey
         let ecdsa256RFC = try KeyConverter.toRFC4716(key: ecdsa256)
-        let ecdsa256Parsed = try KeyParser.parseRFC4716(ecdsa256RFC)
+        let ecdsa256Parsed = try PublicKeyParser.parseRFC4716(ecdsa256RFC)
         #expect(ecdsa256Parsed.type == .ecdsa256)
         
         // Test ECDSA P-384
         let ecdsa384 = try SwiftKeyGen.generateKey(type: .ecdsa384, comment: "ecdsa384-test") as! ECDSAKey
         let ecdsa384RFC = try KeyConverter.toRFC4716(key: ecdsa384)
-        let ecdsa384Parsed = try KeyParser.parseRFC4716(ecdsa384RFC)
+        let ecdsa384Parsed = try PublicKeyParser.parseRFC4716(ecdsa384RFC)
         #expect(ecdsa384Parsed.type == .ecdsa384)
         
         // Test ECDSA P-521
         let ecdsa521 = try SwiftKeyGen.generateKey(type: .ecdsa521, comment: "ecdsa521-test") as! ECDSAKey
         let ecdsa521RFC = try KeyConverter.toRFC4716(key: ecdsa521)
-        let ecdsa521Parsed = try KeyParser.parseRFC4716(ecdsa521RFC)
+        let ecdsa521Parsed = try PublicKeyParser.parseRFC4716(ecdsa521RFC)
         #expect(ecdsa521Parsed.type == .ecdsa521)
     }
 }

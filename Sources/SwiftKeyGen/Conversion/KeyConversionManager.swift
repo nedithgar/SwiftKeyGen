@@ -57,13 +57,13 @@ public struct KeyConversionManager {
                 throw SSHKeyError.unsupportedOperation("OpenSSH private key conversion not yet implemented")
             }
             // Parse as public key
-            let parsed = try KeyParser.parsePublicKey(inputString.trimmingCharacters(in: .whitespacesAndNewlines))
+            let parsed = try PublicKeyParser.parsePublicKey(inputString.trimmingCharacters(in: .whitespacesAndNewlines))
             keyData = parsed.data
             keyType = parsed.type
             comment = parsed.comment
             
         case .rfc4716:
-            let parsed = try KeyParser.parseRFC4716(inputString)
+            let parsed = try PublicKeyParser.parseRFC4716(inputString)
             keyData = parsed.data
             keyType = parsed.type
             comment = parsed.comment
@@ -135,7 +135,7 @@ public struct KeyConversionManager {
         
         if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
             return .openssh
-        } else if KeyParser.isRFC4716Format(trimmed) {
+        } else if PublicKeyParser.isRFC4716Format(trimmed) {
             return .rfc4716
         } else if PEMParser.isPEMFormat(trimmed) {
             let pemType = PEMParser.detectPEMType(trimmed) ?? ""

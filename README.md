@@ -106,13 +106,13 @@ let p521Key = try SwiftKeyGen.generateKeyPair(type: .ecdsa521)
 ```swift
 // Parse a public key string
 let publicKeyString = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... user@host"
-let (keyType, keyData, comment) = try KeyParser.parsePublicKey(publicKeyString)
+let (keyType, keyData, comment) = try PublicKeyParser.parsePublicKey(publicKeyString)
 
 // Calculate fingerprint from public key string
-let fingerprint = try KeyParser.fingerprint(from: publicKeyString)
+let fingerprint = try PublicKeyParser.fingerprint(from: publicKeyString)
 
 // Detect key type
-let detectedType = KeyParser.detectKeyType(from: publicKeyString)
+let detectedType = PublicKeyParser.detectKeyType(from: publicKeyString)
 ```
 
 ### Custom Fingerprint Formats
@@ -261,7 +261,7 @@ AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
 ---- END SSH2 PUBLIC KEY ----
 """
 
-let parsed = try KeyParser.parseRFC4716(rfc4716String)
+let parsed = try PublicKeyParser.parseRFC4716(rfc4716String)
 print("Key type: \(parsed.type)")
 print("Comment: \(parsed.comment ?? "none")")
 

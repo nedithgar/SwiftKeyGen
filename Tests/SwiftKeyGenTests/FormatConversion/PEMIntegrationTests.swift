@@ -29,7 +29,7 @@ struct PEMIntegrationTests {
         #expect(opensshFormat.hasPrefix("ssh-rsa "))
         
         // Verify we can parse it back
-        let (keyType, keyData, _) = try KeyParser.parsePublicKey(opensshFormat)
+        let (keyType, keyData, _) = try PublicKeyParser.parsePublicKey(opensshFormat)
         #expect(keyType == .rsa)
         #expect(!keyData.isEmpty)
     }
@@ -54,7 +54,7 @@ struct PEMIntegrationTests {
         #expect(opensshFormat.hasPrefix("ecdsa-sha2-nistp256 "))
         
         // Verify we can parse it back
-        let (keyType, keyData, _) = try KeyParser.parsePublicKey(opensshFormat)
+        let (keyType, keyData, _) = try PublicKeyParser.parsePublicKey(opensshFormat)
         #expect(keyType == .ecdsa256)
         #expect(!keyData.isEmpty)
     }
@@ -113,7 +113,7 @@ struct PEMIntegrationTests {
             
             // Read and verify RFC4716 format
             let outputContent = try String(contentsOfFile: outputFile.path, encoding: .utf8)
-            #expect(KeyParser.isRFC4716Format(outputContent))
+            #expect(PublicKeyParser.isRFC4716Format(outputContent))
         }
     }
     
@@ -153,7 +153,7 @@ struct PEMIntegrationTests {
         #expect(outputContent.hasPrefix("ssh-ed25519 "))
         
         // Verify we can parse it back
-        let (keyType, keyData, _) = try KeyParser.parsePublicKey(outputContent.trimmingCharacters(in: .whitespacesAndNewlines))
+        let (keyType, keyData, _) = try PublicKeyParser.parsePublicKey(outputContent.trimmingCharacters(in: .whitespacesAndNewlines))
         #expect(keyType == .ed25519)
         #expect(!keyData.isEmpty)
     }
