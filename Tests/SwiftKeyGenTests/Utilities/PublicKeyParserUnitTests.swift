@@ -2,8 +2,8 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("KeyParser Tests")
-struct KeyParserTests {    
+@Suite("PublicKeyParser Unit Tests")
+struct PublicKeyParserUnitTests {    
     @Test func detectKeyTypesNonRSA() throws {
         // Faster path – exclude RSA (expensive) to keep core detection coverage
         let keyTypes: [KeyType] = [.ed25519, .ecdsa256, .ecdsa384, .ecdsa521]
