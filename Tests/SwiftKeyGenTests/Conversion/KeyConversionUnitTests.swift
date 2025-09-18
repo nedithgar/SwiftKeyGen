@@ -94,6 +94,53 @@ struct KeyConversionUnitTests {
         #expect(parsed.data == key.publicKeyData())
     }
 
+    @Test("RFC4716 export uses provided comment")
+    func testRFC4716ExportWithComment() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test@example.com") as! Ed25519Key
+
+        let rfc = try KeyConverter.toRFC4716(key: key)
+        #expect(rfc.contains("---- BEGIN SSH2 PUBLIC KEY ----"))
+        #expect(rfc.contains("---- END SSH2 PUBLIC KEY ----"))
+        #expect(rfc.contains("Comment: \"test@example.com\""))
+
+        let parsed = try PublicKeyParser.parseRFC4716(rfc)
+        #expect(parsed.type == .ed25519)
+        #expect(parsed.comment == "test@example.com")
+        #expect(parsed.data == key.publicKeyData())
+    }
+
+    @Test("RFC4716 explicit import")
+    func testRFC4716ImportLiteral() throws {
+        let rfc4716String = """
+        ---- BEGIN SSH2 PUBLIC KEY ----
+        Comment: "user@host"
+        AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+        ---- END SSH2 PUBLIC KEY ----
+        """
+
+        let parsed = try PublicKeyParser.parseRFC4716(rfc4716String)
+        #expect(parsed.type == .ed25519)
+        #expect(parsed.comment == "user@host")
+        try PublicKeyParser.validatePublicKeyData(parsed.data, type: parsed.type)
+    }
+
+    @Test("RFC4716 base64 lines wrapped at 70", .tags(.rsa, .slow))
+    func testRFC4716LongLinesRSA() throws {
+        // RSA public key produces a long base64 payload
+        let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-test") as! RSAKey
+        let rfc = try KeyConverter.toRFC4716(key: rsa)
+
+        let lines = rfc.split(separator: "\n")
+        for (idx, line) in lines.enumerated() {
+            if idx == 0 || idx == lines.count - 1 || line.hasPrefix("Comment:") { continue }
+            #expect(line.count <= 70)
+        }
+
+        let parsed = try PublicKeyParser.parseRFC4716(rfc)
+        #expect(parsed.type == .rsa)
+        #expect(parsed.data == rsa.publicKeyData())
+    }
+
     // MARK: - exportKey()
 
     @Test("exportKey writes all formats and round-trips (Ed25519)")
@@ -154,5 +201,120 @@ struct KeyConversionUnitTests {
                 passphrase: "secret"
             )
         }
+    }
+
+    // MARK: - Detection and parsing helpers
+
+    @Test("Format detection: OpenSSH pub, RFC4716, OpenSSH private")
+    func testFormatDetection() throws {
+        // OpenSSH public key (ed25519) literal
+        let opensshPub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example"
+        #expect(try KeyConversionManager.detectFormat(from: opensshPub) == .openssh)
+
+        // RFC4716
+        let rfc = """
+        ---- BEGIN SSH2 PUBLIC KEY ----
+        AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+        ---- END SSH2 PUBLIC KEY ----
+        """
+        #expect(try KeyConversionManager.detectFormat(from: rfc) == .rfc4716)
+
+        // OpenSSH private key markers
+        let opensshPrivate = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+        -----END OPENSSH PRIVATE KEY-----
+        """
+        #expect(try KeyConversionManager.detectFormat(from: opensshPrivate) == .openssh)
+    }
+
+    @Test("PublicKeyParser.parseAnyFormat for OpenSSH and RFC4716")
+    func testParseAnyFormat() throws {
+        // Ed25519
+        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test-key") as! Ed25519Key
+        let openssh = key.publicKeyString()
+        let parsedOpenSSH = try PublicKeyParser.parseAnyFormat(openssh)
+        #expect(parsedOpenSSH.data == key.publicKeyData())
+
+        let rfc = try KeyConverter.toRFC4716(key: key)
+        let parsedRFC = try PublicKeyParser.parseAnyFormat(rfc)
+        #expect(parsedRFC.data == key.publicKeyData())
+    }
+
+    @Test("Stdin/stdout helpers: filename and file read")
+    func testStdinStdoutSupport() throws {
+        #expect(KeyFileManager.STDIN_STDOUT_FILENAME == "-")
+
+        let testData = Data("test data".utf8)
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("test_\(UUID().uuidString)")
+        try testData.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let read = try KeyFileManager.readKeyData(from: tmp.path)
+        #expect(read == testData)
+    }
+
+    @Test("Batch convert OpenSSH pub -> RFC4716")
+    func testBatchConversion() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        var inputFiles: [String] = []
+        for i in 1...3 {
+            let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test-\(i)") as! Ed25519Key
+            let path = tempDir.appendingPathComponent("key\(i).pub").path
+            try key.publicKeyString().write(toFile: path, atomically: true, encoding: .utf8)
+            inputFiles.append(path)
+        }
+
+        let options = KeyConversionManager.ConversionOptions(
+            toFormat: .rfc4716,
+            fromFormat: .openssh,
+            output: tempDir.path
+        )
+
+        let results = try KeyConversionManager.batchConvert(files: inputFiles, options: options)
+        #expect(results.count == 3)
+
+        for result in results {
+            #expect(result.success == true)
+            #expect(result.error == nil)
+            let out = try String(contentsOfFile: result.output, encoding: .utf8)
+            #expect(PublicKeyParser.isRFC4716Format(out))
+        }
+    }
+
+    @Test("RFC4716 conversion across all key types", .tags(.rsa, .slow))
+    func testAllKeyTypesRFC4716() throws {
+        // Ed25519
+        let ed = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-test") as! Ed25519Key
+        let edRFC = try KeyConverter.toRFC4716(key: ed)
+        let edParsed = try PublicKeyParser.parseRFC4716(edRFC)
+        #expect(edParsed.type == .ed25519)
+
+        // RSA
+        let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-test") as! RSAKey
+        let rsaRFC = try KeyConverter.toRFC4716(key: rsa)
+        let rsaParsed = try PublicKeyParser.parseRFC4716(rsaRFC)
+        #expect(rsaParsed.type == .rsa)
+
+        // ECDSA P-256
+        let e256 = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa256-test") as! ECDSAKey
+        let e256RFC = try KeyConverter.toRFC4716(key: e256)
+        let e256Parsed = try PublicKeyParser.parseRFC4716(e256RFC)
+        #expect(e256Parsed.type == .ecdsa256)
+
+        // ECDSA P-384
+        let e384 = try SwiftKeyGen.generateKey(type: .ecdsa384, comment: "ecdsa384-test") as! ECDSAKey
+        let e384RFC = try KeyConverter.toRFC4716(key: e384)
+        let e384Parsed = try PublicKeyParser.parseRFC4716(e384RFC)
+        #expect(e384Parsed.type == .ecdsa384)
+
+        // ECDSA P-521
+        let e521 = try SwiftKeyGen.generateKey(type: .ecdsa521, comment: "ecdsa521-test") as! ECDSAKey
+        let e521RFC = try KeyConverter.toRFC4716(key: e521)
+        let e521Parsed = try PublicKeyParser.parseRFC4716(e521RFC)
+        #expect(e521Parsed.type == .ecdsa521)
     }
 }
