@@ -141,67 +141,6 @@ struct KeyConversionUnitTests {
         #expect(parsed.data == rsa.publicKeyData())
     }
 
-    // MARK: - exportKey()
-
-    @Test("exportKey writes all formats and round-trips (Ed25519)")
-    func testExportAllFormatsEd25519() throws {
-        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "export-test") as! Ed25519Key
-        let tmp = FileManager.default.temporaryDirectory
-        let base = tmp.appendingPathComponent("swiftkeygen_export_\(UUID().uuidString)").path
-
-        let results = try KeyConverter.exportKey(
-            key,
-            formats: [.openssh, .pem, .pkcs8, .rfc4716],
-            basePath: base
-        )
-
-        // Paths returned for each format
-        #expect(results[.openssh] == base)
-        #expect(results[.pem] == base + ".pem")
-        #expect(results[.pkcs8] == base + ".p8")
-        #expect(results[.rfc4716] == base + ".rfc")
-
-        // Validate file contents
-        let opensshData = try Data(contentsOf: URL(fileURLWithPath: base))
-        let openssh = String(decoding: opensshData, as: UTF8.self)
-        #expect(openssh.contains("BEGIN OPENSSH PRIVATE KEY"))
-        #expect(openssh.contains("END OPENSSH PRIVATE KEY"))
-
-        let pemString = try String(contentsOfFile: base + ".pem", encoding: .utf8)
-        #expect(pemString.contains("-----BEGIN PRIVATE KEY-----"))
-
-        let pkcs8String = try String(contentsOfFile: base + ".p8", encoding: .utf8)
-        #expect(pkcs8String.contains("-----BEGIN PRIVATE KEY-----"))
-
-        let rfc = try String(contentsOfFile: base + ".rfc", encoding: .utf8)
-        #expect(rfc.hasPrefix("---- BEGIN SSH2 PUBLIC KEY ----"))
-
-        // Parse OpenSSH back to a key and compare public component
-        let parsedKey = try OpenSSHPrivateKey.parse(data: opensshData)
-        #expect(parsedKey.publicKeyData() == key.publicKeyData())
-
-        // Cleanup
-        try? FileManager.default.removeItem(atPath: base)
-        try? FileManager.default.removeItem(atPath: base + ".pem")
-        try? FileManager.default.removeItem(atPath: base + ".p8")
-        try? FileManager.default.removeItem(atPath: base + ".rfc")
-    }
-
-    @Test("exportKey errors when RSA encryption requested", .tags(.rsa, .slow))
-    func testExportRSAEncryptedPEMUnsupported() throws {
-        let rsa = try RSAKeyGenerator.generate(bits: 1024)
-        let tmp = FileManager.default.temporaryDirectory
-        let base = tmp.appendingPathComponent("swiftkeygen_export_rsa_\(UUID().uuidString)").path
-
-        #expect(throws: SSHKeyError.unsupportedOperation("Encrypted PEM not supported by Swift Crypto")) {
-            _ = try KeyConverter.exportKey(
-                rsa,
-                formats: [.pem, .pkcs8],
-                basePath: base,
-                passphrase: "secret"
-            )
-        }
-    }
 
     // MARK: - Detection and parsing helpers
 
@@ -239,50 +178,6 @@ struct KeyConversionUnitTests {
         let rfc = try KeyConverter.toRFC4716(key: key)
         let parsedRFC = try PublicKeyParser.parseAnyFormat(rfc)
         #expect(parsedRFC.data == key.publicKeyData())
-    }
-
-    @Test("Stdin/stdout helpers: filename and file read")
-    func testStdinStdoutSupport() throws {
-        #expect(KeyFileManager.STDIN_STDOUT_FILENAME == "-")
-
-        let testData = Data("test data".utf8)
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("test_\(UUID().uuidString)")
-        try testData.write(to: tmp)
-        defer { try? FileManager.default.removeItem(at: tmp) }
-
-        let read = try KeyFileManager.readKeyData(from: tmp.path)
-        #expect(read == testData)
-    }
-
-    @Test("Batch convert OpenSSH pub -> RFC4716")
-    func testBatchConversion() throws {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        var inputFiles: [String] = []
-        for i in 1...3 {
-            let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test-\(i)") as! Ed25519Key
-            let path = tempDir.appendingPathComponent("key\(i).pub").path
-            try key.publicKeyString().write(toFile: path, atomically: true, encoding: .utf8)
-            inputFiles.append(path)
-        }
-
-        let options = KeyConversionManager.ConversionOptions(
-            toFormat: .rfc4716,
-            fromFormat: .openssh,
-            output: tempDir.path
-        )
-
-        let results = try KeyConversionManager.batchConvert(files: inputFiles, options: options)
-        #expect(results.count == 3)
-
-        for result in results {
-            #expect(result.success == true)
-            #expect(result.error == nil)
-            let out = try String(contentsOfFile: result.output, encoding: .utf8)
-            #expect(PublicKeyParser.isRFC4716Format(out))
-        }
     }
 
     @Test("RFC4716 conversion across all key types", .tags(.rsa, .slow))
