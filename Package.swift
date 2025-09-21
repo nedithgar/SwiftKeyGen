@@ -40,5 +40,6 @@ let package = Package(
             name: "SwiftKeyGenCLI",
             dependencies: ["SwiftKeyGen"]
         )
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )
