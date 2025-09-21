@@ -110,7 +110,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 ~~- [ ] SSH1 format (legacy)~~
 
 ### Output Options
-- [ ] Bubble babble format for fingerprints
+- [x] Bubble babble format for fingerprints
 
 ### Compatibility Features
 ~~- [ ] SSH1 protocol support (deprecated)~~
