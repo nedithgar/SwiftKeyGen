@@ -74,25 +74,25 @@ struct SSHDecoder {
         let length = try decodeUInt32()
         let len = Int(length)
         let end = offset + len
-        guard end <= data.count else {
-            throw SSHKeyError.invalidKeyData
+        guard end <= data.count else { throw SSHKeyError.invalidKeyData }
+        if len == 0 { return Data() }
+        let slice = data.span.extracting(offset ..< end)
+        // Materialize the borrowed span as an Array first (explicit copy), then
+        // wrap that Array in a Data value. This path avoids withUnsafeBytes and
+        // any implicit reliance on Span conforming to Sequence -> Data init.
+        let sliceCount = slice.count
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(sliceCount)
+        // Index-based copy since Span<UInt8> does not (yet) conform to Sequence.
+        var i = 0
+        while i < sliceCount {
+            bytes.append(slice[i])
+            i &+= 1
         }
-        if len == 0 {
-            return Data()
-        }
-        let tt = data.span
-
-        // Avoid subdata(in:) which may trap in debug builds when backed by
-        // certain Foundation storage kinds even if the range is checked.
-        // Copy directly from the underlying contiguous buffer instead.
-        let result: Data = data.withUnsafeBytes { rawBuf in
-            precondition(rawBuf.count >= end)
-            let base = rawBuf.baseAddress!.advanced(by: offset)
-            return Data(bytes: base, count: len)
-        }
+        let result = Data(bytes)
         offset = end
         return result
-    }
+}
     
     mutating func decodeString() throws -> String {
         let data = try decodeData()

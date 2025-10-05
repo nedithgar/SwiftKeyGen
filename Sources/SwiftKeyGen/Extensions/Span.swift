@@ -1,8 +1,16 @@
+import Foundation
+
 /// Shared helpers for reading multi‑byte integer values from a `Span<UInt8>`.
 ///
 /// Centralizes logic previously duplicated in Blowfish and BCrypt implementations.
 /// All reads are big‑endian to match OpenSSH and Blowfish expectations.
 extension Span where Element == UInt8 {
+
+    @inlinable
+    func toData() -> Data {
+        self.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
     /// Read 4 bytes as a big‑endian `UInt32`, advancing `offset` cyclically.
     ///
     /// The read consumes four successive bytes starting at `offset`, wrapping
