@@ -72,12 +72,25 @@ struct SSHDecoder {
     
     mutating func decodeData() throws -> Data {
         let length = try decodeUInt32()
-        guard offset + Int(length) <= data.count else {
+        let len = Int(length)
+        let end = offset + len
+        guard end <= data.count else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        let result = data.subdata(in: offset..<offset+Int(length))
-        offset += Int(length)
+        if len == 0 {
+            return Data()
+        }
+        let tt = data.span
+
+        // Avoid subdata(in:) which may trap in debug builds when backed by
+        // certain Foundation storage kinds even if the range is checked.
+        // Copy directly from the underlying contiguous buffer instead.
+        let result: Data = data.withUnsafeBytes { rawBuf in
+            precondition(rawBuf.count >= end)
+            let base = rawBuf.baseAddress!.advanced(by: offset)
+            return Data(bytes: base, count: len)
+        }
+        offset = end
         return result
     }
     
@@ -98,12 +111,19 @@ struct SSHDecoder {
     }
     
     mutating func decodeBytes(count: Int) throws -> [UInt8] {
-        guard offset + count <= data.count else {
+        let end = offset + count
+        guard end <= data.count else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        let result = Array(data.subdata(in: offset..<offset+count))
-        offset += count
+        if count == 0 { return [] }
+
+        let result: [UInt8] = data.withUnsafeBytes { rawBuf in
+            precondition(rawBuf.count >= end)
+            let base = rawBuf.bindMemory(to: UInt8.self)
+            let startPtr = base.baseAddress!.advanced(by: offset)
+            return Array(UnsafeBufferPointer(start: startPtr, count: count))
+        }
+        offset = end
         return result
     }
     
