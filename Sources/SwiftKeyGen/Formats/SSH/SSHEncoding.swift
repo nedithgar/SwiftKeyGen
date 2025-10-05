@@ -77,19 +77,7 @@ struct SSHDecoder {
         guard end <= data.count else { throw SSHKeyError.invalidKeyData }
         if len == 0 { return Data() }
         let slice = data.span.extracting(offset ..< end)
-        // Materialize the borrowed span as an Array first (explicit copy), then
-        // wrap that Array in a Data value. This path avoids withUnsafeBytes and
-        // any implicit reliance on Span conforming to Sequence -> Data init.
-        let sliceCount = slice.count
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(sliceCount)
-        // Index-based copy since Span<UInt8> does not (yet) conform to Sequence.
-        var i = 0
-        while i < sliceCount {
-            bytes.append(slice[i])
-            i &+= 1
-        }
-        let result = Data(bytes)
+        let result = slice.toData()
         offset = end
         return result
 }
