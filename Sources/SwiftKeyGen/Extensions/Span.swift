@@ -29,18 +29,26 @@ extension Span where Element == UInt8 {
         self.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 
-    /// Returns a new `[UInt8]` copied from the span's elements.
+    /// Returns a new `[UInt8]` containing a copy of this span’s bytes.
     ///
-    /// Useful when a mutable byte array is required, or when avoiding
-    /// allocation through `Data` intermediates for small transformations.
-    /// - Complexity: O(n)
+    /// Use this when a mutable, random-access Swift array of bytes is required
+    /// (e.g. in-place transformations, algorithms that need `Array` semantics),
+    /// but you don’t need the Foundation features of `Data`.
+    ///
+    /// The operation performs a single contiguous copy of the span’s memory
+    /// (implemented via `withUnsafeBufferPointer`) and does not iterate
+    /// element‑by‑element. The resulting array owns its storage and is
+    /// independent of the original span.
+    ///
+    /// - Returns: A newly allocated `[UInt8]` with the same byte order as the span.
+    /// - Complexity: O(*n*) where *n* = `count` (copies each byte once).
+    /// - Important: This allocates. In tight decoding loops prefer operating
+    ///   on the `Span` directly or, if an owned buffer is needed for APIs,
+    ///   consider `toData()` when Foundation interoperability is desired.
+    /// - SeeAlso: ``toData()`` for producing an owned `Data` buffer.
     @inlinable
-    func toArray() -> [UInt8] {
-        var out: [UInt8] = []
-        out.reserveCapacity(count)
-        var i = 0
-        while i < count { out.append(self[i]); i &+= 1 }
-        return out
+    func toUInt8Array() -> [UInt8] {
+        self.withUnsafeBufferPointer { Array($0) }
     }
 
     /// Read 4 bytes as a big‑endian `UInt32`, advancing `offset` cyclically.

@@ -107,7 +107,7 @@ struct SSHDecoder {
 
         // Borrow the requested slice as a Span and materialize as an Array.
         let slice = data.span.extracting(offset ..< end)
-        let result = slice.toArray()
+        let result = slice.toUInt8Array()
         offset = end
         return result
     }
