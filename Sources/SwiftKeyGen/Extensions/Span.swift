@@ -6,6 +6,24 @@ import Foundation
 /// All reads are big‑endian to match OpenSSH and Blowfish expectations.
 extension Span where Element == UInt8 {
 
+    /// Returns a new `Data` value containing a copy of the bytes viewed by this span.
+    ///
+    /// Use this when an owned, heap‑backed buffer is required by an API that
+    /// cannot operate on a `Span` directly. The operation performs a linear
+    /// copy of the span's elements into freshly allocated storage.
+    ///
+    /// ```swift
+    /// let span: Span<UInt8> = Span([0x41, 0x42, 0x43])
+    /// let data = span.toData()
+    /// // data == Data([0x41, 0x42, 0x43]) and is independent of `span`.
+    /// ```
+    ///
+    /// - Returns: A newly allocated `Data` containing the span's bytes in order.
+    /// - Complexity: O(*n*) where *n* is `count` (copies each byte once).
+    /// - Important: This allocates and copies. When possible, prefer passing the
+    ///   span itself (or converting to another non‑owning view) to avoid heap
+    ///   traffic and reduce allocations in tight loops.
+    /// - SeeAlso: ``InlineArray/toData()``
     @inlinable
     func toData() -> Data {
         self.withUnsafeBufferPointer { Data(buffer: $0) }
