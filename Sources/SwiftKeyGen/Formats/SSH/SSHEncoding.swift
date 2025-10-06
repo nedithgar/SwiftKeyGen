@@ -105,12 +105,9 @@ struct SSHDecoder {
         }
         if count == 0 { return [] }
 
-        let result: [UInt8] = data.withUnsafeBytes { rawBuf in
-            precondition(rawBuf.count >= end)
-            let base = rawBuf.bindMemory(to: UInt8.self)
-            let startPtr = base.baseAddress!.advanced(by: offset)
-            return Array(UnsafeBufferPointer(start: startPtr, count: count))
-        }
+        // Borrow the requested slice as a Span and materialize as an Array.
+        let slice = data.span.extracting(offset ..< end)
+        let result = slice.toArray()
         offset = end
         return result
     }

@@ -29,6 +29,20 @@ extension Span where Element == UInt8 {
         self.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 
+    /// Returns a new `[UInt8]` copied from the span's elements.
+    ///
+    /// Useful when a mutable byte array is required, or when avoiding
+    /// allocation through `Data` intermediates for small transformations.
+    /// - Complexity: O(n)
+    @inlinable
+    func toArray() -> [UInt8] {
+        var out: [UInt8] = []
+        out.reserveCapacity(count)
+        var i = 0
+        while i < count { out.append(self[i]); i &+= 1 }
+        return out
+    }
+
     /// Read 4 bytes as a big‑endian `UInt32`, advancing `offset` cyclically.
     ///
     /// The read consumes four successive bytes starting at `offset`, wrapping
