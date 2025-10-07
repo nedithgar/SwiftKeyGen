@@ -1,23 +1,46 @@
 import Foundation
 import Crypto
 
-/// Centralized manager for key format conversions.
+/// Centralized manager for converting SSH keys between supported formats.
+///
+/// KeyConversionManager focuses on public key conversions across commonly used
+/// SSH formats. It auto‑detects input formats when not explicitly provided and
+/// writes results to a file or standard output. Private key export to PEM/PKCS#8
+/// is intentionally not supported here; use dedicated private‑key APIs instead.
 public struct KeyConversionManager {
     
-    /// Input/output options for conversion.
+    /// Options that control input, output, and format selection for conversions.
     public struct ConversionOptions {
-        /// Input source; use "-" to read from stdin.
+        /// Input source path or `-` for standard input.
+        ///
+        /// Defaults to `-`, which reads the entire input from stdin.
         public var input: String = "-"      // Default to stdin
-        /// Output destination; use "-" to write to stdout.
+        /// Output destination path or `-` for standard output.
+        ///
+        /// Defaults to `-`, which writes the converted key to stdout.
         public var output: String = "-"     // Default to stdout
-        /// Explicit input format. If `nil`, the manager auto‑detects the format.
+        /// Explicit input format if known.
+        ///
+        /// When `nil` (the default), the manager attempts to auto‑detect the
+        /// input format based on headers, magic bytes, or known prefixes.
         public var fromFormat: KeyFormat?   // Auto-detect if nil
         /// Target format to convert to.
         public var toFormat: KeyFormat
-        /// Optional passphrase for formats supporting encryption.
+        /// Optional passphrase for formats that support encryption.
+        ///
+        /// Note: The public conversion APIs in this type do not export private
+        /// keys. As a result, this value is typically unused when converting
+        /// public keys between OpenSSH and RFC4716.
         public var passphrase: String?
         
-        /// Create a new set of conversion options.
+        /// Creates a new set of conversion options used by `convertKey(options:)`.
+        ///
+        /// - Parameters:
+        ///   - toFormat: The target output format.
+        ///   - fromFormat: The explicit input format, or `nil` to auto‑detect.
+        ///   - input: The input path or `-` for stdin. Defaults to `-`.
+        ///   - output: The output path or `-` for stdout. Defaults to `-`.
+        ///   - passphrase: An optional passphrase for formats that support it.
         public init(toFormat: KeyFormat, 
                     fromFormat: KeyFormat? = nil,
                     input: String = "-",
@@ -31,7 +54,23 @@ public struct KeyConversionManager {
         }
     }
     
-    /// Convert a key between formats.
+    /// Converts a single key from an input format to a target format.
+    ///
+    /// The method reads the input from a file path or stdin (`-`), attempts to
+    /// determine the source format (unless explicitly provided), parses the
+    /// public key, and emits it in the requested target format to a file or
+    /// stdout (`-`).
+    ///
+    /// Supported conversions are limited to public key formats:
+    /// - Input: OpenSSH public, RFC4716 public, PEM/PKCS#8 public forms
+    /// - Output: OpenSSH public, RFC4716 public
+    ///
+    /// Exporting to PEM or PKCS#8 requires private key material and is not
+    /// supported by this API.
+    ///
+    /// - Parameter options: The input/output and format options.
+    /// - Throws: `SSHKeyError` when detection fails, parsing fails, or when a
+    ///   requested operation is unsupported (e.g., PEM/PKCS#8 export).
     public static func convertKey(options: ConversionOptions) throws {
         // Read input
         let inputString: String
@@ -129,7 +168,16 @@ public struct KeyConversionManager {
         }
     }
     
-    /// Detect the format of key data.
+    /// Detects the most likely key format for a given key string.
+    ///
+    /// The detection considers well‑known PEM headers, RFC4716 markers, and
+    /// OpenSSH prefixes. Private and public key indicators are handled where
+    /// applicable to distinguish `.pem` from `.pkcs8`.
+    ///
+    /// - Parameter keyString: The raw key contents to inspect.
+    /// - Returns: The detected `KeyFormat` value.
+    /// - Throws: `SSHKeyError.unsupportedOperation` when the input does not
+    ///   resemble any supported format.
     public static func detectFormat(from keyString: String) throws -> KeyFormat {
         let trimmed = keyString.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -208,7 +256,20 @@ public struct KeyConversionManager {
         }
     }
     
-    /// Convert multiple keys in batch
+    /// Converts multiple keys in a batch, returning per‑file results.
+    ///
+    /// Each file in `files` is converted using `options` as a template. The
+    /// input path in `options` is replaced per file. If `options.output` is not
+    /// `-`, an output filename is synthesized based on the input name and
+    /// `options.toFormat` (e.g., `.pub` for OpenSSH, `.rfc` for RFC4716).
+    ///
+    /// - Parameters:
+    ///   - files: Absolute or relative paths to input files to convert.
+    ///   - options: A template of conversion options applied to each file.
+    /// - Returns: An array of tuples containing the input path, resolved output
+    ///   path, success flag, and an optional `Error` if the conversion failed.
+    /// - Throws: Propagates errors that occur outside of per‑file handling
+    ///   (rare). Most per‑file failures are captured in the returned results.
     public static func batchConvert(files: [String], options: ConversionOptions) throws -> [(input: String, output: String, success: Bool, error: Error?)] {
         var results: [(input: String, output: String, success: Bool, error: Error?)] = []
         
