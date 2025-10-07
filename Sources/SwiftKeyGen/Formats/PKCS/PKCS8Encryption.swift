@@ -2,10 +2,60 @@ import Foundation
 import CommonCrypto
 import Crypto
 
-/// PKCS#8 encryption support using PBES2 (Password-Based Encryption Scheme 2)
+/// High–level helpers for producing **encrypted PKCS#8 (``ENCRYPTED PRIVATE KEY``)** blobs
+/// using the PBES2 scheme (Password‑Based Encryption Scheme 2) with PBKDF2 key
+/// derivation and an AES‑128‑CBC content encryption algorithm.
+///
+/// This type focuses on the *encoding* side of PKCS#8 when a caller wants to wrap
+/// an already assembled (unencrypted) `PrivateKeyInfo` (PKCS#8) structure in the
+/// PBES2 envelope defined in RFC 8018. It intentionally mirrors OpenSSL's legacy
+/// defaults (HMAC‑SHA1 PRF, AES‑128‑CBC, 2048 iterations) to maximize
+/// interoperability with existing tools (`openssl pkcs8`, `ssh-keygen`, etc.).
+///
+/// ### Features
+/// - PBKDF2 (HMAC‑SHA1) key derivation with configurable iteration count
+/// - Random salt and IV generation using the project's secure RNG utilities
+/// - PKCS#7 padding + AES‑128‑CBC encryption
+/// - Assembly of the PBES2 `AlgorithmIdentifier` ASN.1 structure
+/// - PEM formatting (`-----BEGIN ENCRYPTED PRIVATE KEY-----`)
+///
+/// ### Security Notes
+/// - The historical OpenSSL default PRF (HMAC‑SHA1) is retained for compatibility.
+///   Modern deployments SHOULD prefer HMAC‑SHA256+ and higher iteration counts or
+///   memory‑hard KDFs (scrypt / Argon2). A future enhancement may add alternate
+///   PRFs and ciphers; this API is deliberately scoped and currently internalizes
+///   most implementation details pending broader format negotiation support.
+/// - Iteration count 2048 is considered low by contemporary standards; callers
+///   planning to store long‑term secrets SHOULD raise this (consider 100k+).
+///
+/// ### Usage Example
+/// ```swift
+/// let rawPrivateKeyInfo: Data = /* DER of PrivateKeyInfo (unencrypted PKCS#8) */
+/// let (ciphertext, params) = try PKCS8Encryption.encryptPBES2(
+///     data: rawPrivateKeyInfo,
+///     passphrase: "correct horse battery staple",
+///     iterations: PKCS8Encryption.defaultIterations
+/// )
+/// let algId = PKCS8Encryption.createPBES2AlgorithmIdentifier(parameters: params)
+/// let encryptedInfo = PKCS8Encryption.encodeEncryptedPrivateKeyInfo(
+///     algorithmIdentifier: algId,
+///     encryptedData: ciphertext
+/// )
+/// let pem = PKCS8Encryption.formatEncryptedPKCS8PEM(encryptedPrivateKeyInfo: encryptedInfo)
+/// print(pem)
+/// ```
+///
+/// Only the `defaultIterations` constant is public today; the remaining helpers
+/// are kept `internal` while the broader PKCS#8 parsing / generation surface is
+/// stabilized. If you need additional capabilities, open an issue describing
+/// the interoperability or security requirement.
 public struct PKCS8Encryption {
     
-    /// Default PBKDF2 iteration count matching common OpenSSL defaults.
+    /// The default PBKDF2 iteration count (2048) chosen for parity with
+    /// historical OpenSSL output. This value is intentionally conservative for
+    /// compatibility, not security. Prefer supplying a larger iteration count
+    /// (e.g. 100_000 or higher) when generating new encrypted key material in
+    /// environments where increased derivation cost is acceptable.
     public static let defaultIterations = 2048
     static let defaultPRF = "hmacWithSHA1"  // OpenSSL default for PBES2
     static let defaultCipher = "aes-128-cbc"
