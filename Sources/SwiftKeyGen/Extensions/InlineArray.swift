@@ -25,6 +25,6 @@ extension InlineArray where Element == UInt8 {
     /// - SeeAlso: ``Span/toData()``
     @inlinable 
     func toData() -> Data {
-        self.span.toData()
+        span.toData()
     }
 }

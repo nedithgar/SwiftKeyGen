@@ -26,7 +26,7 @@ extension Span where Element == UInt8 {
     /// - SeeAlso: ``InlineArray/toData()``
     @inlinable
     func toData() -> Data {
-        self.withUnsafeBufferPointer { Data(buffer: $0) }
+        withUnsafeBufferPointer { Data(buffer: $0) }
     }
 
     /// Returns a new `[UInt8]` containing a copy of this span’s bytes.
@@ -48,7 +48,7 @@ extension Span where Element == UInt8 {
     /// - SeeAlso: ``toData()`` for producing an owned `Data` buffer.
     @inlinable
     func toUInt8Array() -> [UInt8] {
-        self.withUnsafeBufferPointer { Array($0) }
+        withUnsafeBufferPointer { Array($0) }
     }
 
     /// Read 4 bytes as a big‑endian `UInt32`, advancing `offset` cyclically.
