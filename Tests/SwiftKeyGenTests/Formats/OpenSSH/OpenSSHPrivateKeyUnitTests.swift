@@ -264,5 +264,231 @@ struct OpenSSHPrivateKeyUnitTests {
             _ = try OpenSSHPrivateKey.parse(data: pem)
         }
     }
+
+    // MARK: - Round-trip Serialization Tests
+
+    @Test("Ed25519 key round-trip without passphrase")
+    func testEd25519RoundTripNoPassphrase() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test@example.com") as! Ed25519Key
+        
+        let serialized = try OpenSSHPrivateKey.serialize(key: key)
+        let serializedString = String(data: serialized, encoding: .utf8)!
+        
+        // Verify PEM format
+        #expect(serializedString.hasPrefix("-----BEGIN OPENSSH PRIVATE KEY-----"))
+        #expect(serializedString.hasSuffix("-----END OPENSSH PRIVATE KEY-----\n"))
+        #expect(serializedString.contains("-----END OPENSSH PRIVATE KEY-----"))
+        
+        // Parse it back
+        let parsedKey = try OpenSSHPrivateKey.parse(data: serialized)
+        
+        // Verify they match
+        #expect(parsedKey.keyType == .ed25519)
+        #expect(parsedKey.comment == "test@example.com")
+        #expect(parsedKey.publicKeyString() == key.publicKeyString())
+    }
+
+    @Test("Ed25519 key round-trip with passphrase")
+    func testEd25519RoundTripWithPassphrase() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "encrypted@example.com") as! Ed25519Key
+        let passphrase = "test-password"
+        
+        // Serialize with passphrase
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: passphrase)
+        let serializedString = String(data: serialized, encoding: .utf8)!
+        
+        // Verify PEM format
+        #expect(serializedString.hasPrefix("-----BEGIN OPENSSH PRIVATE KEY-----"))
+        #expect(serializedString.hasSuffix("-----END OPENSSH PRIVATE KEY-----\n"))
+        
+        // The encrypted content should be different from unencrypted
+        let unencrypted = try OpenSSHPrivateKey.serialize(key: key)
+        #expect(serialized != unencrypted)
+        
+        // Try to parse without passphrase - should fail
+        #expect(throws: SSHKeyError.passphraseRequired) {
+            _ = try OpenSSHPrivateKey.parse(data: serialized)
+        }
+        
+        // Parse with correct passphrase
+        let parsedKey = try OpenSSHPrivateKey.parse(data: serialized, passphrase: passphrase)
+        
+        // Verify they match
+        #expect(parsedKey.keyType == .ed25519)
+        #expect(parsedKey.comment == "encrypted@example.com")
+        #expect(parsedKey.publicKeyString() == key.publicKeyString())
+    }
+
+    @Test("different passphrases produce different ciphertext")
+    func testDifferentPassphrasesDifferentOutput() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
+        
+        let encrypted1 = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: "password1",
+            rounds: 16
+        )
+        
+        let encrypted2 = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: "password2",
+            rounds: 16
+        )
+        
+        // Different passphrases should produce different encrypted output
+        #expect(encrypted1 != encrypted2)
+    }
+
+    @Test("ECDSA P-256 key round-trip with signing verification")
+    func testECDSAP256RoundTrip() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "test-p256@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P256!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("ECDSA P-384 key round-trip with signing verification")
+    func testECDSAP384RoundTrip() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa384, comment: "test-p384@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P384!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("ECDSA P-521 key round-trip with signing verification")
+    func testECDSAP521RoundTrip() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa521, comment: "test-p521@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P521!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("RSA key round-trip with signing verification", .tags(.rsa, .slow))
+    func testRSARoundTrip() throws {
+        let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@example.com") as! RSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! RSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, RSA!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    // MARK: - Cipher Support Tests
+
+    @Test("Ed25519 with AES-128-CBC cipher")
+    func testEd25519WithAES128CBC() throws {
+        let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
+        
+        let serialized = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: "testpass",
+            comment: key.comment,
+            cipher: "aes128-cbc"
+        )
+        
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.publicKeyString() == key.publicKeyString())
+    }
+
+    @Test("Ed25519 with 3DES-CBC cipher")
+    func testEd25519With3DESCBC() throws {
+        let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
+        
+        let serialized = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: "testpass",
+            comment: key.comment,
+            cipher: "3des-cbc"
+        )
+        
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.publicKeyString() == key.publicKeyString())
+    }
+
+    @Test("Ed25519 with ChaCha20-Poly1305 cipher")
+    func testEd25519WithChaCha20Poly1305() throws {
+        let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
+        
+        let serialized = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: "testpass",
+            comment: key.comment,
+            cipher: "chacha20-poly1305@openssh.com"
+        )
+        
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.publicKeyString() == key.publicKeyString())
+    }
+
+    // MARK: - File I/O Tests
+
+    @Test("file output with passphrase via KeyFileManager")
+    func testFileOutputWithPassphrase() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let privatePath = tempDir.appendingPathComponent("test_ed25519_\(UUID().uuidString)").path
+        let publicPath = privatePath + ".pub"
+        
+        defer {
+            try? FileManager.default.removeItem(atPath: privatePath)
+            try? FileManager.default.removeItem(atPath: publicPath)
+        }
+        
+        // Generate with passphrase
+        try KeyFileManager.generateKeyPairFiles(
+            type: .ed25519,
+            privatePath: privatePath,
+            comment: "passphrase-test@example.com",
+            passphrase: "my-secure-passphrase"
+        )
+        
+        // Verify files exist
+        #expect(FileManager.default.fileExists(atPath: privatePath))
+        #expect(FileManager.default.fileExists(atPath: publicPath))
+        
+        // Read private key file
+        let privateKeyData = try Data(contentsOf: URL(fileURLWithPath: privatePath))
+        let privateKeyString = String(data: privateKeyData, encoding: .utf8)!
+        
+        // Verify OpenSSH format
+        #expect(privateKeyString.hasPrefix("-----BEGIN OPENSSH PRIVATE KEY-----"))
+        #expect(privateKeyString.contains("-----END OPENSSH PRIVATE KEY-----"))
+        
+        // Verify we can parse it back with the passphrase
+        let parsed = try OpenSSHPrivateKey.parse(data: privateKeyData, passphrase: "my-secure-passphrase")
+        #expect(parsed.comment == "passphrase-test@example.com")
+    }
 }
 
