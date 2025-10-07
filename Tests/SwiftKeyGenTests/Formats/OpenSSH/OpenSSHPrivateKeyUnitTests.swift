@@ -51,7 +51,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(dec.remaining == Int(encLen))
     }
 
-    @Test("serialize (bcrypt) encodes KDF salt and rounds")
+    @Test("serialize (bcrypt) encodes KDF salt and rounds", .tags(.slow))
     func testSerializeEncryptedKDFParameters() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "kdf@test")
         let rounds = 8
@@ -89,7 +89,7 @@ struct OpenSSHPrivateKeyUnitTests {
         }
     }
 
-    @Test("AEAD ciphers write length excluding tag")
+    @Test("AEAD ciphers write length excluding tag", .tags(.slow))
     func testAEADCipherLengthAccounting() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "aead@test")
         let cipher = "aes256-gcm@openssh.com"
@@ -117,7 +117,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(dec.remaining == Int(encLen) + authLen)
     }
 
-    @Test("parse with wrong passphrase -> invalidPassphrase")
+    @Test("parse with wrong passphrase -> invalidPassphrase", .tags(.slow))
     func testParseWrongPassphrase() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "wrongpass@test")
         let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: "correct", rounds: 6)
@@ -288,7 +288,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsedKey.publicKeyString() == key.publicKeyString())
     }
 
-    @Test("Ed25519 key round-trip with passphrase")
+    @Test("Ed25519 key round-trip with passphrase", .tags(.slow))
     func testEd25519RoundTripWithPassphrase() throws {
         let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "encrypted@example.com") as! Ed25519Key
         let passphrase = "test-password"
@@ -319,7 +319,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsedKey.publicKeyString() == key.publicKeyString())
     }
 
-    @Test("different passphrases produce different ciphertext")
+    @Test("different passphrases produce different ciphertext", .tags(.slow))
     func testDifferentPassphrasesDifferentOutput() throws {
         let key = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
         
@@ -371,7 +371,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(try key.verify(signature: sig, for: message))
     }
 
-    @Test("ECDSA P-521 key round-trip with signing verification")
+    @Test("ECDSA P-521 key round-trip with signing verification", .tags(.slow))
     func testECDSAP521RoundTrip() throws {
         let key = try SwiftKeyGen.generateKey(type: .ecdsa521, comment: "test-p521@example.com") as! ECDSAKey
         let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
@@ -405,7 +405,7 @@ struct OpenSSHPrivateKeyUnitTests {
 
     // MARK: - Cipher Support Tests
 
-    @Test("Ed25519 with AES-128-CBC cipher")
+    @Test("Ed25519 with AES-128-CBC cipher", .tags(.slow))
     func testEd25519WithAES128CBC() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
         
@@ -421,7 +421,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsed.publicKeyString() == key.publicKeyString())
     }
 
-    @Test("Ed25519 with 3DES-CBC cipher")
+    @Test("Ed25519 with 3DES-CBC cipher", .tags(.slow))
     func testEd25519With3DESCBC() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
         
@@ -437,7 +437,7 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsed.publicKeyString() == key.publicKeyString())
     }
 
-    @Test("Ed25519 with ChaCha20-Poly1305 cipher")
+    @Test("Ed25519 with ChaCha20-Poly1305 cipher", .tags(.slow))
     func testEd25519WithChaCha20Poly1305() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "test@example.com")
         
@@ -455,7 +455,7 @@ struct OpenSSHPrivateKeyUnitTests {
 
     // MARK: - File I/O Tests
 
-    @Test("file output with passphrase via KeyFileManager")
+    @Test("file output with passphrase via KeyFileManager", .tags(.slow))
     func testFileOutputWithPassphrase() throws {
         let tempDir = FileManager.default.temporaryDirectory
         let privatePath = tempDir.appendingPathComponent("test_ed25519_\(UUID().uuidString)").path
