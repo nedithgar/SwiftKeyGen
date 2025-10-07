@@ -388,7 +388,7 @@ struct PassphraseIntegrationTests {
     
     // MARK: - PEM/PKCS8 Format Passphrase Operations
     
-    @Test("ssh-keygen changes passphrase on our PEM key", .tags(.slow))
+    @Test("ssh-keygen changes passphrase on our PEM key")
     func testSSHKeygenChangesPassphraseOnOurPEM() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate ECDSA key and export to SEC1 PEM with passphrase
@@ -437,8 +437,8 @@ struct PassphraseIntegrationTests {
             #expect(oldPassResult.failed, "ssh-keygen should reject old passphrase")
         }
     }
-    
-    @Test("ssh-keygen changes passphrase on our PKCS8 key", .tags(.slow))
+
+    @Test("ssh-keygen changes passphrase on our PKCS8 key")
     func testSSHKeygenChangesPassphraseOnOurPKCS8() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate ECDSA key and export to PKCS8 with passphrase
