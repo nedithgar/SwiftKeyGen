@@ -1,11 +1,38 @@
 import Foundation
 import Crypto
 
-/// RSA private key backed by the project’s RSA implementation.
+/// A concrete SSH private key representing an RSA key pair.
+///
+/// `RSAKey` wraps the project’s RSA implementation (``Insecure/RSA``) and provides
+/// higher‑level conveniences aligned with OpenSSH tooling:
+///
+/// - Produces SSH wire‑format public key blobs (``publicKeyData()``)
+/// - Produces an OpenSSH `authorized_keys` style public key string (``publicKeyString()``)
+/// - Exposes PKCS#1 DER private key material (``privateKeyData()``) for downstream
+///   container formats (PEM / OpenSSH private key serialization is handled elsewhere)
+/// - Computes public key fingerprints across multiple hash + output formats (``fingerprint(hash:format:)``)
+///
+/// Instances are typically created via ``RSAKeyGenerator`` rather than directly.
+/// You can also construct one internally from an existing ``Insecure/RSA/PrivateKey``
+/// (e.g. after parsing) using the internal initializer.
 public struct RSAKey: SSHKey {
+    /// The strongly‑typed SSH key kind (`rsa`).
+    ///
+    /// Mirrors ``KeyType/rsa`` and is emitted as the leading field in SSH public key blobs
+    /// and OpenSSH `authorized_keys` lines.
     public let keyType = KeyType.rsa
+
+    /// Optional human‑readable comment appended in OpenSSH public key text form.
+    ///
+    /// Commonly used to store an email address, username, host, or purpose marker.
+    /// This value does not affect cryptographic properties.
     public var comment: String?
     
+    /// The underlying RSA private key primitive.
+    ///
+    /// Exposed publicly for advanced operations that may require direct access.
+    /// Prefer using the high‑level APIs on ``RSAKey`` where possible to preserve
+    /// consistent encoding and defensive behaviors.
     public let privateKey: Insecure.RSA.PrivateKey
     
     init(privateKey: Insecure.RSA.PrivateKey, comment: String? = nil) {
@@ -13,7 +40,18 @@ public struct RSAKey: SSHKey {
         self.comment = comment
     }
     
-    /// Return the SSH wire‑format public key (type, e, n).
+    /// Encodes the public portion of the key in SSH wire format.
+    ///
+    /// The returned blob matches the OpenSSH binary layout:
+    ///
+    /// ```
+    /// string    "ssh-rsa"          (algorithm identifier)
+    /// mpint     e                  (public exponent)
+    /// mpint     n                  (modulus)
+    /// ```
+    ///
+    /// - Returns: A `Data` value suitable for inclusion in higher‑level envelopes
+    ///   (e.g. `authorized_keys` text line base64 section, certificate signing, fingerprinting).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -25,9 +63,15 @@ public struct RSAKey: SSHKey {
         return encoder.encode()
     }
     
-    /// Return the raw private key bytes.
+    /// Exposes the raw private key encoded as PKCS#1 DER (`RSAPrivateKey`).
     ///
-    /// Note: Full OpenSSH private key serialization is handled elsewhere.
+    /// This does **not** wrap the key in PEM headers/footers or the OpenSSH
+    /// proprietary private key container; those responsibilities live in
+    /// format modules under `Sources/SwiftKeyGen/Formats/`.
+    ///
+    /// - Returns: DER bytes of the PKCS#1 `RSAPrivateKey` sequence, or empty `Data`
+    ///   if an encoding failure occurs (should be rare). Failures are intentionally
+    ///   swallowed to avoid throwing in simple introspection contexts.
     public func privateKeyData() -> Data {
         // Return PKCS#1 DER-encoded RSA private key (RSAPrivateKey)
         // OpenSSH private key container serialization is handled in Formats/OpenSSH
@@ -37,7 +81,12 @@ public struct RSAKey: SSHKey {
         return Data()
     }
     
-    /// Return the OpenSSH public key string for `authorized_keys`.
+    /// Produces the canonical OpenSSH public key text line (`authorized_keys` format).
+    ///
+    /// Layout: `<type> <base64(wire-format)> [comment]`.
+    ///
+    /// - Returns: A UTF‑8 string safe to append to an `authorized_keys` file or
+    ///   use in clipboard / provisioning contexts.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -49,7 +98,15 @@ public struct RSAKey: SSHKey {
         return result
     }
     
-    /// Compute a fingerprint for the public key.
+    /// Computes a fingerprint of the SSH public key blob using a selected hash and presentation.
+    ///
+    /// The hash is taken over the SSH wire‑format public key returned by ``publicKeyData()``.
+    ///
+    /// - Parameters:
+    ///   - hash: The hash function to apply (e.g. ``HashFunction/sha256``).
+    ///   - format: Output representation (hex, base64, bubble babble). Defaults to ``FingerprintFormat/base64``.
+    /// - Returns: A formatted fingerprint string. For SHA‑based hashes, a `SHA256:`/`SHA512:` prefix
+    ///   mirrors OpenSSH conventions. MD5 fingerprints are colon‑separated hex (legacy compatibility).
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -161,18 +218,27 @@ public struct RSAKey: SSHKey {
     }
 }
 
-/// Factory for generating RSA keys with size validation.
+/// Factory utilities for creating ``RSAKey`` instances with validated modulus sizes.
+///
+/// Centralizes OpenSSH‑aligned bounds checking (minimum and maximum bit lengths,
+/// byte alignment) to ensure consistent key strength and compatibility.
 public struct RSAKeyGenerator: SSHKeyGenerator {
     // Constants matching OpenSSH
     private static let SSH_RSA_MINIMUM_MODULUS_SIZE = 1024
     private static let OPENSSL_RSA_MAX_MODULUS_BITS = 16384
     
-    /// Generate a new RSA private key.
+    /// Generates a new RSA key pair.
+    ///
+    /// Performs strict validation before key generation:
+    /// - Enforces a minimum modulus size of 1024 bits (legacy lower bound; consider 2048+ for modern use)
+    /// - Enforces an upper bound consistent with OpenSSL (16384 bits)
+    /// - Requires the bit size to be an exact multiple of 8
     ///
     /// - Parameters:
-    ///   - bits: Modulus size in bits (multiple of 8). Defaults to ``KeyType/defaultBits`` for RSA.
-    ///   - comment: Optional key comment to attach.
-    /// - Throws: ``SSHKeyError/invalidKeySize(_:_)`` if the size is out of range.
+    ///   - bits: Desired modulus length. If `nil`, defaults to ``KeyType/rsa``'s ``KeyType/defaultBits``.
+    ///   - comment: Optional comment to embed in the resulting key’s public string.
+    /// - Returns: A freshly generated ``RSAKey`` containing a secure random key pair.
+    /// - Throws: ``SSHKeyError/invalidKeySize(_:_:)`` when outside accepted bounds or not byte aligned.
     public static func generate(bits: Int? = nil, comment: String? = nil) throws -> RSAKey {
         let keySize = bits ?? KeyType.rsa.defaultBits
         
