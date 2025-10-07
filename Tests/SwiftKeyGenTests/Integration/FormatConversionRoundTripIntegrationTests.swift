@@ -7,8 +7,8 @@ import Foundation
 struct FormatConversionRoundTripIntegrationTests {
     
     // MARK: - OpenSSH ↔ PEM Round-Trips
-    
-    @Test("OpenSSH → PEM → OpenSSH round-trip via both tools")
+
+    @Test("OpenSSH → PEM → OpenSSH round-trip via both tools", .tags(.rsa))
     func testOpenSSHToPEMToOpenSSHRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate key in OpenSSH format with ssh-keygen
@@ -84,57 +84,73 @@ struct FormatConversionRoundTripIntegrationTests {
     
     // MARK: - OpenSSH ↔ PKCS8 Round-Trips
     
-    @Test("OpenSSH → PKCS8 → OpenSSH round-trip via both tools", .tags(.slow))
+    @Test("OpenSSH → PKCS8 → OpenSSH round-trip via both tools", .tags(.rsa))
     func testOpenSSHToPKCS8ToOpenSSHRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
-            // Generate key in OpenSSH format with ssh-keygen
-            let opensshPath = tempDir.appendingPathComponent("openssh_key")
-            let pubPath = tempDir.appendingPathComponent("openssh_key.pub")
-            
+            // NOTE: OpenSSH's ssh-keygen does NOT reliably accept Ed25519 private keys in PKCS#8
+            // (it expects the proprietary OpenSSH private key format). This caused intermittent
+            // failures when using an Ed25519 key here. To ensure a deterministic round‑trip that
+            // both tools (ssh-keygen + our implementation) can parse via PKCS#8, we use RSA.
+            // This mirrors the rationale documented in the OpenSSH → PEM test above.
+            let opensshPath = tempDir.appendingPathComponent("openssh_rsa_key")
+            let pubPath = tempDir.appendingPathComponent("openssh_rsa_key.pub")
+
             let genResult = try IntegrationTestSupporter.runSSHKeygen([
-                "-t", "ed25519",
+                "-t", "rsa",
+                "-b", "2048",
                 "-f", opensshPath.path,
                 "-N", "",
                 "-C", "test@host.com"
             ])
-            #expect(genResult.succeeded, "ssh-keygen should generate OpenSSH key")
-            
-            // Get original fingerprint
+            #expect(genResult.succeeded, "ssh-keygen should generate OpenSSH RSA key")
+
+            // Original fingerprint (includes comment + algorithm in parentheses)
             let originalFP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", pubPath.path])
             #expect(originalFP.succeeded)
-            
-            // Convert to PKCS8 with our implementation
+
+            // Convert to PKCS#8 with our implementation
             let parsed = try KeyManager.readPrivateKey(from: opensshPath.path, passphrase: nil)
             let pkcs8Data = try KeyConverter.toPKCS8(key: parsed, passphrase: nil)
             let pkcs8String = String(data: pkcs8Data, encoding: .utf8)!
-            
-            // Write PKCS8 version
+
+            // Write PKCS#8 version
             let pkcs8Path = tempDir.appendingPathComponent("pkcs8_key.pem")
             try IntegrationTestSupporter.write(pkcs8String, to: pkcs8Path)
-            
-            // Verify ssh-keygen can read the PKCS8
+
+            // Verify ssh-keygen can read the PKCS#8 file we produced
             let pkcs8FP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", pkcs8Path.path])
-            #expect(pkcs8FP.succeeded, "ssh-keygen should read our PKCS8 format")
-            
-            // Compare fingerprints
-            let originalHash = originalFP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            let pkcs8Hash = pkcs8FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            #expect(originalHash == pkcs8Hash, "Fingerprints should match after OpenSSH→PKCS8 conversion")
-            
-            // Convert PKCS8 back to OpenSSH with our implementation
+            #expect(pkcs8FP.succeeded, "ssh-keygen should read our PKCS#8 RSA key")
+
+            // Normalize fingerprints to ignore comment differences (comments are not preserved in PKCS#8)
+            func normalize(_ line: String) -> String {
+                // Format typically: "2048 SHA256:abcdef... comment (RSA)" or without trailing alg
+                let parts = line.split(separator: " ")
+                guard parts.count >= 2 else { return line }
+                let bits = parts[0]
+                let fingerprint = parts[1]
+                // Keep algorithm suffix if present e.g. (RSA)
+                if let alg = parts.last, alg.first == "(", alg.last == ")" {
+                    return "\(bits) \(fingerprint) \(alg)"
+                }
+                return "\(bits) \(fingerprint)"
+            }
+
+            let originalHashNorm = normalize(originalFP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            let pkcs8HashNorm = normalize(pkcs8FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            #expect(originalHashNorm == pkcs8HashNorm, "Fingerprints (sans comment) should match after OpenSSH→PKCS#8 conversion")
+
+            // Convert PKCS#8 back to OpenSSH with our implementation
             let parsedPKCS8 = try KeyManager.readPrivateKey(from: pkcs8Path.path, passphrase: nil)
             let backToOpenSSHData = try OpenSSHPrivateKey.serialize(key: parsedPKCS8, passphrase: nil)
-            
-            // Write back to OpenSSH
-            let roundTripPath = tempDir.appendingPathComponent("roundtrip_key")
+
+            let roundTripPath = tempDir.appendingPathComponent("roundtrip_rsa_key")
             try backToOpenSSHData.write(to: roundTripPath)
-            
-            // Verify ssh-keygen can read it
+
             let roundTripFP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", roundTripPath.path])
-            #expect(roundTripFP.succeeded, "ssh-keygen should read round-trip OpenSSH key")
-            
-            let roundTripHash = roundTripFP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            #expect(originalHash == roundTripHash, "Fingerprints should match after full round-trip")
+            #expect(roundTripFP.succeeded, "ssh-keygen should read round‑trip OpenSSH RSA key")
+
+            let roundTripHashNorm = normalize(roundTripFP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            #expect(originalHashNorm == roundTripHashNorm, "Fingerprints (sans comment) should match after full PKCS#8 round‑trip")
         }
     }
     
@@ -143,8 +159,13 @@ struct FormatConversionRoundTripIntegrationTests {
     @Test("PEM → PKCS8 → PEM round-trip via both tools", .tags(.slow))
     func testPEMToPKCS8ToPEMRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
-            // Generate key in PEM format with our implementation
-            let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "test@host.com") as! Ed25519Key
+            // IMPORTANT: Use RSA here instead of Ed25519.
+            // OpenSSH's ssh-keygen does not reliably accept Ed25519 private keys in generic
+            // PKCS#8 PEM form (it expects the proprietary "OPENSSH PRIVATE KEY" container).
+            // This previously caused spurious failures ("is not a key file"). RSA PKCS#1/PKCS#8
+            // are fully supported for import/export, giving us a deterministic round‑trip across
+            // both implementations. Mirrors rationale in the OpenSSH↔PEM / PKCS#8 tests above.
+            let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@host.com")
             let pemString = try KeyConverter.toPEM(key: key, passphrase: nil)
             
             // Write PEM version
@@ -168,9 +189,21 @@ struct FormatConversionRoundTripIntegrationTests {
             #expect(pkcs8FP.succeeded, "ssh-keygen should read our PKCS8 format")
             
             // Compare fingerprints
-            let pem1Hash = pem1FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            let pkcs8Hash = pkcs8FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            #expect(pem1Hash == pkcs8Hash, "Fingerprints should match after PEM→PKCS8 conversion")
+            // Normalize fingerprints to ignore absent comments (PKCS#1 / PKCS#8 don't carry them)
+            func normalize(_ line: String) -> String {
+                let parts = line.split(separator: " ")
+                guard parts.count >= 2 else { return line }
+                let bits = parts[0]
+                let fingerprint = parts[1]
+                if let alg = parts.last, alg.first == "(", alg.last == ")" { // keep algorithm suffix e.g. (RSA)
+                    return "\(bits) \(fingerprint) \(alg)"
+                }
+                return "\(bits) \(fingerprint)"
+            }
+
+            let pem1Hash = normalize(pem1FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            let pkcs8Hash = normalize(pkcs8FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            #expect(pem1Hash == pkcs8Hash, "Fingerprints (sans comment) should match after PEM→PKCS#8 conversion")
             
             // Convert PKCS8 back to PEM with our implementation
             let parsedPKCS8 = try KeyManager.readPrivateKey(from: pkcs8Path.path, passphrase: nil)
@@ -184,8 +217,8 @@ struct FormatConversionRoundTripIntegrationTests {
             let pem2FP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", pemPath2.path])
             #expect(pem2FP.succeeded, "ssh-keygen should read round-trip PEM key")
             
-            let pem2Hash = pem2FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            #expect(pem1Hash == pem2Hash, "Fingerprints should match after full round-trip")
+            let pem2Hash = normalize(pem2FP.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
+            #expect(pem1Hash == pem2Hash, "Fingerprints (sans comment) should match after full PEM↔PKCS#8 round-trip")
         }
     }
     
