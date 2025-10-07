@@ -497,40 +497,26 @@ extension Insecure {
         
         /// Calculate modular inverse using Extended Euclidean Algorithm
         private static func modularInverse(_ a: BigUInt, _ m: BigUInt) -> BigUInt? {
+            // Extended Euclidean Algorithm on integers
+            // Finds t such that a*t ≡ 1 (mod m), if gcd(a, m) == 1
             if m == 1 { return 0 }
-            
-            let originalM = m
-            var a = a % m
-            var m = m
-            var x0 = BigInt(0)
-            var x1 = BigInt(1)
-            
-            let maxIterations = 100000 // Prevent infinite loops
-            var iterations = 0
-            
-            while a > 1 && iterations < maxIterations {
-                iterations += 1
-                
-                let q = BigInt(a / m)
-                
-                var t = BigInt(m)
-                m = a
-                a = BigUInt(t % BigInt(a))
-                
-                t = x0
-                x0 = x1 - q * x0
-                x1 = t
+
+            var r = BigInt(m)
+            var newR = BigInt(a % m)
+            var t = BigInt(0)
+            var newT = BigInt(1)
+
+            while newR != 0 {
+                let q = r / newR
+                (r, newR) = (newR, r - q * newR)
+                (t, newT) = (newT, t - q * newT)
             }
-            
-            if iterations >= maxIterations {
-                return nil // Failed to find modular inverse
-            }
-            
-            if x1 < 0 {
-                x1 += BigInt(originalM)
-            }
-            
-            return BigUInt(x1)
+
+            // If gcd(a, m) != 1, inverse doesn't exist
+            if r != 1 { return nil }
+
+            if t < 0 { t += BigInt(m) }
+            return BigUInt(t)
         }
         
         /// Decrypt using Chinese Remainder Theorem optimization

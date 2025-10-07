@@ -3,6 +3,7 @@ import Testing
 import Foundation
 import Crypto
 import _CryptoExtras
+import BigInt
 
 @Suite("Insecure RSA Test")
 struct InsecureRSATest {
@@ -18,7 +19,7 @@ struct InsecureRSATest {
         #expect(publicKey.n == privateKey.n)
     }
     
-    @Test("RSA Encryption/Decryption", .disabled("Fix padding issue"))
+    @Test("RSA Encryption/Decryption")
     func testRSAEncryptionDecryption() throws {
         let (privateKey, publicKey) = try Insecure.RSA.generateKeyPair(bitSize: 1024)
         
@@ -81,5 +82,45 @@ struct InsecureRSATest {
         
         #expect(reconstructedKey.n == publicKey.n)
         #expect(reconstructedKey.e == publicKey.e)
+    }
+
+    @Test("RSA encryption padding sanity (debug)")
+    func testRSAEncryptionPaddingSanity() throws {
+        let (priv, pub) = try Insecure.RSA.generateKeyPair(bitSize: 1024)
+        let k = (pub.bitSize + 7) / 8
+
+        let message = Data("Hello, RSA!".utf8)
+        #expect(message.count <= k - 11)
+
+        // Build PKCS#1 v1.5 block: 0x00 0x02 PS 0x00 M
+        var em = Data()
+        em.append(0x00)
+        em.append(0x02)
+        let psLen = k - message.count - 3
+        var ps = try Data.generateSecureRandomBytes(count: psLen)
+        for i in 0..<ps.count { if ps[i] == 0 { ps[i] = 1 } }
+        em.append(ps)
+        em.append(0x00)
+        em.append(message)
+
+        #expect(em.count == k)
+        #expect(em[0] == 0x00)
+        #expect(em[1] == 0x02)
+
+        // Encrypt -> Decrypt via raw ops
+        let m = BigUInt(em)
+        let c = Insecure.RSA.rawEncrypt(m, with: pub)
+        let mDec = Insecure.RSA.rawDecrypt(c, with: priv)
+        let out = mDec.serialize().leftPadded(to: k)
+
+        // Unpadding-like checks
+        #expect(out.count == k)
+        #expect(out[0] == 0x00)
+        #expect(out[1] == 0x02)
+        var sep = -1
+        for i in 2..<out.count { if out[i] == 0 { sep = i; break } }
+        #expect(sep >= 10)
+        let recovered = out[(sep + 1)...]
+        #expect(Data(recovered) == message)
     }
 }
