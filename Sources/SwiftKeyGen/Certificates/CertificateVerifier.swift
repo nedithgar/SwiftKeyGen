@@ -2,7 +2,12 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Result of certificate verification.
+/// The outcome of verifying an SSH certificate.
+///
+/// This result communicates whether a certificate is currently valid under the
+/// provided verification options and, if not, the specific reason verification
+/// failed. Use this to make precise policy decisions (e.g., prompt the user,
+/// deny a connection, or fall back to a different trust path).
 public enum CertificateVerificationResult: Equatable {
     /// The certificate is valid under the provided options.
     case valid
@@ -19,29 +24,87 @@ public enum CertificateVerificationResult: Equatable {
     /// The provided CA key does not match the one embedded in the certificate.
     case caKeyMismatch
     /// A non‑structured error occurred with a diagnostic message.
+    ///
+    /// This case is returned for unexpected parsing/verification problems where
+    /// a richer, structured failure does not apply. The associated message is
+    /// suitable for logs and diagnostics but should not be relied on for
+    /// programmatic branching.
     case error(String)
 }
 
 /// Options controlling certificate verification behavior.
+///
+/// These options mirror `ssh-keygen`/OpenSSH semantics for validating user and
+/// host certificates. By default, verification checks temporal validity and
+/// optionally enforces principal matching and CA signature verification.
 public struct CertificateVerificationOptions {
     /// Require that at least one allowed principal matches.
+    ///
+    /// - Note: If `true` and `allowedPrincipals` is empty while the
+    ///   certificate lists zero principals, verification returns
+    ///   ``CertificateVerificationResult/invalidPrincipal``.
     public var requirePrincipal: Bool = false
     /// Allowed principals (usernames or hostnames) to match.
+    ///
+    /// When ``wildcardPrincipalMatching`` is enabled, patterns like
+    /// `*.example.com` match exactly one subdomain level (e.g.,
+    /// `host.example.com`, but not `a.b.example.com`).
     public var allowedPrincipals: [String] = []
     /// The time at which to evaluate validity.
+    ///
+    /// Defaults to `Date()` (now). `validAfter` and `validBefore` checks are
+    /// performed using the certificate’s UNIX epoch timestamps.
     public var verifyTime: Date = Date()
     /// If set, require the certificate to be of this type.
+    ///
+    /// When provided, the certificate’s ``SSHCertificate/type`` must equal this
+    /// value or verification returns
+    /// ``CertificateVerificationResult/invalidCertificateType``.
     public var expectedCertificateType: SSHCertificateType?
-    /// Whether wildcard principals (e.g. `*.example.com`) are matched.
+    /// Whether wildcard principals (e.g., `*.example.com`) are matched.
+    ///
+    /// - Important: `*.example.com` matches `a.example.com` but not
+    ///   `a.b.example.com`. Generic `*` segments in other positions are also
+    ///   supported and treated as “match any substring”.
     public var wildcardPrincipalMatching: Bool = true
     
+    /// Creates a new set of verification options with sensible defaults.
+    ///
+    /// - Defaults:
+    ///   - ``requirePrincipal``: `false`
+    ///   - ``allowedPrincipals``: `[]`
+    ///   - ``verifyTime``: `Date()` (current time)
+    ///   - ``expectedCertificateType``: `nil` (don’t enforce)
+    ///   - ``wildcardPrincipalMatching``: `true`
     public init() {}
 }
 
-/// Certificate verifier.
+/// Verifies OpenSSH user and host certificates.
+///
+/// The verifier enforces validity windows, optional principal matching (with
+/// limited wildcard support), and—when a CA key is provided—signature
+/// verification and CA key matching against the certificate’s embedded
+/// signature key.
 public struct CertificateVerifier {
     
-    /// Verify a certificate.
+    /// Verifies a certificate against the supplied options and CA key.
+    ///
+    /// If ``caKey`` is `nil`, only structural checks are performed (e.g., time
+    /// validity, certificate type, and optional principal matching). When a CA
+    /// key is supplied (public or private), the verifier also ensures the
+    /// certificate’s embedded signature key matches the provided CA key and the
+    /// signature over the certificate blob is valid.
+    ///
+    /// - Parameters:
+    ///   - certifiedKey: The certified key and associated certificate to verify.
+    ///   - caKey: The certificate authority key to verify the signature with.
+    ///     Pass `nil` to skip signature verification.
+    ///   - options: Verification options controlling principal, time, and type
+    ///     checks. Defaults to ``CertificateVerificationOptions``.
+    /// - Returns: A ``CertificateVerificationResult`` explaining the outcome.
+    /// - Discussion: The function never throws. Unexpected conditions are
+    ///   surfaced as ``CertificateVerificationResult/error(_:)`` with a
+    ///   diagnostic string suitable for logging.
     public static func verifyCertificate(
         _ certifiedKey: CertifiedKey,
         caKey: (any SSHKey)? = nil,
