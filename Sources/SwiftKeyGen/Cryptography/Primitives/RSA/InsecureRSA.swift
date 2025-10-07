@@ -5,13 +5,36 @@ import Crypto
 // MARK: - Insecure RSA Implementation
 
 extension Insecure {
-    /// Complete RSA implementation for educational and compatibility purposes
-    /// WARNING: This implementation is for internal use only and may not be secure against all attacks
+    /// Namespace that provides an (intentionally) insecure / minimal RSA implementation.
+    ///
+    /// This type exists for:
+    ///  - Format / interoperability tests (e.g. ASN.1 / DER parsing, OpenSSH conversion)
+    ///  - Educational inspection of the raw mathematics behind higher‑level APIs
+    ///  - Fallback / legacy behaviors where a fully hardened implementation is not required
+    ///
+    /// It is **NOT** a complete, constant‑time, side‑channel resistant implementation and
+    /// must not be used for production security boundaries. Prefer the hardened key types
+    /// exposed elsewhere in the library (e.g. `RSAKey`) for real cryptographic operations.
+    ///
+    /// - Warning: This module purposefully omits a variety of mitigations (blinding, padding
+    ///   oracle protections, strict ASN.1 validation hardening, fault attack countermeasures).
+    ///   Do not expose these primitives directly to untrusted inputs outside of controlled tests.
     public enum RSA {
         
         // MARK: - Key Generation
         
-        /// Generate an RSA key pair with the specified bit size
+        /// Generates a new RSA key pair.
+        ///
+        /// Prime generation uses a probabilistic Miller–Rabin test; keys are retried until
+        /// the modulus reaches the requested bit length and the modular inverse for `e`
+        /// exists. Uses public exponent 65537.
+        ///
+        /// - Parameter bitSize: Desired bit size of the RSA modulus (must be ≥ 512 and a multiple of 8). Defaults to 2048.
+        /// - Returns: A tuple containing the newly created `PrivateKey` and matching `PublicKey`.
+        /// - Throws: `SSHKeyError.invalidKeySize` when the supplied size is unsupported, or
+        ///   `SSHKeyError.generationFailed` if a valid key could not be produced after repeated attempts.
+        /// - Important: This function is for testing / compatibility only and does not attempt to
+        ///   enforce modern minimum sizes or policies. Callers are responsible for validating strength.
         public static func generateKeyPair(bitSize: Int = 2048) throws -> (privateKey: PrivateKey, publicKey: PublicKey) {
             guard bitSize >= 512 && bitSize % 8 == 0 else {
                 throw SSHKeyError.invalidKeySize(bitSize, "RSA key size must be at least 512 bits and a multiple of 8")
@@ -60,51 +83,83 @@ extension Insecure {
         
         // MARK: - Key Types
         
-        /// RSA Public Key
+        /// Public portion of an RSA key pair.
+        ///
+        /// Encapsulates the modulus `n` and public exponent `e`. Utility accessors are provided
+        /// for serialization and size queries.
         public struct PublicKey {
+            /// The RSA modulus (n).
             public let n: BigUInt  // modulus
+            /// The public exponent (e). Commonly 65537.
             public let e: BigUInt  // public exponent
             
+            /// Creates a new public key from raw big integer components.
+            /// - Parameters:
+            ///   - n: The modulus.
+            ///   - e: The public exponent.
             public init(n: BigUInt, e: BigUInt) {
                 self.n = n
                 self.e = e
             }
             
-            /// Initialize from modulus and exponent data
+            /// Initializes a public key from serialized big‑endian data blobs.
+            ///
+            /// - Parameters:
+            ///   - modulus: Big‑endian representation of the modulus.
+            ///   - exponent: Big‑endian representation of the exponent.
+            /// - Throws: Never directly, but kept `throws` to align with potential future validation additions.
             public init(modulus: Data, exponent: Data) throws {
                 self.n = BigUInt(modulus)
                 self.e = BigUInt(exponent)
             }
             
-            /// Get the modulus as Data
+            /// The modulus serialized as big‑endian bytes.
             public var modulusData: Data {
                 return n.serialize()
             }
             
-            /// Get the exponent as Data
+            /// The public exponent serialized as big‑endian bytes.
             public var exponentData: Data {
                 return e.serialize()
             }
             
-            /// Key size in bits
+            /// Effective RSA modulus size in bits.
             public var bitSize: Int {
                 return n.bitWidth
             }
         }
         
-        /// RSA Private Key
+        /// Private portion of an RSA key pair including CRT optimization values.
+        ///
+        /// All key constituents (`p`, `q`, `d`, CRT pre‑computations) are exposed for
+        /// interoperability and testing. Treat these values as sensitive material.
         public struct PrivateKey {
+            /// Modulus shared with the public key.
             public let n: BigUInt   // modulus
+            /// Public exponent.
             public let e: BigUInt   // public exponent
+            /// Private exponent (d).
             public let d: BigUInt   // private exponent
+            /// First prime factor (p).
             public let p: BigUInt   // prime p
+            /// Second prime factor (q).
             public let q: BigUInt   // prime q
             
             // Chinese Remainder Theorem optimization values
+            /// d (mod p−1)
             public let dP: BigUInt  // d mod (p-1)
+            /// d (mod q−1)
             public let dQ: BigUInt  // d mod (q-1)
+            /// Multiplicative inverse of q modulo p.
             public let qInv: BigUInt // q^(-1) mod p
             
+            /// Creates a private key and derives CRT parameters automatically.
+            /// - Parameters:
+            ///   - n: Modulus.
+            ///   - e: Public exponent.
+            ///   - d: Private exponent.
+            ///   - p: First prime.
+            ///   - q: Second prime.
             public init(n: BigUInt, e: BigUInt, d: BigUInt, p: BigUInt, q: BigUInt) {
                 self.n = n
                 self.e = e
@@ -118,7 +173,16 @@ extension Insecure {
                 self.qInv = modularInverse(q, p) ?? BigUInt(0)
             }
             
-            /// Initialize with pre-computed CRT values
+            /// Creates a private key with pre‑computed CRT fields (used when importing existing keys).
+            /// - Parameters:
+            ///   - n: Modulus.
+            ///   - e: Public exponent.
+            ///   - d: Private exponent.
+            ///   - p: First prime.
+            ///   - q: Second prime.
+            ///   - dP: d (mod p−1).
+            ///   - dQ: d (mod q−1).
+            ///   - qInv: q⁻¹ (mod p).
             public init(n: BigUInt, e: BigUInt, d: BigUInt, p: BigUInt, q: BigUInt, dP: BigUInt, dQ: BigUInt, qInv: BigUInt) {
                 self.n = n
                 self.e = e
@@ -130,12 +194,12 @@ extension Insecure {
                 self.qInv = qInv
             }
             
-            /// Get the public key
+            /// Extracts the corresponding public key.
             public var publicKey: PublicKey {
                 return PublicKey(n: n, e: e)
             }
             
-            /// Key size in bits
+            /// Effective RSA modulus size in bits.
             public var bitSize: Int {
                 return n.bitWidth
             }
@@ -143,7 +207,15 @@ extension Insecure {
         
         // MARK: - Encryption/Decryption
         
-        /// Encrypt data using RSA public key (PKCS#1 v1.5 padding)
+        /// Encrypts data using PKCS#1 v1.5 padding and the supplied public key.
+        ///
+        /// - Note: PKCS#1 v1.5 padding is susceptible to padding oracle attacks when
+        ///   decryption errors are distinguishable. Use OAEP in production contexts.
+        /// - Parameters:
+        ///   - plaintext: Message bytes to encrypt.
+        ///   - publicKey: Target RSA public key.
+        /// - Returns: Ciphertext of size equal to the key modulus length in bytes.
+        /// - Throws: `SSHKeyError.invalidKeyData` if the message is too large for the modulus minus padding overhead.
         public static func encrypt(_ plaintext: Data, with publicKey: PublicKey) throws -> Data {
             let keyByteSize = (publicKey.bitSize + 7) / 8
             
@@ -163,7 +235,14 @@ extension Insecure {
             return c.serialize().leftPadded(to: keyByteSize)
         }
         
-        /// Decrypt data using RSA private key (PKCS#1 v1.5 padding)
+        /// Decrypts data that was produced by `encrypt(_:with:)` (PKCS#1 v1.5).
+        ///
+        /// - Parameters:
+        ///   - ciphertext: Ciphertext bytes whose length must match the key size in bytes.
+        ///   - privateKey: The matching RSA private key.
+        /// - Returns: The original plaintext message after padding removal.
+        /// - Throws: `SSHKeyError.invalidKeyData` if input size is invalid or padding checks fail.
+        /// - Warning: Timing differences during padding validation are not masked.
         public static func decrypt(_ ciphertext: Data, with privateKey: PrivateKey) throws -> Data {
             let keyByteSize = (privateKey.bitSize + 7) / 8
             
@@ -184,7 +263,18 @@ extension Insecure {
         
         // MARK: - Signing/Verification
         
-        /// Sign data using RSA private key with specified hash algorithm
+        /// Produces a PKCS#1 v1.5 signature over `message` using the specified hash algorithm.
+        ///
+        /// The DigestInfo wrapper (hash OID + digest) is padded per PKCS#1 v1.5 and then exponentiated.
+        ///
+        /// - Parameters:
+        ///   - message: Data to be signed.
+        ///   - privateKey: RSA private key.
+        ///   - hashAlgorithm: Hash function (default `.sha256`).
+        /// - Returns: Raw signature bytes whose length equals the key modulus length in bytes.
+        /// - Throws: `SSHKeyError.invalidKeyData` if padding fails (extremely unlikely under normal sizes).
+        /// - Important: PKCS#1 v1.5 signatures are vulnerable to certain subtle attacks if verification
+        ///   is non‑strict. Verification here is intentionally narrow but not fully hardened.
         public static func sign(_ message: Data, with privateKey: PrivateKey, hashAlgorithm: HashAlgorithm = .sha256) throws -> Data {
             let keyByteSize = (privateKey.bitSize + 7) / 8
             
@@ -214,12 +304,29 @@ extension Insecure {
             return s.serialize().leftPadded(to: keyByteSize)
         }
         
-        /// Sign data using RSA private key (PKCS#1 v1.5 with SHA256) - convenience method
+        /// Convenience overload that signs using SHA‑256.
+        ///
+        /// - Parameters:
+        ///   - message: Data to be signed.
+        ///   - privateKey: RSA private key.
+        /// - Returns: PKCS#1 v1.5 signature bytes.
+        /// - Throws: See `sign(_:with:hashAlgorithm:)`.
         public static func sign(_ message: Data, with privateKey: PrivateKey) throws -> Data {
             return try sign(message, with: privateKey, hashAlgorithm: .sha256)
         }
         
-        /// Verify RSA signature with specified hash algorithm
+        /// Verifies a PKCS#1 v1.5 signature for a message with a chosen hash algorithm.
+        ///
+        /// The signature is left‑padded with zeros if shorter than the key size (mirroring permissive
+        /// behaviors in some SSH tooling). DigestInfo parsing is strict with respect to length and OID.
+        ///
+        /// - Parameters:
+        ///   - signature: Raw signature bytes (may be shorter than modulus length; will be left‑padded for processing).
+        ///   - message: Original message that was signed.
+        ///   - publicKey: RSA public key.
+        ///   - hashAlgorithm: Hash algorithm expected (default `.sha256`).
+        /// - Returns: `true` if the signature validates; otherwise `false`.
+        /// - Throws: Never; validation failures return `false`.
         public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey, hashAlgorithm: HashAlgorithm = .sha256) throws -> Bool {
             let keyByteSize = (publicKey.bitSize + 7) / 8
             
@@ -265,29 +372,51 @@ extension Insecure {
             return extractedHash == expectedHash
         }
         
-        /// Verify RSA signature (PKCS#1 v1.5 with SHA256) - convenience method
+        /// Convenience overload that verifies a signature assuming SHA‑256 was used.
+        ///
+        /// - Parameters:
+        ///   - signature: Raw signature bytes.
+        ///   - message: Original message.
+        ///   - publicKey: RSA public key.
+        /// - Returns: `true` if valid; otherwise `false`.
         public static func verify(_ signature: Data, for message: Data, with publicKey: PublicKey) throws -> Bool {
             return try verify(signature, for: message, with: publicKey, hashAlgorithm: .sha256)
         }
         
         // MARK: - Raw Operations
         
-        /// Raw RSA encryption: c = m^e mod n
+        /// Performs the raw modular exponentiation for encryption:  c = m^e mod n.
+        ///
+        /// - Parameters:
+        ///   - message: Integer message representative (< n).
+        ///   - publicKey: RSA public key.
+        /// - Returns: Ciphertext integer.
+        /// - Important: No padding is applied. Callers must supply a properly encoded representative.
         public static func rawEncrypt(_ message: BigUInt, with publicKey: PublicKey) -> BigUInt {
             return message.power(publicKey.e, modulus: publicKey.n)
         }
         
-        /// Raw RSA decryption: m = c^d mod n
+        /// Performs the raw modular exponentiation for decryption using CRT: m = c^d mod n.
+        ///
+        /// - Parameters:
+        ///   - ciphertext: Integer ciphertext (< n).
+        ///   - privateKey: RSA private key.
+        /// - Returns: Decrypted integer representative.
+        /// - Warning: No padding removal or validation is performed.
         public static func rawDecrypt(_ ciphertext: BigUInt, with privateKey: PrivateKey) -> BigUInt {
             return decryptWithCRT(ciphertext, privateKey: privateKey)
         }
         
         // MARK: - PEM/DER Parsing
         
-        /// Extract RSA public key components (modulus and exponent) from SPKI DER representation
-        /// - Parameter spkiDERRepresentation: The SPKI DER-encoded RSA public key
-        /// - Returns: A tuple containing the modulus and exponent as Data
-        /// - Throws: SSHKeyError if parsing fails
+        /// Extracts the RSA modulus and exponent from a DER encoded SubjectPublicKeyInfo (SPKI) structure.
+        ///
+        /// Minimal ASN.1 parsing is performed strictly for the expected RSA public key layout.
+        ///
+        /// - Parameter spkiDERRepresentation: DER bytes of the SPKI wrapper containing an `RSAPublicKey`.
+        /// - Returns: Tuple `(modulus, exponent)` as big‑endian data blobs.
+        /// - Throws: `SSHKeyError.invalidFormat` for structural violations or `SSHKeyError.invalidKeyData` for length inconsistencies.
+        /// - Important: This parser is intentionally narrow and not a full ASN.1 validator.
         public static func extractPublicKeyComponents(from spkiDERRepresentation: Data) throws -> (modulus: Data, exponent: Data) {
             // SPKI structure for RSA:
             // SubjectPublicKeyInfo ::= SEQUENCE {
