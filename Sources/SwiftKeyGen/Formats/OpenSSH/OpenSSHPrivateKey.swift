@@ -3,7 +3,53 @@ import Crypto
 import _CryptoExtras
 import BigInt
 
-/// Utilities to serialize private keys to the OpenSSH proprietary format.
+/// A namespace containing utilities for working with the OpenSSH proprietary
+/// private key format (`openssh-key-v1`).
+///
+/// This type provides high‑level helpers to:
+///
+/// - Serialize an in‑memory `SSHKey` (Ed25519, RSA, ECDSA) into an
+///   OpenSSH "-----BEGIN OPENSSH PRIVATE KEY-----" PEM‑wrapped blob, with
+///   optional bcrypt based passphrase protection (matching `ssh-keygen`).
+/// - Parse (and transparently decrypt when protected) an OpenSSH private key
+///   back into the corresponding strongly typed key model used by SwiftKeyGen.
+///
+/// The implementation mirrors OpenSSH semantics including:
+///
+/// - Magic header `openssh-key-v1\0` (not length‑prefixed)
+/// - Bcrypt PBKDF (`kdfname = "bcrypt"`) parameter block (salt + rounds)
+/// - Per‑cipher key + IV derivation using a single bcrypt output buffer
+/// - Two 32‑bit random check values duplicated to detect wrong passphrases
+/// - Deterministic field ordering per key type (matching upstream ordering)
+/// - Deterministic padding bytes 1..n used for format integrity checking
+/// - Authenticated cipher tag length exclusion from the stored length field
+///
+/// Supported key algorithms: Ed25519, RSA, ECDSA (P‑256 / P‑384 / P‑521). Other
+/// key types will raise `SSHKeyError.unsupportedKeyType`.
+///
+/// Example – generating and exporting an encrypted Ed25519 key:
+/// ```swift
+/// let pair = try KeyGeneration.generateKeyPair(type: .ed25519)
+/// let pem = try OpenSSHPrivateKey.serialize(
+///     key: pair.privateKey,
+///     passphrase: "correct horse battery staple",
+///     comment: "demo@host"
+/// )
+/// print(String(data: pem, encoding: .utf8)!)
+/// ```
+///
+/// Example – parsing (auto‑detecting encryption):
+/// ```swift
+/// let loaded = try OpenSSHPrivateKey.parse(
+///     data: pem,
+///     passphrase: "correct horse battery staple"
+/// )
+/// print(loaded.keyType) // e.g. .ed25519
+/// ```
+///
+/// - Note: Only public APIs (the struct itself plus `serialize` / `parse` and
+///   the exported constants) are documented; internal helpers intentionally
+///   remain undocumented to keep focus on the stable surface area.
 public struct OpenSSHPrivateKey {
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
@@ -11,11 +57,49 @@ public struct OpenSSHPrivateKey {
     private static let AUTH_MAGIC = "openssh-key-v1\0"
     private static let SALT_LEN = 16
     private static let DEFAULT_CIPHER = Cipher.defaultCipher
-    /// Default bcrypt PBKDF rounds used by OpenSSH for key derivation.
+    /// The default bcrypt PBKDF iteration count used by OpenSSH (and this
+    /// library) when encrypting private keys with a passphrase.
+    ///
+    /// OpenSSH historically defaults to a low round count (24) to balance
+    /// interactive latency with minimal resistance against offline guessing.
+    /// Consider supplying a larger `rounds` value to `serialize` when you can
+    /// tolerate additional derivation cost.
     public static let DEFAULT_ROUNDS = 24
     private static let KDFNAME = "bcrypt"
     
-    /// Serialize a private key to OpenSSH format
+    /// Serializes a private key into the OpenSSH `openssh-key-v1` PEM wrapped
+    /// format.
+    ///
+    /// When a non‑empty `passphrase` is provided the output is encrypted using
+    /// the specified (or default) cipher and a bcrypt PBKDF (`kdfname = bcrypt`).
+    /// The derived key material is split into encryption key + IV according to
+    /// the cipher's requirements. Two random 32‑bit "check" values are encoded
+    /// twice inside the encrypted payload to allow detection of an incorrect
+    /// passphrase without exposing plaintext key material.
+    ///
+    /// Padding is appended using ascending byte values (1,2,3,...) to the
+    /// cipher block size (or ChaCha20-Poly1305's implicit block size rules) in
+    /// order to match OpenSSH's canonical encoding and enable strict padding
+    /// verification during parse.
+    ///
+    /// - Parameters:
+    ///   - key: The private key to serialize (Ed25519, RSA, or ECDSA variant).
+    ///   - passphrase: Optional passphrase; when non‑empty enables encryption.
+    ///   - comment: Optional comment stored alongside the private key; when
+    ///     omitted the key's intrinsic `comment` (if any) is used.
+    ///   - cipher: Optional cipher name (e.g. "aes256-ctr"). If `nil`, the
+    ///     library default is used when `passphrase` is present; ignored when
+    ///     no passphrase is supplied (cipher forced to "none").
+    ///   - rounds: Bcrypt PBKDF iteration count (work factor) used only when
+    ///     passphrase protection is active.
+    ///
+    /// - Returns: A `Data` buffer containing a complete PEM with BEGIN/END
+    ///   markers and 64‑character wrapped Base64 body.
+    ///
+    /// - Throws: `SSHKeyError.unsupportedCipher` if the requested cipher is not
+    ///   recognized; `SSHKeyError.unsupportedKeyType` if the key algorithm is
+    ///   not supported; `SSHKeyError.invalidKeyData` for internal encoding
+    ///   inconsistencies; or errors surfaced by the underlying PBKDF / cipher.
     public static func serialize(
         key: any SSHKey,
         passphrase: String? = nil,
@@ -274,7 +358,33 @@ public struct OpenSSHPrivateKey {
         )
     }
     
-    /// Parse an OpenSSH private key from data
+    /// Parses an OpenSSH `openssh-key-v1` private key (optionally encrypted)
+    /// from the provided data buffer.
+    ///
+    /// The method validates the magic preamble, decodes cipher / KDF metadata,
+    /// performs bcrypt key derivation & decryption when necessary, verifies the
+    /// duplicated random check integers, reconstructs the concrete key type,
+    /// and finally validates deterministic padding bytes. Any deviation from
+    /// the expected structure results in an `SSHKeyError` ensuring that
+    /// malformed or tampered keys are rejected early.
+    ///
+    /// - Parameters:
+    ///   - data: Raw PEM (or newline‑preserved) `Data` containing the OpenSSH
+    ///     private key with BEGIN/END markers.
+    ///   - passphrase: Optional passphrase. Required if the key is encrypted;
+    ///     supplying `nil` (or empty) for an encrypted key results in
+    ///     `SSHKeyError.passphraseRequired`.
+    ///
+    /// - Returns: A concrete `SSHKey` instance (`Ed25519Key`, `RSAKey`, or
+    ///   `ECDSAKey`) reconstructed from the serialized form.
+    ///
+    /// - Throws: `SSHKeyError.invalidFormat` for structural problems,
+    ///   `SSHKeyError.unsupportedCipher` or `.unsupportedKeyType` when the
+    ///   cipher or key algorithm is unknown, `SSHKeyError.passphraseRequired`
+    ///   if decryption is needed but no passphrase is supplied,
+    ///   `SSHKeyError.invalidPassphrase` when check values mismatch after
+    ///   decryption, or `SSHKeyError.invalidKeyData` for inconsistent numeric
+    ///   / scalar encodings.
     public static func parse(
         data: Data,
         passphrase: String? = nil
