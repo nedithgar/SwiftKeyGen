@@ -1,9 +1,29 @@
 import Foundation
 
-/// Certificate manager for working with SSH certificates
+/// High‑level utilities for working with SSH certificates.
+///
+/// ``CertificateManager`` provides convenience operations to save, read, generate,
+/// verify, and display OpenSSH v01 certificates. It is a stateless façade over
+/// lower‑level components such as ``CertificateAuthority``, ``CertificateParser``,
+/// and ``CertificateVerifier`` and mirrors common `ssh-keygen` workflows where
+/// practical.
+///
+/// - SeeAlso: ``CertificateAuthority``, ``CertificateVerifier``, ``KeyFileManager``
 public struct CertificateManager {
     
-    /// Save a certified key to file
+    /// Write a certificate public key line to a file.
+    ///
+    /// Persists the certificate in OpenSSH "authorized_keys" style as a single
+    /// line: `<cert-type> <base64-cert> [comment]` followed by a newline. File
+    /// permissions are set to `0644`.
+    ///
+    /// - Parameters:
+    ///   - certifiedKey: The key with an attached certificate blob to write.
+    ///   - path: Destination file path. `~` is expanded to the user’s home.
+    ///   - comment: Optional trailing comment. If `nil`, the original key’s
+    ///     comment is used when available.
+    /// - Throws: ``SSHKeyError`` if serialization fails, or file I/O errors
+    ///   raised by Foundation when writing or setting attributes.
     public static func saveCertificate(
         _ certifiedKey: CertifiedKey,
         to path: String,
@@ -35,7 +55,16 @@ public struct CertificateManager {
         )
     }
     
-    /// Read a certificate from file
+    /// Read and parse a certificate from a file.
+    ///
+    /// Scans the file for the first non‑empty, non‑comment line and attempts to
+    /// parse an OpenSSH certificate from it.
+    ///
+    /// - Parameter path: Path to a file containing a certificate line.
+    /// - Returns: A ``CertifiedKey`` containing the original public key and the
+    ///   attached certificate.
+    /// - Throws: ``SSHKeyError/invalidFormat`` if no valid certificate line is
+    ///   found, or file I/O errors raised by Foundation when reading the file.
     public static func readCertificate(from path: String) throws -> CertifiedKey {
         let expandedPath = NSString(string: path).expandingTildeInPath
         let content = try String(contentsOfFile: expandedPath, encoding: .utf8)
@@ -51,7 +80,31 @@ public struct CertificateManager {
         throw SSHKeyError.invalidFormat
     }
     
-    /// Generate certificate files for multiple hosts
+    /// Generate and write host certificates for multiple hosts.
+    ///
+    /// For each host in `hosts`, this method:
+    /// - Generates a new host key of `keyType`.
+    /// - Signs a `.host` certificate with the CA key from `caKeyPath`.
+    /// - Writes the certificate to `"<outputDirectory>/<host>-cert.pub"` with
+    ///   permissions `0644`.
+    /// - Writes the private key to `"<outputDirectory>/<host>"` with permissions
+    ///   `0600` (OpenSSH format).
+    ///
+    /// - Parameters:
+    ///   - hosts: Hostnames to certify. Wildcard principal `*.host` is added for
+    ///     each entry.
+    ///   - caKeyPath: Filesystem path to the CA private key.
+    ///   - caKeyPassphrase: Optional passphrase for the CA key.
+    ///   - keyType: Key type to generate for each host (default `.ed25519`).
+    ///   - outputDirectory: Directory to write keys and certificates (default
+    ///     current directory).
+    ///   - validityDays: Validity window in days from now (default `365`).
+    ///   - serialStart: Optional starting serial number; if `nil`, a timestamp‑
+    ///     based serial is used. The serial increments by 1 for each host.
+    /// - Returns: A list of tuples containing the host and the certificate path
+    ///   written for that host.
+    /// - Throws: ``SSHKeyError`` for key loading, signing, or serialization
+    ///   failures; file I/O errors for write or chmod failures.
     public static func generateCertificatesForHosts(
         hosts: [String],
         caKeyPath: String,
@@ -103,7 +156,13 @@ public struct CertificateManager {
         return results
     }
     
-    /// Display certificate information
+    /// Render human‑readable certificate information.
+    ///
+    /// Returns a formatted description of the certificate along with the
+    /// subject public key’s SHA‑256 fingerprint (Base64).
+    ///
+    /// - Parameter certifiedKey: The certified key to describe.
+    /// - Returns: A string suitable for display (multi‑line).
     public static func displayCertificateInfo(_ certifiedKey: CertifiedKey) -> String {
         var info = ""
         info += certifiedKey.certificateInfo()
@@ -115,7 +174,21 @@ public struct CertificateManager {
         return info
     }
     
-    /// Check if a certificate is valid for a specific host
+    /// Verify a certificate for a host principal.
+    ///
+    /// Performs verification with options appropriate for host certificates:
+    /// `.host` type, required principal match, and wildcard principal matching
+    /// enabled (e.g., `*.example.com`).
+    ///
+    /// - Parameters:
+    ///   - certifiedKey: The certificate to verify.
+    ///   - hostname: Hostname that must appear (directly or via wildcard) in the
+    ///     certificate’s principals.
+    ///   - caKey: Optional CA key to pin verification to a specific authority.
+    ///   - date: Verification time override (defaults to `Date()`).
+    /// - Returns: A ``CertificateVerificationResult`` with details of the
+    ///   verification outcome.
+    /// - SeeAlso: ``CertificateVerifier``
     public static func verifyCertificateForHost(
         _ certifiedKey: CertifiedKey,
         hostname: String,
@@ -132,7 +205,20 @@ public struct CertificateManager {
         return CertificateVerifier.verifyCertificate(certifiedKey, caKey: caKey, options: options)
     }
     
-    /// Check if a certificate is valid for a specific user
+    /// Verify a certificate for a user principal.
+    ///
+    /// Performs verification with options appropriate for user certificates:
+    /// `.user` type, required principal match, and no wildcard principal
+    /// matching.
+    ///
+    /// - Parameters:
+    ///   - certifiedKey: The certificate to verify.
+    ///   - username: Username that must appear in the certificate’s principals.
+    ///   - caKey: Optional CA key to pin verification to a specific authority.
+    ///   - date: Verification time override (defaults to `Date()`).
+    /// - Returns: A ``CertificateVerificationResult`` with details of the
+    ///   verification outcome.
+    /// - SeeAlso: ``CertificateVerifier``
     public static func verifyCertificateForUser(
         _ certifiedKey: CertifiedKey,
         username: String,
@@ -149,13 +235,37 @@ public struct CertificateManager {
         return CertificateVerifier.verifyCertificate(certifiedKey, caKey: caKey, options: options)
     }
     
-    /// Parse and display certificate from string
+    /// Parse and format certificate information from a single line.
+    ///
+    /// - Parameter certString: A single OpenSSH certificate line
+    ///   (`<type> <base64> [comment]`).
+    /// - Returns: Human‑readable certificate information, as produced by
+    ///   ``displayCertificateInfo(_:)``.
+    /// - Throws: ``SSHKeyError`` if parsing fails.
     public static func parseCertificateString(_ certString: String) throws -> String {
         let certifiedKey = try CertificateParser.parseCertificate(from: certString)
         return displayCertificateInfo(certifiedKey)
     }
     
-    /// Create a certificate with default user permissions
+    /// Create a `.user` certificate with sensible defaults.
+    ///
+    /// Signs `publicKey` with `caKey` to produce a user certificate with standard
+    /// OpenSSH user extensions when none are provided (X11/agent/port
+    /// forwarding, PTY, user rc). Optional critical options include
+    /// ``SSHCertificateOption/forceCommand`` and ``SSHCertificateOption/sourceAddress``.
+    ///
+    /// - Parameters:
+    ///   - publicKey: The subject key to certify.
+    ///   - caKey: The certificate authority private key used to sign the
+    ///     certificate.
+    ///   - username: The key ID and principal for the certificate.
+    ///   - validityDays: Validity window in days starting now (default `30`).
+    ///   - forceCommand: Optional forced command (critical option).
+    ///   - sourceAddress: Optional source address list (critical option).
+    /// - Returns: A ``CertifiedKey`` containing the subject key and attached
+    ///   certificate.
+    /// - Throws: ``SSHKeyError`` for signing/encoding failures.
+    /// - SeeAlso: ``CertificateAuthority/signCertificate(publicKey:caKey:keyId:principals:serial:validFrom:validTo:certificateType:criticalOptions:extensions:signatureAlgorithm:)``
     public static func createUserCertificate(
         publicKey: any SSHKey,
         caKey: any SSHKey,
