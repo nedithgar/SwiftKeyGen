@@ -2,10 +2,46 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Parser for SSH certificates
+/// Parses OpenSSH v01 SSH certificates into strongly typed models.
+///
+/// `CertificateParser` decodes OpenSSH certificate public key strings
+/// (the `*-cert-v01@openssh.com` form produced by `ssh-keygen -L/-s`) and
+/// returns a `CertifiedKey` that bundles the parsed public key together with
+/// its `SSHCertificate` metadata.
+///
+/// Supported certificate algorithms:
+/// - `ssh-ed25519-cert-v01@openssh.com`
+/// - `ssh-rsa-cert-v01@openssh.com`
+/// - `ecdsa-sha2-nistp256-cert-v01@openssh.com`
+/// - `ecdsa-sha2-nistp384-cert-v01@openssh.com`
+/// - `ecdsa-sha2-nistp521-cert-v01@openssh.com`
+///
+/// The parser performs structural validation and field extraction but does not
+/// perform signature verification. Use the certificate verification utilities
+/// in the Certificates module to verify trust and validity.
 public struct CertificateParser {
     
-    /// Parse a certificate from public key string
+    /// Parses an OpenSSH certificate from its public key string representation.
+    ///
+    /// This method expects the full OpenSSH certificate line as typically found
+    /// in `authorized_keys`-style files, for example:
+    ///
+    /// ```text
+    /// ssh-ed25519-cert-v01@openssh.com AAAAC3NzaC1lZDI1NTE5AAAAI… optional-comment
+    /// ```
+    ///
+    /// The function validates the key type suffix (`-cert-v01@openssh.com`),
+    /// Base64‑decodes the payload, and delegates to ``parseCertificateData(_:keyType:comment:)``.
+    ///
+    /// - Parameter publicKeyString: The full OpenSSH certificate public key line
+    ///   including the certificate key type and Base64 data; an optional trailing
+    ///   comment (key ID/label) is allowed and will be preserved when possible.
+    /// - Returns: A ``CertifiedKey`` whose ``CertifiedKey/certificate`` contains
+    ///   the parsed certificate fields and whose underlying public key matches the
+    ///   certificate subject.
+    /// - Throws: ``SSHKeyError`` when the string is malformed, not a certificate,
+    ///   the payload is not valid Base64, the key type is unsupported, or when any
+    ///   field fails to decode.
     public static func parseCertificate(from publicKeyString: String) throws -> CertifiedKey {
         // Split the components
         let components = publicKeyString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,7 +68,28 @@ public struct CertificateParser {
         return try parseCertificateData(keyData, keyType: keyType, comment: comment)
     }
     
-    /// Parse certificate from raw data
+    /// Parses an OpenSSH certificate from raw decoded data.
+    ///
+    /// Use this overload when you have already extracted and Base64‑decoded the
+    /// certificate payload from an OpenSSH certificate public key string. The
+    /// `data` must contain the full SSH wire format beginning with the key type
+    /// string, followed by the certificate blob as emitted by OpenSSH.
+    ///
+    /// - Parameters:
+    ///   - data: The Base64‑decoded bytes from the OpenSSH certificate public key
+    ///     field. This begins with the key type string and length‑prefixed fields
+    ///     that make up the certificate blob.
+    ///   - keyType: The certificate key type string as it appeared in the public
+    ///     key line (e.g., `ssh-ed25519-cert-v01@openssh.com`). This is validated
+    ///     against the content of `data`.
+    ///   - comment: Optional trailing comment captured from the public key line;
+    ///     preserved on the returned public key when applicable.
+    /// - Returns: A ``CertifiedKey`` populated with the parsed certificate fields
+    ///   (serial, key ID, principals, validity, critical options, extensions,
+    ///   signature key/type) and the subject public key.
+    /// - Throws: ``SSHKeyError`` when the data is structurally invalid, the
+    ///   certificate type or underlying key type is unsupported, or fields fail
+    ///   to decode.
     public static func parseCertificateData(_ data: Data, keyType: String, comment: String? = nil) throws -> CertifiedKey {
         var decoder = SSHDecoder(data: data)
         
