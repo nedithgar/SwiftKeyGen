@@ -2,7 +2,38 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Certificate Authority for signing SSH certificates
+/// Certificate Authority utilities for SSH certificates.
+///
+/// Creates and signs OpenSSH v01 certificates for supported key types
+/// (RSA, ECDSA P‑256/P‑384/P‑521, and Ed25519). The primary entry point is
+/// ``CertificateAuthority/signCertificate(publicKey:caKey:keyId:principals:serial:validFrom:validTo:certificateType:criticalOptions:extensions:signatureAlgorithm:)``,
+/// which returns a ``CertifiedKey`` containing both the original key and its
+/// attached certificate blob.
+///
+/// Behavior aligns with `ssh-keygen` where practical:
+/// - Default validity is “forever” unless `validFrom`/`validTo` is provided.
+/// - `.user` certificates receive standard permissions when no `extensions`
+///   are supplied (X11/agent/port forwarding, PTY, user rc).
+/// - Signature algorithm defaults to a sensible choice for the CA key type.
+///
+/// - SeeAlso: ``CertificateVerifier``, ``CertificateManager``
+///
+/// ### Example: Sign a user certificate
+/// ```swift
+/// let caKey = try SwiftKeyGen.generateKey(type: .ed25519)
+/// let userKey = try SwiftKeyGen.generateKey(type: .ed25519)
+///
+/// let cert = try CertificateAuthority.signCertificate(
+///     publicKey: userKey,
+///     caKey: caKey,
+///     keyId: "john.doe",
+///     principals: ["john", "jdoe"],
+///     validFrom: Date(),
+///     validTo: Date().addingTimeInterval(30 * 24 * 60 * 60)
+/// )
+///
+/// try CertificateManager.saveCertificate(cert, to: "~/.ssh/id_ed25519-cert.pub")
+/// ```
 public struct CertificateAuthority {
     
     /// Signs an SSH certificate for the given key using the provided CA key.
