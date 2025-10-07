@@ -1,10 +1,34 @@
 import Foundation
 import Crypto
 
-/// Manages operations on existing SSH keys
+/// High‑level utility for performing management operations on existing private SSH keys on disk.
+///
+/// `KeyManager` focuses on post‑generation lifecycle tasks such as:
+///  - Loading encrypted / unencrypted OpenSSH private keys (`openssh-key-v1`)
+///  - Adding, changing, or removing passphrases (re‑encrypting in place)
+///  - Updating or synchronizing key comments (and the companion `.pub` file when present)
+///  - Lightweight introspection of key metadata *without* decrypting the private portion
+///  - Verifying passphrases provided by a user (constant‑time enough for UX loops)
+///
+/// All methods operate on the OpenSSH private key file format. Unsupported or malformed
+/// inputs surface as ``SSHKeyError`` cases. Methods that mutate files attempt to
+/// preserve secure POSIX permissions (`0600` for private keys, `0644` for public keys)
+/// on Apple platforms.
 public struct KeyManager {
     
-    /// Read a private key from file
+    /// Reads and fully decodes an OpenSSH private key from disk.
+    ///
+    /// This will decrypt the key material if it is passphrase‑protected. The returned
+    /// value conforms to ``SSHKey`` (e.g. ``RSAKey``, ``Ed25519Key``, ``ECDSAKey``).
+    ///
+    /// - Note: The path may include a leading tilde (`~`) which will be expanded.
+    ///
+    /// - Parameters:
+    ///   - path: Filesystem path to the OpenSSH private key file.
+    ///   - passphrase: Optional passphrase used to decrypt the key if encrypted.
+    /// - Returns: A concrete type conforming to ``SSHKey`` representing the private key.
+    /// - Throws: ``SSHKeyError.invalidFormat`` if parsing fails, ``SSHKeyError.decryptionFailed``
+    ///           if the passphrase is wrong, or other ``SSHKeyError`` cases for unsupported types.
     public static func readPrivateKey(
         from path: String,
         passphrase: String? = nil
@@ -14,7 +38,20 @@ public struct KeyManager {
         return try OpenSSHPrivateKey.parse(data: data, passphrase: passphrase)
     }
     
-    /// Change or remove the passphrase on an existing key
+    /// Changes, adds, or removes the passphrase protecting an existing private key.
+    ///
+    /// The operation reads the current key, validates the provided `oldPassphrase` (if any),
+    /// and rewrites the file using the specified `newPassphrase`. Supplying `nil` for
+    /// `newPassphrase` removes encryption; supplying `nil` for `oldPassphrase` assumes the
+    /// key is currently unencrypted.
+    ///
+    /// - Parameters:
+    ///   - keyPath: Path to the existing OpenSSH private key file.
+    ///   - oldPassphrase: Current passphrase (if the key is encrypted).
+    ///   - newPassphrase: New passphrase to apply; pass `nil` to remove encryption.
+    ///   - rounds: Cost parameter for the KDF (bcrypt) when encrypting.
+    /// - Throws: ``SSHKeyError.decryptionFailed`` if the old passphrase is incorrect, or other
+    ///           ``SSHKeyError`` values for format / serialization issues. I/O errors are also propagated.
     public static func changePassphrase(
         keyPath: String,
         oldPassphrase: String? = nil,
@@ -50,7 +87,17 @@ public struct KeyManager {
         #endif
     }
     
-    /// Update the comment on an existing key
+    /// Updates the comment embedded in an OpenSSH private key and synchronizes the matching public key file.
+    ///
+    /// The private key is decrypted (if necessary), its `comment` field mutated, and the key is
+    /// re‑serialized preserving its current encryption state. If a sibling `<path>.pub` file exists,
+    /// its trailing comment segment is also updated to stay in sync.
+    ///
+    /// - Parameters:
+    ///   - keyPath: Path to the OpenSSH private key file.
+    ///   - passphrase: Passphrase if the key is encrypted.
+    ///   - newComment: Replacement comment text.
+    /// - Throws: ``SSHKeyError`` cases for parse/decrypt/serialize failures or propagated I/O errors.
     public static func updateComment(
         keyPath: String,
         passphrase: String? = nil,
@@ -99,7 +146,15 @@ public struct KeyManager {
         }
     }
     
-    /// Remove passphrase from a key (convenience method)
+    /// Removes encryption from a passphrase‑protected private key (convenience wrapper).
+    ///
+    /// Equivalent to calling ``changePassphrase(keyPath:oldPassphrase:newPassphrase:rounds:)``
+    /// with `newPassphrase` = `nil`.
+    ///
+    /// - Parameters:
+    ///   - keyPath: Path to the encrypted private key file.
+    ///   - currentPassphrase: Existing passphrase required to decrypt the key.
+    /// - Throws: ``SSHKeyError.decryptionFailed`` if the passphrase is wrong or other errors encountered.
     public static func removePassphrase(
         keyPath: String,
         currentPassphrase: String
@@ -111,7 +166,16 @@ public struct KeyManager {
         )
     }
     
-    /// Add passphrase to an unencrypted key (convenience method)
+    /// Adds encryption to an unencrypted private key (convenience wrapper).
+    ///
+    /// Equivalent to calling ``changePassphrase(keyPath:oldPassphrase:newPassphrase:rounds:)``
+    /// with `oldPassphrase` = `nil`.
+    ///
+    /// - Parameters:
+    ///   - keyPath: Path to the unencrypted private key file.
+    ///   - newPassphrase: Passphrase to apply.
+    ///   - rounds: Cost (work factor) for bcrypt based KDF.
+    /// - Throws: ``SSHKeyError`` cases or underlying I/O errors.
     public static func addPassphrase(
         keyPath: String,
         newPassphrase: String,
@@ -125,7 +189,13 @@ public struct KeyManager {
         )
     }
     
-    /// Verify a passphrase for a key
+    /// Verifies whether a provided passphrase can successfully decrypt the key.
+    ///
+    /// - Parameters:
+    ///   - keyPath: Path to the private key file.
+    ///   - passphrase: Candidate passphrase (or `nil` if expecting no encryption).
+    /// - Returns: `true` if the key can be parsed with the passphrase; otherwise `false`.
+    /// - Note: This performs a full parse/decrypt attempt; repeated use in tight loops may be expensive.
     public static func verifyPassphrase(
         keyPath: String,
         passphrase: String?
@@ -138,7 +208,21 @@ public struct KeyManager {
         }
     }
     
-    /// Get key information without decrypting the private key
+    /// Extracts public metadata about a private key without decrypting its private section.
+    ///
+    /// This performs a partial parse of the OpenSSH `openssh-key-v1` envelope to obtain:
+    ///  - Key algorithm (``KeyType``)
+    ///  - Whether the private portion is encrypted
+    ///  - Cipher name (if encrypted)
+    ///  - Raw SSH wire‑format public key bytes (suitable for fingerprinting)
+    ///
+    /// Private key block decryption is intentionally skipped for performance and to allow
+    /// metadata inspection prior to prompting a user for a passphrase.
+    ///
+    /// - Parameter keyPath: Path to the OpenSSH private key file.
+    /// - Returns: A ``KeyManager/KeyInfo`` structure with parsed metadata.
+    /// - Throws: ``SSHKeyError.invalidFormat`` for malformed data, ``SSHKeyError.unsupportedKeyType``
+    ///           for unknown algorithms, or underlying I/O errors.
     public static func getKeyInfo(keyPath: String) throws -> KeyInfo {
         let expandedPath = NSString(string: keyPath).expandingTildeInPath
         let data = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
@@ -222,17 +306,21 @@ public struct KeyManager {
         )
     }
     
+    /// Lightweight metadata describing an OpenSSH private key, produced by ``getKeyInfo(keyPath:)``.
     public struct KeyInfo {
-        /// Detected key algorithm.
+        /// Detected key algorithm (e.g. ``KeyType/ed25519``, ``KeyType/rsa``).
         public let keyType: KeyType
-        /// Whether the private key is encrypted at rest.
+        /// Indicates whether the private key blob is encrypted (KDF name not `"none"`).
         public let isEncrypted: Bool
-        /// Cipher name used for encryption (if any).
+        /// Optional cipher name (e.g. `"aes256-ctr"`) when the key is encrypted; `nil` if unencrypted or `"none"`.
         public let cipherName: String?
-        /// SSH wire‑format public key bytes.
+        /// Raw SSH wire‑format public key data (starts with the key type length + name, followed by algorithm‑specific fields).
         public let publicKeyData: Data
         
-        /// OpenSSH‑style SHA‑256 fingerprint for the public key.
+        /// OpenSSH‑style SHA‑256 fingerprint computed over ``publicKeyData``.
+        ///
+        /// Mirrors the output of `ssh-keygen -lf <publickey>` (the `SHA256:` base64 format without padding).
+        /// Suitable for display, logging, or host key verification contexts.
         public var fingerprint: String {
             let digest = SHA256.hash(data: publicKeyData)
             let base64 = Data(digest).base64EncodedStringStrippingPadding()
