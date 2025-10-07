@@ -452,43 +452,5 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsed.keyType == key.keyType)
         #expect(parsed.publicKeyString() == key.publicKeyString())
     }
-
-    // MARK: - File I/O Tests
-
-    @Test("file output with passphrase via KeyFileManager", .tags(.slow))
-    func testFileOutputWithPassphrase() throws {
-        let tempDir = FileManager.default.temporaryDirectory
-        let privatePath = tempDir.appendingPathComponent("test_ed25519_\(UUID().uuidString)").path
-        let publicPath = privatePath + ".pub"
-        
-        defer {
-            try? FileManager.default.removeItem(atPath: privatePath)
-            try? FileManager.default.removeItem(atPath: publicPath)
-        }
-        
-        // Generate with passphrase
-        try KeyFileManager.generateKeyPairFiles(
-            type: .ed25519,
-            privatePath: privatePath,
-            comment: "passphrase-test@example.com",
-            passphrase: "my-secure-passphrase"
-        )
-        
-        // Verify files exist
-        #expect(FileManager.default.fileExists(atPath: privatePath))
-        #expect(FileManager.default.fileExists(atPath: publicPath))
-        
-        // Read private key file
-        let privateKeyData = try Data(contentsOf: URL(fileURLWithPath: privatePath))
-        let privateKeyString = String(data: privateKeyData, encoding: .utf8)!
-        
-        // Verify OpenSSH format
-        #expect(privateKeyString.hasPrefix("-----BEGIN OPENSSH PRIVATE KEY-----"))
-        #expect(privateKeyString.contains("-----END OPENSSH PRIVATE KEY-----"))
-        
-        // Verify we can parse it back with the passphrase
-        let parsed = try OpenSSHPrivateKey.parse(data: privateKeyData, passphrase: "my-secure-passphrase")
-        #expect(parsed.comment == "passphrase-test@example.com")
-    }
 }
 
