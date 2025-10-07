@@ -21,20 +21,20 @@ This document tracks missing integration tests for complete bidirectional intero
 ## 🔴 HIGH PRIORITY - Core Interoperability
 
 ### OpenSSH Format Bidirectional (CRITICAL)
-- [ ] **Parse ssh-keygen's OpenSSH format Ed25519 keys** (unencrypted)
-- [ ] **Parse ssh-keygen's OpenSSH format Ed25519 keys** (encrypted with passphrase)
-- [ ] **Parse ssh-keygen's OpenSSH format RSA keys** (2048, 3072, 4096 bits)
-- [ ] **Parse ssh-keygen's OpenSSH format ECDSA keys** (P-256, P-384, P-521)
-- [ ] **ssh-keygen extracts public key from our OpenSSH format** (all key types)
-- [ ] **ssh-keygen can decrypt our OpenSSH format** (encrypted keys)
-- [ ] **Round-trip test**: Generate with ssh-keygen → Parse with us → Export → ssh-keygen reads
+- [x] **Parse ssh-keygen's OpenSSH format Ed25519 keys** (unencrypted)
+- [x] **Parse ssh-keygen's OpenSSH format Ed25519 keys** (encrypted with passphrase)
+- [x] **Parse ssh-keygen's OpenSSH format RSA keys** (2048, 3072, 4096 bits)
+- [x] **Parse ssh-keygen's OpenSSH format ECDSA keys** (P-256, P-384, P-521)
+- [x] **ssh-keygen extracts public key from our OpenSSH format** (all key types)
+- [x] **ssh-keygen can decrypt our OpenSSH format** (encrypted keys)
+- [x] **Round-trip test**: Generate with ssh-keygen → Parse with us → Export → ssh-keygen reads
 
 ### Fingerprint Matching (CRITICAL)
-- [ ] **SHA256 fingerprints match ssh-keygen** (Ed25519, RSA, ECDSA)
-- [ ] **SHA512 fingerprints match ssh-keygen** (all key types)
-- [ ] **MD5 fingerprints match ssh-keygen** (legacy format with colons)
-- [ ] **Fingerprint format consistency** (Base64 encoding, prefix handling)
-- [ ] **Fingerprint from different sources** (private key, public key, certificate)
+- [x] **SHA256 fingerprints match ssh-keygen** (Ed25519, RSA, ECDSA)
+- [x] **SHA512 fingerprints match ssh-keygen** (all key types)
+- [x] **MD5 fingerprints match ssh-keygen** (legacy format with colons)
+- [x] **Fingerprint format consistency** (Base64 encoding, prefix handling)
+- [x] **Fingerprint from different sources** (private key, public key, certificate)
 
 ### Parse ssh-keygen Generated Keys (CRITICAL)
 - [ ] **Parse ssh-keygen Ed25519 private key** (OpenSSH format, no passphrase)
@@ -62,13 +62,13 @@ This document tracks missing integration tests for complete bidirectional intero
 - [ ] **Parse certificates with custom extensions**
 
 ### RFC4716 Format Bidirectional
-- [ ] **Parse ssh-keygen RFC4716 public key** (Ed25519)
-- [ ] **Parse ssh-keygen RFC4716 public key** (RSA)
-- [ ] **Parse ssh-keygen RFC4716 public key** (ECDSA all curves)
-- [ ] **Parse ssh-keygen RFC4716 with headers** (Comment, Subject, etc.)
-- [ ] **ssh-keygen reads our RFC4716 format** (all key types)
-- [ ] **ssh-keygen preserves our RFC4716 headers**
-- [ ] **Round-trip RFC4716 conversion** (ssh-keygen → us → ssh-keygen)
+- [x] **Parse ssh-keygen RFC4716 public key** (Ed25519)
+- [x] **Parse ssh-keygen RFC4716 public key** (RSA)
+- [x] **Parse ssh-keygen RFC4716 public key** (ECDSA all curves)
+- [x] **Parse ssh-keygen RFC4716 with headers** (Comment, Subject, etc.)
+- [x] **ssh-keygen reads our RFC4716 format** (all key types)
+- [x] **ssh-keygen preserves our RFC4716 headers**
+- [x] **Round-trip RFC4716 conversion** (ssh-keygen → us → ssh-keygen)
 
 ## 🟡 MEDIUM PRIORITY - Important Features
 
@@ -84,11 +84,11 @@ This document tracks missing integration tests for complete bidirectional intero
 - [ ] **Signature verification with message data** (arbitrary payloads)
 
 ### Randomart Visualization
-- [ ] **Randomart matches ssh-keygen for same key** (Ed25519)
-- [ ] **Randomart matches ssh-keygen for same key** (RSA)
-- [ ] **Randomart matches ssh-keygen for same key** (ECDSA)
-- [ ] **Randomart visual structure identical** (border, dimensions, symbols)
-- [ ] **Randomart deterministic for same input**
+- [x] **Randomart matches ssh-keygen for same key** (Ed25519)
+- [x] **Randomart matches ssh-keygen for same key** (RSA)
+- [x] **Randomart matches ssh-keygen for same key** (ECDSA)
+- [x] **Randomart visual structure identical** (border, dimensions, symbols)
+- [x] **Randomart deterministic for same input**
 
 ### Host Certificates
 - [ ] **ssh-keygen verifies our host certificate** (Ed25519 CA)
@@ -99,20 +99,20 @@ This document tracks missing integration tests for complete bidirectional intero
 - [ ] **Host certificate validity checks**
 
 ### Passphrase Operations Bidirectional
-- [ ] **ssh-keygen changes passphrase on our OpenSSH key**
-- [ ] **ssh-keygen removes passphrase from our OpenSSH key**
-- [ ] **ssh-keygen adds passphrase to our unencrypted OpenSSH key**
+- [x] **ssh-keygen changes passphrase on our OpenSSH key**
+- [x] **ssh-keygen removes passphrase from our OpenSSH key**
+- [x] **ssh-keygen adds passphrase to our unencrypted OpenSSH key**
 - [ ] **ssh-keygen changes passphrase on our PEM key**
 - [ ] **ssh-keygen changes passphrase on our PKCS8 key**
-- [ ] **We change passphrase on ssh-keygen OpenSSH key** (if KeyManager supports)
-- [ ] **We remove passphrase from ssh-keygen key** (if KeyManager supports)
-- [ ] **Passphrase operation preserves key integrity**
+- [x] **We change passphrase on ssh-keygen OpenSSH key** (if KeyManager supports)
+- [x] **We remove passphrase from ssh-keygen key** (if KeyManager supports)
+- [x] **Passphrase operation preserves key integrity**
 
 ### Bubble Babble Format
-- [ ] **Bubble babble matches ssh-keygen** (Ed25519)
-- [ ] **Bubble babble matches ssh-keygen** (RSA)
-- [ ] **Bubble babble matches ssh-keygen** (ECDSA all curves)
-- [ ] **Bubble babble format structure** (hyphen separation, vowel-consonant pattern)
+- [x] **Bubble babble matches ssh-keygen** (Ed25519)
+- [x] **Bubble babble matches ssh-keygen** (RSA)
+- [x] **Bubble babble matches ssh-keygen** (ECDSA all curves)
+- [x] **Bubble babble format structure** (hyphen separation, vowel-consonant pattern)
 
 ## 🟢 LOWER PRIORITY - Completeness
 
@@ -188,25 +188,30 @@ This document tracks missing integration tests for complete bidirectional intero
 Tests/SwiftKeyGenTests/Integration/
 ├── SSHKeygenIntegrationTests.swift          # ✅ Existing (PEM/PKCS8 encryption)
 ├── CertificateSSHKeygenIntegrationTests.swift # ✅ Existing (Certificate verification)
-├── OpenSSHFormatIntegrationTests.swift       # 🆕 OpenSSH format bidirectional
-├── FingerprintIntegrationTests.swift         # 🆕 All fingerprint algorithms
-├── SignatureIntegrationTests.swift           # 🆕 Signature verification
-├── PassphraseIntegrationTests.swift          # 🆕 Passphrase operations
-├── RFC4716IntegrationTests.swift             # 🆕 RFC4716 format
-├── RandomartIntegrationTests.swift           # 🆕 Randomart and bubble babble
-├── KnownHostsIntegrationTests.swift          # 🆕 known_hosts file handling
-└── CertificateAdvancedIntegrationTests.swift # 🆕 Advanced certificate features
+├── OpenSSHFormatIntegrationTests.swift       # ✅ IMPLEMENTED (OpenSSH format bidirectional)
+├── FingerprintIntegrationTests.swift         # ✅ IMPLEMENTED (All fingerprint algorithms)
+├── RFC4716IntegrationTests.swift             # ✅ IMPLEMENTED (RFC4716 format)
+├── PassphraseIntegrationTests.swift          # ✅ IMPLEMENTED (Passphrase operations)
+├── RandomartIntegrationTests.swift           # ✅ IMPLEMENTED (Randomart and bubble babble)
+├── SignatureIntegrationTests.swift           # 🆕 Signature verification (TODO)
+├── KnownHostsIntegrationTests.swift          # 🆕 known_hosts file handling (TODO)
+└── CertificateAdvancedIntegrationTests.swift # 🆕 Advanced certificate features (TODO)
 ```
 
 ## 🎯 Immediate Next Steps
 
-Start with these 5 test files in priority order:
+~~Start with these 5 test files in priority order:~~ ✅ **COMPLETED!**
 
-1. **OpenSSHFormatIntegrationTests.swift** - Most critical, most common format
-2. **FingerprintIntegrationTests.swift** - Essential for key identification
-3. **RFC4716IntegrationTests.swift** - Complete format coverage
-4. **SignatureIntegrationTests.swift** - Security-critical verification
-5. **PassphraseIntegrationTests.swift** - Common user workflows
+1. ✅ **OpenSSHFormatIntegrationTests.swift** - Most critical, most common format
+2. ✅ **FingerprintIntegrationTests.swift** - Essential for key identification
+3. ✅ **RFC4716IntegrationTests.swift** - Complete format coverage
+4. ⏭️ **SignatureIntegrationTests.swift** - Security-critical verification (TODO)
+5. ✅ **PassphraseIntegrationTests.swift** - Common user workflows
+
+**Next Priority:**
+- SignatureIntegrationTests.swift (for signature verification bidirectionality)
+- CertificateAdvancedIntegrationTests.swift (host certs, critical options, extensions)
+- KnownHostsIntegrationTests.swift (if known_hosts support exists)
 
 ## 📝 Notes
 
