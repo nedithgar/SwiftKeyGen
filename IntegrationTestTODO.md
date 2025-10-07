@@ -37,29 +37,29 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Fingerprint from different sources** (private key, public key, certificate)
 
 ### Parse ssh-keygen Generated Keys (CRITICAL)
-- [ ] **Parse ssh-keygen Ed25519 private key** (OpenSSH format, no passphrase)
-- [ ] **Parse ssh-keygen Ed25519 private key** (with passphrase)
-- [ ] **Parse ssh-keygen RSA private keys** (2048, 3072, 4096 bits, no passphrase)
-- [ ] **Parse ssh-keygen RSA private keys** (with passphrase)
-- [ ] **Parse ssh-keygen ECDSA P-256 private key** (no passphrase)
-- [ ] **Parse ssh-keygen ECDSA P-384 private key** (no passphrase)
-- [ ] **Parse ssh-keygen ECDSA P-521 private key** (no passphrase)
-- [ ] **Parse ssh-keygen ECDSA keys** (with passphrase)
-- [ ] **Extract correct public key from ssh-keygen private keys**
-- [ ] **Preserve key comments from ssh-keygen**
+- [x] **Parse ssh-keygen Ed25519 private key** (OpenSSH format, no passphrase)
+- [x] **Parse ssh-keygen Ed25519 private key** (with passphrase)
+- [x] **Parse ssh-keygen RSA private keys** (2048, 3072, 4096 bits, no passphrase)
+- [x] **Parse ssh-keygen RSA private keys** (with passphrase)
+- [x] **Parse ssh-keygen ECDSA P-256 private key** (no passphrase)
+- [x] **Parse ssh-keygen ECDSA P-384 private key** (no passphrase)
+- [x] **Parse ssh-keygen ECDSA P-521 private key** (no passphrase)
+- [x] **Parse ssh-keygen ECDSA keys** (with passphrase)
+- [x] **Extract correct public key from ssh-keygen private keys**
+- [x] **Preserve key comments from ssh-keygen**
 
 ### Parse ssh-keygen Certificates (CRITICAL)
-- [ ] **Parse ssh-keygen signed user certificate** (Ed25519 CA)
-- [ ] **Parse ssh-keygen signed user certificate** (RSA CA with rsa-sha2-256)
-- [ ] **Parse ssh-keygen signed user certificate** (RSA CA with rsa-sha2-512)
-- [ ] **Parse ssh-keygen signed user certificate** (ECDSA P-256 CA)
-- [ ] **Parse ssh-keygen signed user certificate** (ECDSA P-384 CA)
-- [ ] **Parse ssh-keygen signed user certificate** (ECDSA P-521 CA)
-- [ ] **Parse ssh-keygen signed host certificate** (all CA types)
-- [ ] **Verify signature on ssh-keygen certificate** (all CA types)
-- [ ] **Extract all certificate fields correctly** (principals, validity, serial, options, extensions)
-- [ ] **Parse certificates with critical options** (force-command, source-address)
-- [ ] **Parse certificates with custom extensions**
+- [x] **Parse ssh-keygen signed user certificate** (Ed25519 CA)
+- [x] **Parse ssh-keygen signed user certificate** (RSA CA with rsa-sha2-256)
+- [x] **Parse ssh-keygen signed user certificate** (RSA CA with rsa-sha2-512)
+- [x] **Parse ssh-keygen signed user certificate** (ECDSA P-256 CA)
+- [x] **Parse ssh-keygen signed user certificate** (ECDSA P-384 CA)
+- [x] **Parse ssh-keygen signed user certificate** (ECDSA P-521 CA)
+- [x] **Parse ssh-keygen signed host certificate** (all CA types)
+- [x] **Verify signature on ssh-keygen certificate** (all CA types)
+- [x] **Extract all certificate fields correctly** (principals, validity, serial, options, extensions)
+- [x] **Parse certificates with critical options** (force-command, source-address)
+- [x] **Parse certificates with custom extensions**
 
 ### RFC4716 Format Bidirectional
 - [x] **Parse ssh-keygen RFC4716 public key** (Ed25519)
@@ -73,15 +73,15 @@ This document tracks missing integration tests for complete bidirectional intero
 ## 🟡 MEDIUM PRIORITY - Important Features
 
 ### Signature Verification Bidirectional
-- [ ] **Verify ssh-keygen RSA signature** (ssh-rsa with SHA1)
-- [ ] **Verify ssh-keygen RSA signature** (rsa-sha2-256)
-- [ ] **Verify ssh-keygen RSA signature** (rsa-sha2-512)
-- [ ] **Verify ssh-keygen ECDSA P-256 signature** (ecdsa-sha2-nistp256)
-- [ ] **Verify ssh-keygen ECDSA P-384 signature** (ecdsa-sha2-nistp384)
-- [ ] **Verify ssh-keygen ECDSA P-521 signature** (ecdsa-sha2-nistp521)
-- [ ] **Verify ssh-keygen Ed25519 signature** (ssh-ed25519)
-- [ ] **ssh-keygen verifies our signatures** (via certificate trust chain)
-- [ ] **Signature verification with message data** (arbitrary payloads)
+- [x] **Verify ssh-keygen RSA signature** (ssh-rsa with SHA1)
+- [x] **Verify ssh-keygen RSA signature** (rsa-sha2-256)
+- [x] **Verify ssh-keygen RSA signature** (rsa-sha2-512)
+- [x] **Verify ssh-keygen ECDSA P-256 signature** (ecdsa-sha2-nistp256)
+- [x] **Verify ssh-keygen ECDSA P-384 signature** (ecdsa-sha2-nistp384)
+- [x] **Verify ssh-keygen ECDSA P-521 signature** (ecdsa-sha2-nistp521)
+- [x] **Verify ssh-keygen Ed25519 signature** (ssh-ed25519)
+- [x] **ssh-keygen verifies our signatures** (via certificate trust chain)
+- [x] **Signature verification with message data** (arbitrary payloads)
 
 ### Randomart Visualization
 - [x] **Randomart matches ssh-keygen for same key** (Ed25519)
@@ -91,12 +91,12 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Randomart deterministic for same input**
 
 ### Host Certificates
-- [ ] **ssh-keygen verifies our host certificate** (Ed25519 CA)
-- [ ] **ssh-keygen verifies our host certificate** (RSA CA)
-- [ ] **ssh-keygen verifies our host certificate** (ECDSA CA)
-- [ ] **We verify ssh-keygen host certificate** (all CA types)
-- [ ] **Host certificate with wildcard principals**
-- [ ] **Host certificate validity checks**
+- [x] **ssh-keygen verifies our host certificate** (Ed25519 CA)
+- [x] **ssh-keygen verifies our host certificate** (RSA CA)
+- [x] **ssh-keygen verifies our host certificate** (ECDSA CA)
+- [x] **We verify ssh-keygen host certificate** (all CA types)
+- [x] **Host certificate with wildcard principals**
+- [x] **Host certificate validity checks**
 
 ### Passphrase Operations Bidirectional
 - [x] **ssh-keygen changes passphrase on our OpenSSH key**
@@ -193,25 +193,42 @@ Tests/SwiftKeyGenTests/Integration/
 ├── RFC4716IntegrationTests.swift             # ✅ IMPLEMENTED (RFC4716 format)
 ├── PassphraseIntegrationTests.swift          # ✅ IMPLEMENTED (Passphrase operations)
 ├── RandomartIntegrationTests.swift           # ✅ IMPLEMENTED (Randomart and bubble babble)
-├── SignatureIntegrationTests.swift           # 🆕 Signature verification (TODO)
-├── KnownHostsIntegrationTests.swift          # 🆕 known_hosts file handling (TODO)
-└── CertificateAdvancedIntegrationTests.swift # 🆕 Advanced certificate features (TODO)
+├── ParseSSHKeygenKeysIntegrationTests.swift  # ✅ NEW - Parse ssh-keygen generated keys
+├── ParseSSHKeygenCertificatesIntegrationTests.swift # ✅ NEW - Parse ssh-keygen certificates
+├── SignatureVerificationIntegrationTests.swift # ✅ NEW - Signature verification bidirectional
+├── CertificateAdvancedIntegrationTests.swift # ✅ NEW - Advanced certificate features & host certs
+└── KnownHostsIntegrationTests.swift          # 🆕 known_hosts file handling (TODO - lower priority)
 ```
 
 ## 🎯 Immediate Next Steps
 
-~~Start with these 5 test files in priority order:~~ ✅ **COMPLETED!**
+✅ **ALL HIGH PRIORITY TESTS COMPLETED!**
 
-1. ✅ **OpenSSHFormatIntegrationTests.swift** - Most critical, most common format
-2. ✅ **FingerprintIntegrationTests.swift** - Essential for key identification
-3. ✅ **RFC4716IntegrationTests.swift** - Complete format coverage
-4. ⏭️ **SignatureIntegrationTests.swift** - Security-critical verification (TODO)
-5. ✅ **PassphraseIntegrationTests.swift** - Common user workflows
+Successfully implemented 4 new comprehensive test suites:
 
-**Next Priority:**
-- SignatureIntegrationTests.swift (for signature verification bidirectionality)
-- CertificateAdvancedIntegrationTests.swift (host certs, critical options, extensions)
-- KnownHostsIntegrationTests.swift (if known_hosts support exists)
+1. ✅ **ParseSSHKeygenKeysIntegrationTests.swift** - Parse keys generated by ssh-keygen
+2. ✅ **ParseSSHKeygenCertificatesIntegrationTests.swift** - Parse certificates created by ssh-keygen
+3. ✅ **SignatureVerificationIntegrationTests.swift** - Bidirectional signature verification
+4. ✅ **CertificateAdvancedIntegrationTests.swift** - Host certificates, options, extensions, edge cases
+
+**Coverage Summary:**
+- ✅ Parse all ssh-keygen key types (Ed25519, RSA, ECDSA) with and without passphrases
+- ✅ Parse all ssh-keygen certificate types (user, host) with all CA types
+- ✅ Verify ssh-keygen signatures (all algorithms: Ed25519, RSA SHA-256/512, ECDSA P-256/384/521)
+- ✅ ssh-keygen verifies our signatures (bidirectional verification)
+- ✅ Host certificates with all CA types
+- ✅ Certificate critical options (force-command, source-address)
+- ✅ Certificate extensions handling
+- ✅ Certificate validity checks
+- ✅ Multiple principals and wildcard support
+- ✅ Comment preservation from ssh-keygen keys
+
+**Lower Priority Remaining:**
+- KnownHostsIntegrationTests.swift (known_hosts file handling)
+- Large RSA key sizes (8192, 16384 bits)
+- Certificate validity edge cases (expired, not-yet-valid)
+- Format conversion round-trips
+- Error handling parity
 
 ## 📝 Notes
 
