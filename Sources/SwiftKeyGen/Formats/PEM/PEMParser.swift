@@ -2,12 +2,41 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Parser for PEM and PKCS#8 format keys
+/// High–level utilities for parsing cryptographic key material encoded in
+/// PEM (Privacy Enhanced Mail) textual containers.
+///
+/// This parser focuses on SSH‑relevant algorithms (RSA, ECDSA curves P‑256 / P‑384 / P‑521,
+/// and Ed25519) and supports both public and private key encodings in common
+/// OpenSSL / PKCS#8 / SEC1 forms. It also understands legacy OpenSSL encrypted
+/// private key headers (``Proc-Type`` / ``DEK-Info``) for ECDSA / Ed25519 keys.
+///
+/// All public parsing entry points return strongly typed key model instances
+/// defined elsewhere in the library (e.g. ``RSAPublicKey`` / ``ECDSAPublicKey`` /
+/// ``ECDSAKey`` / ``Ed25519Key``) to preserve invariant enforcement and reduce
+/// the risk of mis‑use of raw key bytes.
+///
+/// Error handling:
+/// - Throws ``SSHKeyError`` values for invalid formats, unsupported algorithms, missing passphrases, or decryption failures.
+/// - Parsing attempts perform conservative validation; malformed or truncated data results in ``SSHKeyError.invalidKeyData``.
+///
+/// Thread safety:
+/// All functions are pure and stateless; the type exposes only static helpers and is therefore thread‑safe.
 public struct PEMParser {
     
     // MARK: - RSA Key Parsing
     
-    /// Parse an RSA public key from PEM format
+    /// Parses an RSA public key contained in a PEM block.
+    ///
+    /// Supported PEM headers:
+    /// - `-----BEGIN RSA PUBLIC KEY-----`
+    /// - `-----BEGIN PUBLIC KEY-----` (PKCS#8 SubjectPublicKeyInfo wrapping RSA)
+    ///
+    /// The implementation delegates to Swift Crypto to decode the public key,
+    /// then extracts the modulus and exponent to build an internal ``RSAPublicKey``.
+    ///
+    /// - Parameter pemString: The full PEM text (including BEGIN/END lines).
+    /// - Returns: A populated ``RSAPublicKey`` instance.
+    /// - Throws: ``SSHKeyError.invalidKeyData`` if DER decoding fails, or other ``SSHKeyError`` / Crypto errors surfaced during parsing.
     public static func parseRSAPublicKey(_ pemString: String) throws -> RSAPublicKey {
         // Use Swift Crypto's built-in PEM parser
         let publicKey = try _RSA.Signing.PublicKey(pemRepresentation: pemString)
@@ -20,7 +49,17 @@ public struct PEMParser {
     
     // MARK: - ECDSA Key Parsing
     
-    /// Parse an ECDSA public key from PEM format
+    /// Parses an ECDSA public key from a PEM representation.
+    ///
+    /// The method first attempts native curve parsing via Swift Crypto for
+    /// P‑256 / P‑384 / P‑521 in standard SubjectPublicKeyInfo form. If those
+    /// attempts fail, it falls back to a manual PKCS#8 structure examination
+    /// to recover the curve OID and raw point.
+    ///
+    /// - Important: Only uncompressed EC points are supported (the OpenSSH / PKCS#8 default).
+    /// - Parameter pemString: The PEM text for the public key.
+    /// - Returns: An ``ECDSAPublicKey`` containing curve metadata and the x963 point.
+    /// - Throws: ``SSHKeyError.invalidKeyData`` when the encoded data is malformed, or ``SSHKeyError.unsupportedOperation`` for unknown curves.
     public static func parseECDSAPublicKey(_ pemString: String) throws -> ECDSAPublicKey {
         // First try the standard Swift Crypto PEM parser
         if let p256Key = try? P256.Signing.PublicKey(pemRepresentation: pemString) {
@@ -182,7 +221,11 @@ public struct PEMParser {
     
     // MARK: - Ed25519 Key Parsing
     
-    /// Parse an Ed25519 public key from PEM format
+    /// Parses an Ed25519 public key from a PEM block.
+    ///
+    /// - Parameter pemString: PEM text with BEGIN/END markers.
+    /// - Returns: An ``Ed25519PublicKey`` wrapping the 32‑byte public key.
+    /// - Throws: ``SSHKeyError.invalidKeyData`` if the key cannot be decoded.
     public static func parseEd25519PublicKey(_ pemString: String) throws -> Ed25519PublicKey {
         let publicKey = try Curve25519.Signing.PublicKey(pemRepresentation: pemString)
         return try Ed25519PublicKey(publicKeyData: publicKey.rawRepresentation)
@@ -190,7 +233,17 @@ public struct PEMParser {
     
     // RSA private key parsing is now implemented in RSA+PEM.swift
     
-    /// Parse an ECDSA private key from PEM format
+    /// Parses an ECDSA private key from PEM text (unencrypted or legacy OpenSSL encrypted).
+    ///
+    /// The function detects encryption headers (`Proc-Type`, `DEK-Info`). If encrypted,
+    /// a passphrase must be supplied to decrypt the payload prior to decoding either a
+    /// SEC1 (traditional EC) or PKCS#8 wrapper.
+    ///
+    /// - Parameters:
+    ///   - pemString: Complete PEM string including header/footer lines.
+    ///   - passphrase: Optional passphrase for legacy OpenSSL PEM encryption (not PKCS#8 PBES2).
+    /// - Returns: A strongly typed ``ECDSAKey`` instance corresponding to the discovered curve.
+    /// - Throws: ``SSHKeyError.passphraseRequired`` if encrypted but no passphrase is supplied, or ``SSHKeyError.invalidKeyData`` / ``SSHKeyError.unsupportedOperation`` for malformed or unsupported keys.
     public static func parseECDSAPrivateKey(_ pemString: String, passphrase: String? = nil) throws -> ECDSAKey {
         let trimmedPEM = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -448,7 +501,17 @@ public struct PEMParser {
         return try parseECDSAPrivateKeyFromSEC1(privateKeyOctet)
     }
     
-    /// Parse an Ed25519 private key from PEM format
+    /// Parses an Ed25519 private key from PEM text (unencrypted or legacy OpenSSL encrypted).
+    ///
+    /// For encrypted PEM (OpenSSL traditional style) a passphrase is required. The
+    /// decrypted payload is expected in PKCS#8 form and the inner 32‑byte seed is
+    /// extracted to construct the Swift Crypto private key.
+    ///
+    /// - Parameters:
+    ///   - pemString: The full PEM string (BEGIN/END + body).
+    ///   - passphrase: Passphrase for legacy OpenSSL encryption if present.
+    /// - Returns: An ``Ed25519Key`` containing the private key material.
+    /// - Throws: ``SSHKeyError.passphraseRequired`` if needed but absent, or ``SSHKeyError.invalidKeyData`` for malformed content.
     public static func parseEd25519PrivateKey(_ pemString: String, passphrase: String? = nil) throws -> Ed25519Key {
         let trimmedPEM = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -583,12 +646,22 @@ public struct PEMParser {
         return try Curve25519.Signing.PrivateKey(rawRepresentation: actualKeyData)
     }
     
-    /// Check if a string is in PEM format
+    /// Returns a Boolean indicating whether the provided string appears to contain a PEM block.
+    ///
+    /// Detection is heuristic and simply checks for the presence of both `-----BEGIN` and `-----END` markers.
+    ///
+    /// - Parameter keyString: Arbitrary textual input.
+    /// - Returns: `true` if the string likely contains at least one PEM block; otherwise `false`.
     public static func isPEMFormat(_ keyString: String) -> Bool {
         return keyString.contains("-----BEGIN") && keyString.contains("-----END")
     }
     
-    /// Detect PEM type from string
+    /// Determines the declared PEM type (the token between `BEGIN` / `END`) of the first block in the string.
+    ///
+    /// Example: for a header `-----BEGIN EC PRIVATE KEY-----` this returns `EC PRIVATE KEY`.
+    ///
+    /// - Parameter pemString: The PEM text.
+    /// - Returns: The type token or `nil` if no PEM header was found.
     public static func detectPEMType(_ pemString: String) -> String? {
         let lines = pemString.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         
@@ -603,9 +676,14 @@ public struct PEMParser {
         return nil
     }
 
-    /// Parse a generic PEM block and return its declared type and decoded payload bytes.
-    /// - Returns: Tuple of `(type, data)` where `type` is the header type between BEGIN/END markers,
-    ///            and `data` is the base64-decoded payload between the markers (headers like Proc-Type/DEK-Info are skipped).
+    /// Parses a generic PEM block and returns its declared type and decoded payload bytes.
+    ///
+    /// This routine strips legacy OpenSSL encryption headers (`Proc-Type`, `DEK-Info`) but does **not** decrypt the body.
+    /// It is suitable as a low‑level primitive for higher‑level format detection or additional ASN.1 decoding.
+    ///
+    /// - Parameter pemString: PEM text containing exactly (or at least) one block.
+    /// - Returns: A tuple `(type: String, data: Data)` where `type` is the header token and `data` is the raw DER / binary content.
+    /// - Throws: ``SSHKeyError.invalidFormat`` if the PEM markers are missing or ``SSHKeyError.invalidBase64`` if decoding fails.
     public static func parsePEM(_ pemString: String) throws -> (type: String, data: Data) {
         guard let pemType = detectPEMType(pemString) else {
             throw SSHKeyError.invalidFormat
@@ -639,13 +717,22 @@ public struct PEMParser {
         return (pemType, data)
     }
     
-    /// Check if PEM contains a private key
+    /// Heuristically determines if the first PEM block appears to represent a private key.
+    ///
+    /// Detection is string based (`PRIVATE` substring in the type token) and does not inspect ASN.1 structure.
+    ///
+    /// - Parameter pemString: The PEM text to inspect.
+    /// - Returns: `true` when the PEM type token contains `PRIVATE`; otherwise `false`.
     public static func isPrivateKey(_ pemString: String) -> Bool {
         guard let pemType = detectPEMType(pemString) else { return false }
         return pemType.contains("PRIVATE")
     }
     
-    /// Try to detect the key algorithm from PEM type
+    /// Attempts to infer the key algorithm family from the PEM type header without parsing ASN.1 content.
+    ///
+    /// - Note: Returns `nil` for generic `PUBLIC KEY` / `PRIVATE KEY` containers where algorithm identification requires ASN.1 inspection.
+    /// - Parameter pemString: PEM text to analyze.
+    /// - Returns: A string identifier (e.g. `RSA`, `ECDSA`) or `nil` if the algorithm cannot be determined heuristically.
     public static func detectKeyAlgorithm(_ pemString: String) -> String? {
         guard let pemType = detectPEMType(pemString) else { return nil }
         
