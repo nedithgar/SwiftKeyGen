@@ -98,7 +98,7 @@ struct OpenSSHParseTests {
         #expect(try key.verify(signature: sig, for: message))
     }
 
-    @Test("RSA key serialize and parse (slow)", .disabled())
+    @Test("RSA key serialize and parse", .tags(.rsa, .slow))
     func testRSASerializeAndParse() throws {
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@example.com") as! RSAKey
         let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
