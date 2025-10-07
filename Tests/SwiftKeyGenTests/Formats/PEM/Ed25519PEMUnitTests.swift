@@ -3,7 +3,7 @@ import Foundation
 import Crypto
 @testable import SwiftKeyGen
 
-@Suite("Ed25519 PKCS#8/SPKI + PEM", .tags(.unit, .critical))
+@Suite("Ed25519 PKCS#8/SPKI + PEM", .tags(.unit))
 struct Ed25519PEMUnitTests {
 
     @Test("PrivateKey PKCS#8 DER/PEM round-trip")
