@@ -385,4 +385,108 @@ struct PassphraseIntegrationTests {
             #expect(origNorm == emptyNorm, "Empty-passphrase key should have same public key")
         }
     }
+    
+    // MARK: - PEM/PKCS8 Format Passphrase Operations
+    
+    @Test("ssh-keygen changes passphrase on our PEM key", .tags(.slow))
+    func testSSHKeygenChangesPassphraseOnOurPEM() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate ECDSA key and export to SEC1 PEM with passphrase
+            let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "pem-passphrase@example.com") as! ECDSAKey
+            let oldPassphrase = "old-pem-secret"
+            let newPassphrase = "new-pem-secret"
+            
+            let keyPath = tempDir.appendingPathComponent("our_key.pem")
+            let pemData = try key.sec1PEMRepresentation(passphrase: oldPassphrase)
+            try IntegrationTestSupporter.write(pemData, to: keyPath)
+            
+            // Verify the PEM structure before passphrase change
+            let originalPEM = try String(contentsOf: keyPath, encoding: .utf8)
+            #expect(originalPEM.contains("BEGIN EC PRIVATE KEY"), "Should be SEC1 PEM format")
+            #expect(originalPEM.contains("Proc-Type: 4,ENCRYPTED"), "Should be encrypted")
+            
+            // Change passphrase with ssh-keygen
+            let changeResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-p",
+                "-f", keyPath.path,
+                "-m", "PEM",  // Keep PEM format
+                "-P", oldPassphrase,
+                "-N", newPassphrase
+            ])
+            #expect(changeResult.succeeded, "ssh-keygen should change passphrase on our PEM key")
+            
+            // Verify ssh-keygen can read with new passphrase
+            let extractResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y",
+                "-f", keyPath.path,
+                "-P", newPassphrase
+            ])
+            #expect(extractResult.succeeded, "ssh-keygen should read PEM with new passphrase")
+            
+            // Verify public key is unchanged
+            let ourNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let newNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(extractResult.stdout)
+            #expect(ourNorm == newNorm, "Public key should be unchanged after PEM passphrase change")
+            
+            // Verify old passphrase no longer works
+            let oldPassResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y",
+                "-f", keyPath.path,
+                "-P", oldPassphrase
+            ])
+            #expect(oldPassResult.failed, "ssh-keygen should reject old passphrase")
+        }
+    }
+    
+    @Test("ssh-keygen changes passphrase on our PKCS8 key", .tags(.slow))
+    func testSSHKeygenChangesPassphraseOnOurPKCS8() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate ECDSA key and export to PKCS8 with passphrase
+            // TODO: 
+            // Note: RSA encrypted PKCS8 is not supported by Swift Crypto
+            let key = try SwiftKeyGen.generateKey(type: .ecdsa384, comment: "pkcs8-passphrase@example.com") as! ECDSAKey
+            let oldPassphrase = "old-pkcs8-secret"
+            let newPassphrase = "new-pkcs8-secret"
+            
+            let keyPath = tempDir.appendingPathComponent("our_key.p8")
+            let pkcs8Data = try key.pkcs8PEMRepresentation(passphrase: oldPassphrase)
+            try IntegrationTestSupporter.write(pkcs8Data, to: keyPath)
+            
+            // Verify the PKCS8 structure before passphrase change
+            let originalPKCS8 = try String(contentsOf: keyPath, encoding: .utf8)
+            #expect(originalPKCS8.contains("BEGIN ENCRYPTED PRIVATE KEY"), "Should be encrypted PKCS8 format")
+            #expect(!originalPKCS8.contains("Proc-Type"), "PKCS8 should not have PEM-style encryption headers")
+            
+            // Change passphrase with ssh-keygen
+            let changeResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-p",
+                "-f", keyPath.path,
+                "-m", "PKCS8",  // Keep PKCS8 format
+                "-P", oldPassphrase,
+                "-N", newPassphrase
+            ])
+            #expect(changeResult.succeeded, "ssh-keygen should change passphrase on our PKCS8 key")
+            
+            // Verify ssh-keygen can read with new passphrase
+            let extractResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y",
+                "-f", keyPath.path,
+                "-P", newPassphrase
+            ])
+            #expect(extractResult.succeeded, "ssh-keygen should read PKCS8 with new passphrase")
+            
+            // Verify public key is unchanged
+            let ourNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let newNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(extractResult.stdout)
+            #expect(ourNorm == newNorm, "Public key should be unchanged after PKCS8 passphrase change")
+            
+            // Verify old passphrase no longer works
+            let oldPassResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y",
+                "-f", keyPath.path,
+                "-P", oldPassphrase
+            ])
+            #expect(oldPassResult.failed, "ssh-keygen should reject old passphrase")
+        }
+    }
 }
