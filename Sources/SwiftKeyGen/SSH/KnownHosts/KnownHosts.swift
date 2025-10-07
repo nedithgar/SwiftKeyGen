@@ -2,17 +2,62 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
+// MARK: - Known Hosts Models & Manager
+
+/// Utilities for parsing, managing, and verifying entries in an OpenSSH `known_hosts` file.
+///
+/// This file contains:
+/// - ``KnownHostsEntry``: An individual line/record from a `known_hosts` file.
+/// - ``KnownHostsManager``: High–level API for reading, writing, hashing, and verifying entries.
+///
+/// The implementation aims for compatibility with the behavior of `ssh` and `ssh-keygen`:
+/// - Lines starting with `#` or blank lines are ignored.
+/// - Each non‑comment line is expected to contain at least: `hostnames keytype base64data [comment...]`.
+/// - Multiple host patterns may be comma‑separated on a single line.
+/// - Hashed hostnames (``KnownHostsManager.hashHostnames()`` / `ssh-keygen -H`) use the legacy
+///   HMAC‑SHA1 construction for interoperability (OpenSSH format: `|1|salt|hash`).
+///
+/// Security Notes:
+/// - The project deliberately uses `Insecure.SHA1` only in this legacy context because OpenSSH
+///   still relies on this specific construction for hashed host patterns. Modern cryptographic
+///   decisions elsewhere should avoid SHA‑1.
+/// - A host key *mismatch* (``KnownHostsManager.VerificationResult/mismatch``) should be treated
+///   as a potential MITM or unexpected key rotation event and surfaced clearly to callers.
+
 /// A single entry in an OpenSSH `known_hosts` file.
 public struct KnownHostsEntry {
-    /// Host pattern (hostname, `[host]:port`, wildcard, or hashed form).
+    /// The raw host pattern segment as parsed from the line.
+    ///
+    /// Can be one of:
+    /// - A plain hostname: `example.com`
+    /// - A bracketed host with non‑default port: `[example.com]:2222`
+    /// - A comma‑separated list of host patterns
+    /// - A wildcard pattern containing `*` or `?`
+    /// - A hashed host marker in the OpenSSH form: `|1|salt|hash`
+    ///
+    /// Multiple host patterns are **not** split here; they are preserved verbatim for round‑trip
+    /// fidelity. Callers that need individual patterns should split on commas when appropriate.
     public let hostPattern: String
-    /// Key algorithm for the entry.
+    /// The SSH public key algorithm (e.g. ``KeyType/sshEd25519``, ``KeyType/rsa``).
     public let keyType: KeyType
-    /// SSH wire‑format public key data.
+    /// The raw SSH wire‑format public key blob (decoded from the base64 column).
+    ///
+    /// This is the same binary payload that would appear on the wire during key exchange,
+    /// beginning with the algorithm name length + bytes.
     public let publicKey: Data
-    /// Optional comment if present on the line.
+    /// Optional trailing comment captured after the key data (if present).
+    ///
+    /// Note: The current parser does **not** capture comments yet (they are discarded), but the
+    /// property exists for future enhancement and API stability.
     public let comment: String?
     
+    /// Creates a new ``KnownHostsEntry``.
+    ///
+    /// - Parameters:
+    ///   - hostPattern: The host pattern or hashed host segment.
+    ///   - keyType: The SSH key algorithm.
+    ///   - publicKey: The decoded SSH public key blob.
+    ///   - comment: Optional trailing comment.
     public init(hostPattern: String, keyType: KeyType, publicKey: Data, comment: String? = nil) {
         self.hostPattern = hostPattern
         self.keyType = keyType
@@ -20,7 +65,16 @@ public struct KnownHostsEntry {
         self.comment = comment
     }
     
-    /// Parse a known_hosts line
+    /// Parses a single `known_hosts` line into a ``KnownHostsEntry``.
+    ///
+    /// Behavior:
+    /// - Ignores blank lines and comments (lines beginning with `#`). Returns `nil` for those.
+    /// - Returns `nil` for malformed or unrecognized lines instead of throwing.
+    /// - Currently discards any trailing comment portion (future enhancement may restore it).
+    ///
+    /// - Parameter line: The raw line text (without newline terminator).
+    /// - Returns: A ``KnownHostsEntry`` if the line could be parsed; otherwise `nil`.
+    /// - Throws: Reserved for future error signaling (currently does **not** throw).
     public static func parse(_ line: String) throws -> KnownHostsEntry? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         
@@ -54,7 +108,11 @@ public struct KnownHostsEntry {
         )
     }
     
-    /// Convert to a `known_hosts` line format.
+    /// Serializes the entry back into OpenSSH `known_hosts` file line form.
+    ///
+    /// Format: `<hostPattern> <keyType> <base64(publicKey)> [comment]`
+    ///
+    /// - Returns: A one‑line canonical representation suitable for direct file persistence.
     public func toLine() -> String {
         var line = "\(hostPattern) \(keyType.rawValue) \(publicKey.base64EncodedString())"
         if let comment = comment {
@@ -68,11 +126,17 @@ public struct KnownHostsEntry {
 public struct KnownHostsManager {
     private let filePath: String
     
+    /// Creates a manager bound to the user’s `known_hosts` file or a custom path.
+    ///
+    /// - Parameter filePath: Optional override path. If `nil`, defaults to `~/.ssh/known_hosts`.
     public init(filePath: String? = nil) {
         self.filePath = filePath ?? NSString(string: "~/.ssh/known_hosts").expandingTildeInPath
     }
     
-    /// Read all entries from the `known_hosts` file.
+    /// Reads and parses all entries from the backing `known_hosts` file.
+    ///
+    /// - Returns: An array of successfully parsed entries. Malformed lines are skipped.
+    /// - Throws: File I/O errors if the file exists but cannot be read.
     public func readEntries() throws -> [KnownHostsEntry] {
         guard FileManager.default.fileExists(atPath: filePath) else {
             return []
@@ -90,7 +154,17 @@ public struct KnownHostsManager {
         return entries
     }
     
-    /// Add a new host key.
+    /// Appends a new host key entry (generating an appropriate host pattern when a non‑default port is provided).
+    ///
+    /// Behavior:
+    /// - If `port` is `nil` or `22`, the host pattern is the raw hostname.
+    /// - Otherwise it is formatted as `[hostname]:port` per OpenSSH conventions.
+    ///
+    /// - Parameters:
+    ///   - hostname: The target host name.
+    ///   - port: Optional port; defaults to `nil` (treated as 22 if unspecified).
+    ///   - key: The SSH key whose public component will be stored.
+    /// - Throws: File I/O errors when the entry cannot be appended.
     public func addHost(hostname: String, port: Int? = nil, key: any SSHKey) throws {
         let hostPattern: String
         if let port = port, port != 22 {
@@ -108,7 +182,12 @@ public struct KnownHostsManager {
         try addEntry(entry)
     }
     
-    /// Add an entry to the file.
+    /// Appends a fully formed ``KnownHostsEntry`` to the file.
+    ///
+    /// Ensures a trailing newline exists before writing. Creates the file if it does not exist.
+    ///
+    /// - Parameter entry: The entry to persist.
+    /// - Throws: File I/O errors if the write fails.
     public func addEntry(_ entry: KnownHostsEntry) throws {
         var content = ""
         
@@ -124,7 +203,13 @@ public struct KnownHostsManager {
         try content.write(toFile: filePath, atomically: true, encoding: .utf8)
     }
     
-    /// Remove entries for a hostname.
+    /// Removes all entries whose `hostPattern` contains the provided hostname substring.
+    ///
+    /// This is a coarse filter matching any entry whose pattern text contains `hostname`.
+    /// Future enhancement may perform stricter semantic matching (wildcards / hashed resolution).
+    ///
+    /// - Parameter hostname: The hostname substring to remove.
+    /// - Throws: File I/O errors if writing the updated file fails.
     public func removeHost(_ hostname: String) throws {
         let entries = try readEntries()
         let filtered = entries.filter { entry in
@@ -134,7 +219,17 @@ public struct KnownHostsManager {
         try writeEntries(filtered)
     }
     
-    /// Find entries for a hostname.
+    /// Locates entries whose host pattern matches a given hostname.
+    ///
+    /// Supports:
+    /// - Exact matches
+    /// - Bracketed `[host]:port` forms
+    /// - Shell wildcards (`*`, `?`)
+    /// - Hashed host patterns (`|1|salt|hash`)
+    ///
+    /// - Parameter hostname: The hostname being queried (without port unless bracketed form supplied in file).
+    /// - Returns: All matching entries (may be empty).
+    /// - Throws: File I/O errors encountered while reading.
     public func findHost(_ hostname: String) throws -> [KnownHostsEntry] {
         let entries = try readEntries()
         return entries.filter { entry in
@@ -142,7 +237,19 @@ public struct KnownHostsManager {
         }
     }
     
-    /// Check if a key matches any known host.
+    /// Verifies a host’s presented key against stored entries.
+    ///
+    /// Flow:
+    /// 1. Resolves matching entries for `hostname`.
+    /// 2. If none found -> ``VerificationResult/unknown``.
+    /// 3. If at least one entry matches algorithm + public key bytes -> ``VerificationResult/valid``.
+    /// 4. Otherwise -> ``VerificationResult/mismatch``.
+    ///
+    /// - Parameters:
+    ///   - hostname: The remote host name (without port; matching logic accounts for patterns).
+    ///   - key: The SSH key presented by the remote host.
+    /// - Returns: A verification result classifying trust status.
+    /// - Throws: File I/O errors while reading known hosts.
     public func verifyHost(_ hostname: String, key: any SSHKey) throws -> VerificationResult {
         let entries = try findHost(hostname)
         
@@ -162,7 +269,14 @@ public struct KnownHostsManager {
         return .mismatch
     }
     
-    /// Hash all hostnames (like `ssh-keygen -H`).
+    /// Rewrites the file replacing plain host patterns with OpenSSH‑style hashed hostnames.
+    ///
+    /// Behavior mirrors `ssh-keygen -H`:
+    /// - Already hashed patterns are left untouched.
+    /// - Comma‑separated host lists are hashed element‑wise and rejoined.
+    /// - Uses HMAC‑SHA1 with a random 20‑byte salt (legacy OpenSSH format for interoperability).
+    ///
+    /// - Throws: File I/O errors if reading or writing fails.
     public func hashHostnames() throws {
         let entries = try readEntries()
         var hashedEntries: [KnownHostsEntry] = []
@@ -273,13 +387,15 @@ public struct KnownHostsManager {
         return Data(hmac) == expectedHash
     }
     
-    /// Result of verifying a host’s public key against `known_hosts`.
+    /// Classification of a host key verification attempt against stored `known_hosts` entries.
     public enum VerificationResult {
-        /// A matching entry exists for the host and key.
+        /// At least one entry matched the hostname and the key’s algorithm and bytes.
         case valid
-        /// The host exists but the key does not match (possible MITM or rotation).
+        /// Entries exist for the hostname but none matched the provided key blob.
+        ///
+        /// Treat as high‑risk: could indicate a MITM attempt or unexpected legitimate key rotation.
         case mismatch
-        /// No entry exists for the host.
+        /// No entries were found for the host. Typically indicates a first‑time connection.
         case unknown
     }
 }
