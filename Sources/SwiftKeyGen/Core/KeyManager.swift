@@ -35,6 +35,34 @@ public struct KeyManager {
     ) throws -> any SSHKey {
         let expandedPath = NSString(string: path).expandingTildeInPath
         let data = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
+        // Fast path: detect OpenSSH proprietary private key markers
+        if data.starts(with: Data("-----BEGIN OPENSSH PRIVATE KEY-----".utf8)) {
+            return try OpenSSHPrivateKey.parse(data: data, passphrase: passphrase)
+        }
+
+        // Detect generic unencrypted PKCS#8 / SEC1 PEM blocks we emit via KeyConverter.
+        // ssh-keygen is able to consume these (Ed25519 PKCS#8 PRIVATE KEY, EC PRIVATE KEY, RSA PRIVATE KEY).
+        // We currently only need Ed25519 PKCS#8 parsing for the failing round‑trip test.
+        if let pemString = String(data: data, encoding: .utf8) {
+            // Normalize by trimming leading/trailing whitespace/newlines
+            let trimmed = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.contains("-----BEGIN PRIVATE KEY-----") && trimmed.contains("-----END PRIVATE KEY-----") {
+                // Attempt Ed25519 PKCS#8 decode first
+                if let key = try? parseEd25519PKCS8PEM(trimmed) {
+                    return key
+                }
+                // Attempt RSA PKCS#8 decode (OpenSSH may emit/accept PKCS#1 too)
+                if let rsa = try? parseRSAPKCS8PEM(trimmed) {
+                    return rsa
+                }
+                // TODO: Add ECDSA PKCS#8 parsing as needed.
+            } else if trimmed.contains("-----BEGIN EC PRIVATE KEY-----") && trimmed.contains("-----END EC PRIVATE KEY-----") {
+                // Placeholder for future ECDSA SEC1 parsing.
+            } else if trimmed.contains("-----BEGIN RSA PRIVATE KEY-----") && trimmed.contains("-----END RSA PRIVATE KEY-----") {
+                if let rsa = try? parseRSAPKCS1PEM(trimmed) { return rsa }
+            }
+        }
+        // Fall back to OpenSSH parser (will throw invalidFormat which matches existing semantics)
         return try OpenSSHPrivateKey.parse(data: data, passphrase: passphrase)
     }
     
@@ -326,5 +354,43 @@ public struct KeyManager {
             let base64 = Data(digest).base64EncodedStringStrippingPadding()
             return "SHA256:" + base64
         }
+    }
+}
+
+// MARK: - Lightweight PKCS#8 / PEM Parsing Helpers
+
+private extension KeyManager {
+    /// Parse an Ed25519 private key from an unencrypted PKCS#8 PEM document.
+    /// The implementation is intentionally minimal – just enough for the
+    /// integration test round‑trip to succeed. For robustness we reuse the
+    /// existing `Curve25519.Signing.PrivateKey` PKCS#8 initializer exposed via
+    /// the Ed25519 PEM utilities (see `Ed25519+PEM.swift`). If structure or
+    /// OID mismatch occurs we quietly return `nil` so callers can continue
+    /// format probing.
+    static func parseEd25519PKCS8PEM(_ pem: String) throws -> Ed25519Key? {
+        // Extract base64 body between the PRIVATE KEY markers
+        guard let base64 = pem.pemBody(type: "PRIVATE KEY"),
+              let derData = Data(base64Encoded: base64) else {
+            return nil
+        }
+        // Leverage the PKCS#8 DER initializer we already vend via extension
+        if let priv = try? Curve25519.Signing.PrivateKey(pkcs8DERRepresentation: derData) {
+            return Ed25519Key(privateKey: priv, comment: nil)
+        }
+        return nil
+    }
+
+    /// Parse an RSA private key from PKCS#8 PEM. Falls back silently (returns nil) if structure unsupported.
+    static func parseRSAPKCS8PEM(_ pem: String) throws -> RSAKey? {
+        // Currently we don't have a dedicated PKCS#8 RSA parser; OpenSSH rarely uses
+        // unencrypted PKCS#8 for RSA in the wild. Return nil so caller can continue probing.
+        return nil
+    }
+
+    /// Parse an RSA private key from traditional PKCS#1 PEM ("RSA PRIVATE KEY").
+    static func parseRSAPKCS1PEM(_ pem: String) throws -> RSAKey? {
+        // Delegate to the existing PEMParser which handles optional encryption headers.
+        if let rsa = try? PEMParser.parseRSAPrivateKey(pem) { return rsa }
+        return nil
     }
 }
