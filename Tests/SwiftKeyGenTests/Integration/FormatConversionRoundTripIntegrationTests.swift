@@ -156,7 +156,7 @@ struct FormatConversionRoundTripIntegrationTests {
     
     // MARK: - PEM ↔ PKCS8 Round-Trips
     
-    @Test("PEM → PKCS8 → PEM round-trip via both tools", .tags(.slow))
+    @Test("PEM → PKCS8 → PEM round-trip via both tools", .tags(.rsa, .slow))
     func testPEMToPKCS8ToPEMRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // IMPORTANT: Use RSA here instead of Ed25519.
@@ -334,7 +334,19 @@ struct FormatConversionRoundTripIntegrationTests {
             let pemPath = tempDir.appendingPathComponent("pem.key")
             try IntegrationTestSupporter.write(pemString, to: pemPath)
             let parsedPEM = try KeyManager.readPrivateKey(from: pemPath.path, passphrase: nil)
-            #expect(parsedPEM.publicKeyString() == originalPublicKey, "PEM format should preserve public key")
+            // NOTE: Standard PEM / PKCS#8 encodings do NOT carry the OpenSSH comment field.
+            // When we read a PEM key back, the key material (algorithm + base64 data) is
+            // identical but the trailing comment is naturally absent. Other integration
+            // tests already normalize this (see earlier round‑trip tests). Here we mirror
+            // that behavior by comparing only the algorithm + base64 portion.
+            func stripComment(_ line: String) -> String {
+                let parts = line.split(separator: " ")
+                guard parts.count >= 2 else { return line }
+                // Return just: <algorithm> <base64>
+                return parts[0...1].joined(separator: " ")
+            }
+            #expect(stripComment(parsedPEM.publicKeyString()) == stripComment(originalPublicKey),
+                    "PEM format should preserve algorithm + public key data (comment not retained by PEM)")
         }
     }
     
