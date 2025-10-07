@@ -2,8 +2,11 @@ import Testing
 @testable import SwiftKeyGen
 import Foundation
 
-@Test("ssh-keygen compatibility - decrypt our encrypted PEM", .tags(.integration))
-func testSSHKeygenCanDecryptOurPEM() throws {
+@Suite("SSH-keygen Integration Tests", .tags(.integration))
+struct SSHKeygenIntegrationTests {
+    
+    @Test("ssh-keygen compatibility - decrypt our encrypted PEM")
+    func testSSHKeygenCanDecryptOurPEM() throws {
     try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
         // Generate a test key
         let key = try ECDSAKeyGenerator.generateP256(comment: "integration-test")
@@ -30,8 +33,8 @@ func testSSHKeygenCanDecryptOurPEM() throws {
     }
 }
 
-@Test("ssh-keygen compatibility - decrypt our encrypted PKCS8", .tags(.integration))
-func testSSHKeygenCanDecryptOurPKCS8() throws {
+    @Test("ssh-keygen compatibility - decrypt our encrypted PKCS8")
+    func testSSHKeygenCanDecryptOurPKCS8() throws {
     try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
         // Generate a test key
         let key = try ECDSAKeyGenerator.generateP384(comment: "pkcs8-test")
@@ -57,8 +60,8 @@ func testSSHKeygenCanDecryptOurPKCS8() throws {
     }
 }
 
-@Test("Compare key formats with ssh-keygen", .tags(.integration))
-func testCompareFormatsWithSSHKeygen() throws {
+    @Test("Compare key formats with ssh-keygen")
+    func testCompareFormatsWithSSHKeygen() throws {
     try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
         // Generate a key with ssh-keygen
         let sshKeyPath = tempDir.appendingPathComponent("ssh_key")
@@ -118,8 +121,8 @@ func testCompareFormatsWithSSHKeygen() throws {
     }
 }
 
-@Test("Test different cipher support", .tags(.integration))
-func testDifferentCipherCompatibility() throws {
+    @Test("Test different cipher support")
+    func testDifferentCipherCompatibility() throws {
     try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
         let key = try ECDSAKeyGenerator.generateP521(comment: "cipher-test")
         let passphrase = "cipherpass"
@@ -144,34 +147,35 @@ func testDifferentCipherCompatibility() throws {
     }
 }
 
-@Test("Verify public key consistency", .tags(.integration))
-func testPublicKeyConsistency() throws {
-    try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
-        // Generate key with our implementation
-        let key = try ECDSAKeyGenerator.generateP256(comment: "consistency-test")
-        let passphrase = "consistent"
-        
-        // Get our public key in OpenSSH format
-        let ourPublicKey = key.publicKeyString()
-        
-        // Export encrypted PEM
-        let pemPath = tempDir.appendingPathComponent("key.pem")
-        let encryptedPEM = try key.sec1PEMRepresentation(passphrase: passphrase)
-        try IntegrationTestSupporter.write(encryptedPEM, to: pemPath)
-        
-        // Extract public key using ssh-keygen
-        let result = try IntegrationTestSupporter.runSSHKeygen([
-            "-f", pemPath.path,
-            "-y",
-            "-P", passphrase
-        ])
-        
-        #expect(result.succeeded, "ssh-keygen should extract public key successfully")
-        
-        // Compare public keys (ignoring comment which might differ)
-        let ourKeyNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(ourPublicKey)
-        let sshKeyNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(result.stdout)
-        
-        #expect(ourKeyNormalized == sshKeyNormalized, "Public keys should match")
+    @Test("Verify public key consistency")
+    func testPublicKeyConsistency() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate key with our implementation
+            let key = try ECDSAKeyGenerator.generateP256(comment: "consistency-test")
+            let passphrase = "consistent"
+            
+            // Get our public key in OpenSSH format
+            let ourPublicKey = key.publicKeyString()
+            
+            // Export encrypted PEM
+            let pemPath = tempDir.appendingPathComponent("key.pem")
+            let encryptedPEM = try key.sec1PEMRepresentation(passphrase: passphrase)
+            try IntegrationTestSupporter.write(encryptedPEM, to: pemPath)
+            
+            // Extract public key using ssh-keygen
+            let result = try IntegrationTestSupporter.runSSHKeygen([
+                "-f", pemPath.path,
+                "-y",
+                "-P", passphrase
+            ])
+            
+            #expect(result.succeeded, "ssh-keygen should extract public key successfully")
+            
+            // Compare public keys (ignoring comment which might differ)
+            let ourKeyNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(ourPublicKey)
+            let sshKeyNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(result.stdout)
+            
+            #expect(ourKeyNormalized == sshKeyNormalized, "Public keys should match")
+        }
     }
 }
