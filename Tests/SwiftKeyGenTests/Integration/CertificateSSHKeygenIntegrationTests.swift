@@ -4,150 +4,112 @@ import Foundation
 
 @Test("Verify Ed25519 certificate with ssh-keygen", .tags(.integration, .slow))
 func testSSHKeygenVerificationEd25519Certificate() throws {
-    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+    try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+        // Generate CA and user keys
+        let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-ca@example.com") as! Ed25519Key
+        let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
 
-    let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-ca@example.com") as! Ed25519Key
-    let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
+        // Write CA private key
+        let caPrivateKeyPath = tempDir.appendingPathComponent("ca_key")
+        let caPrivateKeyData = try OpenSSHPrivateKey.serialize(key: caKey, passphrase: nil)
+        try IntegrationTestSupporter.write(caPrivateKeyData, to: caPrivateKeyPath)
 
-    let caPrivateKeyPath = tempDir.appendingPathComponent("ca_key")
-    let caPrivateKeyData = try OpenSSHPrivateKey.serialize(key: caKey, passphrase: nil)
-    try caPrivateKeyData.write(to: caPrivateKeyPath)
-    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: caPrivateKeyPath.path)
+        // Write CA public key
+        let caPublicKeyPath = tempDir.appendingPathComponent("ca_key.pub")
+        try IntegrationTestSupporter.write(caKey.publicKeyString(), to: caPublicKeyPath)
 
-    let caPublicKeyPath = tempDir.appendingPathComponent("ca_key.pub")
-    try caKey.publicKeyString().write(to: caPublicKeyPath, atomically: true, encoding: .utf8)
+        // Write user public key
+        let userPublicKeyPath = tempDir.appendingPathComponent("user_key.pub")
+        try IntegrationTestSupporter.write(userKey.publicKeyString(), to: userPublicKeyPath)
 
-    let userPublicKeyPath = tempDir.appendingPathComponent("user_key.pub")
-    try userKey.publicKeyString().write(to: userPublicKeyPath, atomically: true, encoding: .utf8)
+        // Sign certificate
+        let cert = try CertificateAuthority.signCertificate(
+            publicKey: userKey,
+            caKey: caKey,
+            keyId: "test-user",
+            principals: ["charlie", "test.example.com"],
+            certificateType: .user
+        )
 
-    let cert = try CertificateAuthority.signCertificate(
-        publicKey: userKey,
-        caKey: caKey,
-        keyId: "test-user",
-        principals: ["charlie", "test.example.com"],
-        certificateType: .user
-    )
+        // Write certificate
+        let certPath = tempDir.appendingPathComponent("user_key-cert.pub")
+        try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
 
-    let certPath = tempDir.appendingPathComponent("user_key-cert.pub")
-    try cert.publicKeyString().write(to: certPath, atomically: true, encoding: .utf8)
+        // Verify ssh-keygen can read certificate
+        let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+        #expect(listResult.succeeded, "ssh-keygen failed to read certificate")
+        #expect(listResult.stdout.contains("Type: ssh-ed25519-cert-v01@openssh.com user certificate"))
+        #expect(listResult.stdout.contains("Key ID: \"test-user\""))
+        #expect(listResult.stdout.contains("charlie"))
+        #expect(listResult.stdout.contains("test.example.com"))
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    process.arguments = ["-L", "-f", certPath.path]
-    let outputPipe = Pipe()
-    process.standardOutput = outputPipe
-    process.standardError = outputPipe
-    try process.run()
-    process.waitUntilExit()
+        // Verify signing CA information
+        let verifyResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+        #expect(verifyResult.stdout.contains("Signing CA: ED25519"))
 
-    let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: outputData, encoding: .utf8) ?? ""
-    #expect(process.terminationStatus == 0, "ssh-keygen failed to read certificate")
-    #expect(output.contains("Type: ssh-ed25519-cert-v01@openssh.com user certificate"))
-    #expect(output.contains("Key ID: \"test-user\""))
-    #expect(output.contains("charlie"))
-    #expect(output.contains("test.example.com"))
+        // Write principals file
+        let principals = tempDir.appendingPathComponent("principals")
+        try IntegrationTestSupporter.write("charlie\ntest.example.com\n", to: principals)
 
-    let verifyProcess = Process()
-    verifyProcess.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    verifyProcess.arguments = ["-L", "-f", certPath.path]
-    let verifyPipe = Pipe()
-    verifyProcess.standardOutput = verifyPipe
-    verifyProcess.standardError = verifyPipe
-    try verifyProcess.run()
-    verifyProcess.waitUntilExit()
-    let verifyData = verifyPipe.fileHandleForReading.readDataToEndOfFile()
-    let verifyOutput = String(data: verifyData, encoding: .utf8) ?? ""
-    #expect(verifyOutput.contains("Signing CA: ED25519"))
-
-    let principals = tempDir.appendingPathComponent("principals")
-    try "charlie\ntest.example.com\n".write(to: principals, atomically: true, encoding: .utf8)
-
-    let checkProcess = Process()
-    checkProcess.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    checkProcess.arguments = ["-L", "-f", certPath.path, "-n", "charlie"]
-    let checkPipe = Pipe()
-    checkProcess.standardOutput = checkPipe
-    checkProcess.standardError = checkPipe
-    try checkProcess.run()
-    checkProcess.waitUntilExit()
-    #expect(checkProcess.terminationStatus == 0, "Certificate validation failed")
+        // Validate certificate with principal
+        let checkResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path, "-n", "charlie"])
+        #expect(checkResult.succeeded, "Certificate validation failed")
+    }
 }
 
 @Test("Verify RSA certificate with ssh-keygen", .tags(.integration, .slow))
 func testSSHKeygenVerificationRSACertificate() throws {
-    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: tempDir) }
+    try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+        // Generate CA and user keys
+        let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
+        let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
 
-    let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
-    let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
+        // Write CA private key
+        let caPrivateKeyPath = tempDir.appendingPathComponent("ca_key")
+        let caPrivateKeyData = try OpenSSHPrivateKey.serialize(key: caKey, passphrase: nil)
+        try IntegrationTestSupporter.write(caPrivateKeyData, to: caPrivateKeyPath)
 
-    let caPrivateKeyPath = tempDir.appendingPathComponent("ca_key")
-    let caPrivateKeyData = try OpenSSHPrivateKey.serialize(key: caKey, passphrase: nil)
-    try caPrivateKeyData.write(to: caPrivateKeyPath)
-    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: caPrivateKeyPath.path)
+        // Write CA public key
+        let caPublicKeyPath = tempDir.appendingPathComponent("ca_key.pub")
+        try IntegrationTestSupporter.write(caKey.publicKeyString(), to: caPublicKeyPath)
 
-    let caPublicKeyPath = tempDir.appendingPathComponent("ca_key.pub")
-    try caKey.publicKeyString().write(to: caPublicKeyPath, atomically: true, encoding: .utf8)
+        // Write user public key
+        let userPublicKeyPath = tempDir.appendingPathComponent("user_key.pub")
+        try IntegrationTestSupporter.write(userKey.publicKeyString(), to: userPublicKeyPath)
 
-    let userPublicKeyPath = tempDir.appendingPathComponent("user_key.pub")
-    try userKey.publicKeyString().write(to: userPublicKeyPath, atomically: true, encoding: .utf8)
+        // Sign certificate
+        let cert = try CertificateAuthority.signCertificate(
+            publicKey: userKey,
+            caKey: caKey,
+            keyId: "test-rsa-user",
+            principals: ["alice", "rsa.example.com"],
+            certificateType: .user,
+            signatureAlgorithm: "rsa-sha2-512"
+        )
 
-    let cert = try CertificateAuthority.signCertificate(
-        publicKey: userKey,
-        caKey: caKey,
-        keyId: "test-rsa-user",
-        principals: ["alice", "rsa.example.com"],
-        certificateType: .user,
-        signatureAlgorithm: "rsa-sha2-512"
-    )
+        // Write certificate
+        let certPath = tempDir.appendingPathComponent("user_key-cert.pub")
+        try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
 
-    let certPath = tempDir.appendingPathComponent("user_key-cert.pub")
-    try cert.publicKeyString().write(to: certPath, atomically: true, encoding: .utf8)
+        // Verify ssh-keygen can read certificate
+        let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+        #expect(listResult.succeeded, "ssh-keygen failed to read certificate")
+        #expect(listResult.stdout.contains("Type: ssh-ed25519-cert-v01@openssh.com user certificate"))
+        #expect(listResult.stdout.contains("Key ID: \"test-rsa-user\""))
+        #expect(listResult.stdout.contains("alice"))
+        #expect(listResult.stdout.contains("rsa.example.com"))
 
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    process.arguments = ["-L", "-f", certPath.path]
-    let outputPipe = Pipe()
-    process.standardOutput = outputPipe
-    process.standardError = outputPipe
-    try process.run()
-    process.waitUntilExit()
+        // Verify signing CA information
+        let verifyResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+        #expect(verifyResult.stdout.contains("Signing CA: RSA"))
 
-    let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-    let output = String(data: outputData, encoding: .utf8) ?? ""
-    #expect(process.terminationStatus == 0, "ssh-keygen failed to read certificate")
-    #expect(output.contains("Type: ssh-ed25519-cert-v01@openssh.com user certificate"))
-    #expect(output.contains("Key ID: \"test-rsa-user\""))
-    #expect(output.contains("alice"))
-    #expect(output.contains("rsa.example.com"))
+        // Write principals file
+        let principals = tempDir.appendingPathComponent("principals")
+        try IntegrationTestSupporter.write("alice\nrsa.example.com\n", to: principals)
 
-    let verifyProcess = Process()
-    verifyProcess.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    verifyProcess.arguments = ["-L", "-f", certPath.path]
-    let verifyPipe = Pipe()
-    verifyProcess.standardOutput = verifyPipe
-    verifyProcess.standardError = verifyPipe
-    try verifyProcess.run()
-    verifyProcess.waitUntilExit()
-    let verifyData = verifyPipe.fileHandleForReading.readDataToEndOfFile()
-    let verifyOutput = String(data: verifyData, encoding: .utf8) ?? ""
-    #expect(verifyOutput.contains("Signing CA: RSA"))
-
-    let principals = tempDir.appendingPathComponent("principals")
-    try "alice\nrsa.example.com\n".write(to: principals, atomically: true, encoding: .utf8)
-
-    let checkProcess = Process()
-    checkProcess.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    checkProcess.arguments = ["-L", "-f", certPath.path, "-n", "alice"]
-    let checkPipe = Pipe()
-    checkProcess.standardOutput = checkPipe
-    checkProcess.standardError = checkPipe
-    try checkProcess.run()
-    checkProcess.waitUntilExit()
-    #expect(checkProcess.terminationStatus == 0, "Certificate validation failed")
+        // Validate certificate with principal
+        let checkResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path, "-n", "alice"])
+        #expect(checkResult.succeeded, "Certificate validation failed")
+    }
 }
 
