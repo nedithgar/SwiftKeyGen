@@ -135,7 +135,8 @@ struct RandomartIntegrationTests {
         
         // Valid characters in randomart (from OpenSSH augmentation_string)
         let validChars = " .o+=*BOX@%&#/^SE"
-        let validSet = CharacterSet(charactersIn: validChars + "|\n+-[]0123456789EDCRSAP")
+        // Allow letters used in headers (ED25519, RSA, ECDSA) and footer hash label [SHA256]
+        let validSet = CharacterSet(charactersIn: validChars + "|\n+-[]0123456789EDCRSAPH")
         
         for char in randomart.unicodeScalars {
             #expect(validSet.contains(char), "Randomart should only contain valid characters")
@@ -349,16 +350,28 @@ struct RandomartIntegrationTests {
     // MARK: - Helper Methods
     
     /// Extract randomart from ssh-keygen -lv output
-    /// Format includes the art box between +---- lines
+    /// This supports both legacy OpenSSH footer (no hash label) and modern
+    /// footer that includes the hash label (e.g. "[SHA256]").
     private func extractRandomart(from output: String) -> String? {
         let lines = output.split(separator: "\n")
-        
-        // Find start and end of randomart
-        guard let startIndex = lines.firstIndex(where: { $0.hasPrefix("+---[") }) else { return nil }
-        guard let endIndex = lines[startIndex...].firstIndex(where: { $0.hasPrefix("+---") && !$0.contains("[") }) else { return nil }
-        
-        // Extract randomart lines
-        let artLines = lines[startIndex...endIndex]
+        guard !lines.isEmpty else { return nil }
+
+        // Header: first line that looks like a framed header (+----[... ]----+)
+        guard let headerIdx = lines.firstIndex(where: { line in
+            let s = String(line)
+            return s.hasPrefix("+") && s.hasSuffix("+") && s.contains("[")
+        }) else { return nil }
+
+        // Expect exactly 9 art lines following the header
+        let artStart = headerIdx + 1
+        let artEnd = artStart + 9
+        guard lines.count > artEnd else { return nil }
+        // Footer: line immediately after the 9 art lines
+        let footerIdx = artEnd
+        let footer = String(lines[footerIdx])
+        guard footer.hasPrefix("+") && footer.hasSuffix("+") else { return nil }
+
+        let artLines = lines[headerIdx...footerIdx]
         return artLines.joined(separator: "\n")
     }
     
