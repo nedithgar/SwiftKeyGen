@@ -37,7 +37,7 @@ struct InsecureRSATest {
         #expect(decrypted == plaintext)
     }
     
-    @Test("RSA Signing/Verification", .disabled("Fix signing issue"))
+    @Test("RSA Signing/Verification")
     func testRSASigningVerification() throws {
         let (privateKey, publicKey) = try Insecure.RSA.generateKeyPair(bitSize: 1024)
         
