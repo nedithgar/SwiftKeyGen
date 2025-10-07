@@ -100,12 +100,13 @@ public struct CertificateParser {
         }
         
         // Read certificate blob
-        let certBlobLength = try decoder.decodeUInt32()
-        guard decoder.remaining >= Int(certBlobLength) else {
-            throw SSHKeyError.invalidFormat
-        }
-        
-        let certBlobData = try decoder.decodeBytes(count: Int(certBlobLength))
+        // The OpenSSH public key payload for certificates is:
+        //   string keytype || certificate-blob
+        // where certificate-blob is NOT wrapped in a single length field.
+        // It consists of a sequence of length‑prefixed fields ending with the
+        // signature. Therefore, after consuming the key type string, the
+        // remainder of the data is the certificate blob.
+        let certBlobData = try decoder.decodeBytes(count: decoder.remaining)
         var certDecoder = SSHDecoder(data: Data(certBlobData))
         
         // Parse certificate components
