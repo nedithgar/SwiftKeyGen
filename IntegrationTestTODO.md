@@ -126,12 +126,12 @@ This document tracks missing integration tests for complete bidirectional intero
 - [ ] **known_hosts entry verification** (key matching)
 - [ ] **known_hosts hostname hashing bidirectional**
 
-### Large and Edge-Case Key Sizes
-- [ ] **ssh-keygen reads our RSA 8192-bit key**
-- [ ] **We read ssh-keygen RSA 16384-bit key**
-- [ ] **ssh-keygen reads our arbitrary RSA key sizes** (1536, 2560, etc.)
-- [ ] **Minimum key size handling** (1024-bit RSA)
-- [ ] **Performance test for large keys** (generation and parsing)
+### ~~Large and Edge-Case Key Sizes~~ (NOT PLANNED)
+- [ ] ~~**ssh-keygen reads our RSA 8192-bit key**~~
+- [ ] ~~**We read ssh-keygen RSA 16384-bit key**~~
+- [ ] ~~**ssh-keygen reads our arbitrary RSA key sizes** (1536, 2560, etc.)~~
+- [ ] ~~**Minimum key size handling** (1024-bit RSA)~~
+- [ ] ~~**Performance test for large keys** (generation and parsing)~~
 
 ### Certificate Advanced Features
 - [ ] **Certificate with force-command critical option**
