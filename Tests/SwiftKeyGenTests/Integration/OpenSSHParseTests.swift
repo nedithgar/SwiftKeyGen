@@ -49,4 +49,68 @@ struct OpenSSHParseTests {
         #expect(parsedKey.comment == "encrypted@example.com")
         #expect(parsedKey.publicKeyString() == key.publicKeyString())
     }
+
+    @Test("ECDSA P-256 key serialize and parse")
+    func testECDSAP256SerializeAndParse() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "test-p256@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P256!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("ECDSA P-384 key serialize and parse")
+    func testECDSAP384SerializeAndParse() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa384, comment: "test-p384@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P384!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("ECDSA P-521 key serialize and parse")
+    func testECDSAP521SerializeAndParse() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa521, comment: "test-p521@example.com") as! ECDSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! ECDSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, ECDSA P521!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
+
+    @Test("RSA key serialize and parse (slow)", .disabled())
+    func testRSASerializeAndParse() throws {
+        let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@example.com") as! RSAKey
+        let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+        let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! RSAKey
+
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
+
+        let message = Data("Hello, RSA!".utf8)
+        let sig = try parsed.sign(data: message)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
+    }
 }
