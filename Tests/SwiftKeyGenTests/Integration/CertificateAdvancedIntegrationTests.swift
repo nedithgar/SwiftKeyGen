@@ -553,4 +553,166 @@ struct CertificateAdvancedIntegrationTests {
                    "Should handle large serial number")
         }
     }
+    
+    // MARK: - Certificate Extension Testing
+    
+    @Test("Certificate extension permit-pty")
+    func testCertificateExtensionPermitPTY() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys
+            let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ca@test.com") as! Ed25519Key
+            let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@test.com") as! Ed25519Key
+            
+            // Sign certificate with default extensions (should include permit-pty)
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "pty-user",
+                principals: ["testuser"],
+                certificateType: .user
+            )
+            
+            // Write certificate
+            let certPath = tempDir.appendingPathComponent("pty-cert.pub")
+            try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
+            
+            // List with ssh-keygen to see extensions
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+            #expect(listResult.succeeded, "ssh-keygen should read certificate")
+            #expect(listResult.stdout.contains("permit-pty"), "Should contain permit-pty extension")
+            
+            // Parse and verify extension exists
+            let certString = try String(contentsOf: certPath, encoding: .utf8)
+            let parsed = try CertificateParser.parseCertificate(from: certString)
+            #expect(parsed.certificate.extensions.contains("permit-pty"), "Certificate should have permit-pty extension")
+        }
+    }
+    
+    @Test("Certificate extension permit-user-rc")
+    func testCertificateExtensionPermitUserRC() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys
+            let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ca@test.com") as! Ed25519Key
+            let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@test.com") as! Ed25519Key
+            
+            // Sign certificate with default extensions (should include permit-user-rc)
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "rc-user",
+                principals: ["testuser"],
+                certificateType: .user
+            )
+            
+            // Write certificate
+            let certPath = tempDir.appendingPathComponent("rc-cert.pub")
+            try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
+            
+            // List with ssh-keygen
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+            #expect(listResult.succeeded, "ssh-keygen should read certificate")
+            #expect(listResult.stdout.contains("permit-user-rc"), "Should contain permit-user-rc extension")
+            
+            // Parse and verify
+            let certString = try String(contentsOf: certPath, encoding: .utf8)
+            let parsed = try CertificateParser.parseCertificate(from: certString)
+            #expect(parsed.certificate.extensions.contains("permit-user-rc"), "Certificate should have permit-user-rc extension")
+        }
+    }
+    
+    @Test("Certificate extension permit-X11-forwarding")
+    func testCertificateExtensionPermitX11Forwarding() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys
+            let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ca@test.com") as! Ed25519Key
+            let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@test.com") as! Ed25519Key
+            
+            // Sign certificate with default extensions
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "x11-user",
+                principals: ["testuser"],
+                certificateType: .user
+            )
+            
+            // Write certificate
+            let certPath = tempDir.appendingPathComponent("x11-cert.pub")
+            try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
+            
+            // List with ssh-keygen
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+            #expect(listResult.succeeded, "ssh-keygen should read certificate")
+            #expect(listResult.stdout.contains("permit-X11-forwarding"), "Should contain permit-X11-forwarding extension")
+            
+            // Parse and verify
+            let certString = try String(contentsOf: certPath, encoding: .utf8)
+            let parsed = try CertificateParser.parseCertificate(from: certString)
+            #expect(parsed.certificate.extensions.contains("permit-X11-forwarding"), "Certificate should have permit-X11-forwarding extension")
+        }
+    }
+    
+    @Test("Certificate extension permit-agent-forwarding")
+    func testCertificateExtensionPermitAgentForwarding() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys
+            let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ca@test.com") as! Ed25519Key
+            let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@test.com") as! Ed25519Key
+            
+            // Sign certificate with default extensions
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "agent-user",
+                principals: ["testuser"],
+                certificateType: .user
+            )
+            
+            // Write certificate
+            let certPath = tempDir.appendingPathComponent("agent-cert.pub")
+            try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
+            
+            // List with ssh-keygen
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+            #expect(listResult.succeeded, "ssh-keygen should read certificate")
+            #expect(listResult.stdout.contains("permit-agent-forwarding"), "Should contain permit-agent-forwarding extension")
+            
+            // Parse and verify
+            let certString = try String(contentsOf: certPath, encoding: .utf8)
+            let parsed = try CertificateParser.parseCertificate(from: certString)
+            #expect(parsed.certificate.extensions.contains("permit-agent-forwarding"), "Certificate should have permit-agent-forwarding extension")
+        }
+    }
+    
+    @Test("Certificate extension permit-port-forwarding")
+    func testCertificateExtensionPermitPortForwarding() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys
+            let caKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ca@test.com") as! Ed25519Key
+            let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@test.com") as! Ed25519Key
+            
+            // Sign certificate with default extensions
+            let cert = try CertificateAuthority.signCertificate(
+                publicKey: userKey,
+                caKey: caKey,
+                keyId: "port-user",
+                principals: ["testuser"],
+                certificateType: .user
+            )
+            
+            // Write certificate
+            let certPath = tempDir.appendingPathComponent("port-cert.pub")
+            try IntegrationTestSupporter.write(cert.publicKeyString(), to: certPath)
+            
+            // List with ssh-keygen
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certPath.path])
+            #expect(listResult.succeeded, "ssh-keygen should read certificate")
+            #expect(listResult.stdout.contains("permit-port-forwarding"), "Should contain permit-port-forwarding extension")
+            
+            // Parse and verify
+            let certString = try String(contentsOf: certPath, encoding: .utf8)
+            let parsed = try CertificateParser.parseCertificate(from: certString)
+            #expect(parsed.certificate.extensions.contains("permit-port-forwarding"), "Certificate should have permit-port-forwarding extension")
+        }
+    }
 }
