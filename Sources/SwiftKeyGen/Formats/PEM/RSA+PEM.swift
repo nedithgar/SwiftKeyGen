@@ -5,8 +5,79 @@ import BigInt
 
 extension PEMParser {
     
-    /// Parse an RSA private key from PEM format
-    /// Supports both encrypted and unencrypted PKCS#1 format
+    /// Parses an RSA private key from a PEM‐encoded string.
+    ///
+    /// This method supports classic OpenSSL / OpenSSH style PKCS#1 `RSA PRIVATE KEY` blocks
+    /// in both unencrypted form:
+    ///
+    /// ```text
+    /// -----BEGIN RSA PRIVATE KEY-----
+    /// <base64>
+    /// -----END RSA PRIVATE KEY-----
+    /// ```
+    ///
+    /// and the legacy "traditional" OpenSSL PEM encryption form that includes the
+    /// `Proc-Type` and `DEK-Info` headers, e.g.:
+    ///
+    /// ```text
+    /// -----BEGIN RSA PRIVATE KEY-----
+    /// Proc-Type: 4,ENCRYPTED
+    /// DEK-Info: AES-256-CBC,4F7A0B5C3E8A91F6E2C1D4B5A6C7D8E9
+    ///
+    /// <base64 ciphertext>
+    /// -----END RSA PRIVATE KEY-----
+    /// ```
+    ///
+    /// The encrypted variant requires a passphrase in order to decrypt the PKCS#1
+    /// DER payload before parsing. Decryption is delegated to `PEMEncryption` which
+    /// implements the OpenSSL EVP_BytesToKey compatible key derivation + cipher flow
+    /// for the supported legacy ciphers expressed in the `DEK-Info` field.
+    ///
+    /// - Important: Only PKCS#1 (`RSA PRIVATE KEY`) blocks are supported here. For
+    ///   PKCS#8 (`PRIVATE KEY` / `ENCRYPTED PRIVATE KEY`) you must use the PKCS
+    ///   parsing utilities (`PEMParser.parsePrivateKey` or a future dedicated API)
+    ///   once implemented. Attempting to pass a PKCS#8 block will result in
+    ///   `SSHKeyError.invalidKeyData`.
+    ///
+    /// - Parameter pemString: The full PEM string including the `-----BEGIN` / `-----END` lines.
+    /// - Parameter passphrase: The passphrase used to decrypt an encrypted key. Omit or pass `nil`
+    ///   for unencrypted keys.
+    /// - Returns: A fully initialized `RSAKey` containing the private key (including CRT components).
+    /// - Throws: `SSHKeyError.passphraseRequired` if the PEM is encrypted but no passphrase was provided;
+    ///   `SSHKeyError.unsupportedCipher` if the cipher in `DEK-Info` is not recognized;
+    ///   `SSHKeyError.invalidKeyData` if the structure, headers, base64 data, or DER payload are malformed.
+    ///
+    /// ### Discussion
+    /// The parser performs minimal normalization (trimming surrounding whitespace/newlines) and then
+    /// detects encryption by the presence of both `Proc-Type:` and `DEK-Info:` headers. For decrypted
+    /// payloads, the resulting DER is parsed as a PKCS#1 `RSAPrivateKey` ASN.1 sequence extracting
+    /// all CRT parameters for efficient operations.
+    ///
+    /// ### Example
+    /// ```swift
+    /// let pem = """
+    /// -----BEGIN RSA PRIVATE KEY-----\n
+    /// MIIBOgIBAAJBALs...snip...\n
+    /// -----END RSA PRIVATE KEY-----
+    /// """
+    /// let rsaKey = try PEMParser.parseRSAPrivateKey(pem)
+    /// print(rsaKey.publicKey.opensshString)
+    /// ```
+    ///
+    /// ```swift
+    /// let encryptedPEM = """
+    /// -----BEGIN RSA PRIVATE KEY-----\n
+    /// Proc-Type: 4,ENCRYPTED\n
+    /// DEK-Info: AES-256-CBC,4F7A0B5C3E8A91F6E2C1D4B5A6C7D8E9\n
+    /// \n
+    /// <ciphertext base64>\n
+    /// -----END RSA PRIVATE KEY-----
+    /// """
+    /// let rsaKey = try PEMParser.parseRSAPrivateKey(encryptedPEM, passphrase: "correct horse battery staple")
+    /// ```
+    ///
+    /// Use the returned `RSAKey` for signing, public key extraction, conversion, or fingerprinting through
+    /// the higher level `KeyManager` / conversion APIs.
     public static func parseRSAPrivateKey(_ pemString: String, passphrase: String? = nil) throws -> RSAKey {
         let trimmedPEM = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
         
