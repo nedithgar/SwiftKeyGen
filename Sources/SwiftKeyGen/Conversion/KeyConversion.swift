@@ -2,22 +2,63 @@ import Foundation
 import Crypto
 import _CryptoExtras
 
-/// Supported key serialization formats.
+/// A key serialization format supported by SwiftKeyGen conversions.
+///
+/// Use with ``KeyConverter`` to select the output format when
+/// converting or exporting keys.
 public enum KeyFormat {
+    /// OpenSSH private key file format as produced by `ssh-keygen`.
+    ///
+    /// - Note: When exporting with ``KeyConverter/exportKey(_:formats:basePath:passphrase:)``,
+    ///   this format writes exactly to `basePath` (no additional extension).
     case openssh
+    /// PEM-encoded private key.
+    ///
+    /// - Discussion: For RSA and Ed25519, the contents are a PKCS#8
+    ///   `PRIVATE KEY` document. For ECDSA, this uses the SEC1/RFC5915
+    ///   `EC PRIVATE KEY` structure to match `ssh-keygen` output.
+    /// - SeeAlso: ``KeyConverter/toPEM(key:passphrase:)``
     case pem
+    /// PKCS#8 private key serialized as a PEM document.
+    ///
+    /// - Note: ``KeyConverter/toPKCS8(key:passphrase:)`` returns UTF‑8
+    ///   PEM data, not DER bytes. Exported files typically use the
+    ///   `.p8` extension in this project.
     case pkcs8
+    /// RFC 4716 (SSH2) public key file format.
+    ///
+    /// - Discussion: This is a public key format. The output contains
+    ///   a `Comment:` header and base64 body wrapped at 70 characters.
+    /// - SeeAlso: ``KeyConverter/toRFC4716(key:)``
     case rfc4716
 }
 
 /// Stateless helpers for converting keys between formats.
+///
+/// ``KeyConverter`` exposes static utility functions to encode SSH keys
+/// to PEM, PKCS#8, or RFC4716, and to export multiple formats to disk.
+/// All operations are pure and thread‑safe.
 public struct KeyConverter {
     
     // RFC4716 format constants
     private static let SSH_COM_PUBLIC_BEGIN = "---- BEGIN SSH2 PUBLIC KEY ----"
     private static let SSH_COM_PUBLIC_END = "---- END SSH2 PUBLIC KEY ----"
     
-    /// Convert a key to PEM format.
+    /// Converts the given private key to a PEM‑encoded string.
+    ///
+    /// - Parameters:
+    ///   - key: The SSH private key to serialize.
+    ///   - passphrase: Optional passphrase to encrypt the PEM document
+    ///     when supported by the underlying key type.
+    ///     - ECDSA uses SEC1 (RFC5915) and supports encryption.
+    ///     - RSA encrypted PEM is not supported and will throw.
+    ///     - Ed25519 currently ignores this parameter and produces an
+    ///       unencrypted PKCS#8 `PRIVATE KEY` PEM.
+    /// - Returns: A PEM string such as `-----BEGIN PRIVATE KEY----- ...` or
+    ///   `-----BEGIN EC PRIVATE KEY----- ...`, depending on the key type.
+    /// - Throws: ``SSHKeyError/unsupportedKeyType`` for unknown key types,
+    ///   or ``SSHKeyError/unsupportedOperation(_:)`` when an encrypted PEM
+    ///   is requested for a key type that does not support it.
     public static func toPEM(key: any SSHKey, passphrase: String? = nil) throws -> String {
         switch key {
         case let ed25519Key as Ed25519Key:
@@ -34,7 +75,18 @@ public struct KeyConverter {
         }
     }
     
-    /// Convert a key to PKCS#8 format.
+    /// Converts the given private key to PKCS#8 as PEM data.
+    ///
+    /// - Parameters:
+    ///   - key: The SSH private key to serialize.
+    ///   - passphrase: Optional passphrase. ECDSA supports encrypted
+    ///     PKCS#8 PEM; RSA encrypted PKCS#8 is not supported and will throw;
+    ///     Ed25519 currently returns an unencrypted PKCS#8 PEM.
+    /// - Returns: UTF‑8 `Data` containing a PEM‑encoded PKCS#8 document.
+    ///   This method does not return DER bytes.
+    /// - Throws: ``SSHKeyError/unsupportedKeyType`` or
+    ///   ``SSHKeyError/unsupportedOperation(_:)`` depending on the key type
+    ///   and `passphrase` support.
     public static func toPKCS8(key: any SSHKey, passphrase: String? = nil) throws -> Data {
         switch key {
         case let ed25519Key as Ed25519Key:
@@ -51,7 +103,16 @@ public struct KeyConverter {
         }
     }
     
-    /// Convert a public key to RFC4716 format.
+    /// Converts the public portion of the key to RFC 4716 format.
+    ///
+    /// - Parameter key: The key whose public component will be exported.
+    /// - Returns: A string wrapped with RFC 4716 `BEGIN/END SSH2 PUBLIC KEY`
+    ///   markers, including a `Comment:` header. The base64 body is wrapped
+    ///   at 70 characters as per the specification.
+    /// - Throws: Currently never throws, but declared `throws` for parity with
+    ///   other conversion routines and future extensibility.
+    /// - Discussion: If ``SSHKey/comment`` is `nil`, the comment defaults to
+    ///   `username@hostname` using the current process information.
     public static func toRFC4716(key: any SSHKey) throws -> String {
         // Get the public key data
         let publicKeyData = key.publicKeyData()
@@ -148,11 +209,21 @@ public struct KeyConverter {
         return Data(pem.utf8)
     }
     
-    /// Export a key in multiple formats and write the results to disk.
+    /// Exports a key in one or more formats and writes each to disk.
     ///
-    /// The `.openssh` case writes the OpenSSH private key to `basePath`. Other
-    /// formats write to files with appropriate extensions (e.g. `.pem`, `.p8`, `.rfc`).
-    /// - Returns: A map of format to the path written.
+    /// - Parameters:
+    ///   - key: The SSH private key to export.
+    ///   - formats: The set of formats to write.
+    ///   - basePath: Base file path. For ``KeyFormat/openssh``, the file is
+    ///     written exactly to `basePath`. Other formats append an extension:
+    ///     `.pem` (PEM), `.p8` (PKCS#8 PEM), `.rfc` (RFC 4716 public key).
+    ///   - passphrase: Optional passphrase used when a format and key type
+    ///     support encryption. See ``toPEM(key:passphrase:)`` and
+    ///     ``toPKCS8(key:passphrase:)`` for specifics.
+    /// - Returns: A dictionary mapping each requested format to the absolute
+    ///   file path written.
+    /// - Throws: Errors from serialization routines or file I/O.
+    /// - Note: Existing files at the resolved paths are overwritten.
     public static func exportKey(
         _ key: any SSHKey,
         formats: Set<KeyFormat>,
