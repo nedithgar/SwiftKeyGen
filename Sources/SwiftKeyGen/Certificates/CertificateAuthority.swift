@@ -5,7 +5,77 @@ import _CryptoExtras
 /// Certificate Authority for signing SSH certificates
 public struct CertificateAuthority {
     
-    /// Sign a public key to create a certificate
+    /// Signs an SSH certificate for the given key using the provided CA key.
+    ///
+    /// This creates an OpenSSH v01 certificate that is attached to `publicKey` and
+    /// returns a `CertifiedKey` containing both the original key and its certificate.
+    /// The certificate is signed by `caKey` and includes the supplied metadata
+    /// (key ID, principals, validity window, critical options, and extensions).
+    ///
+    /// Default behavior closely follows `ssh-keygen`:
+    /// - If neither `validFrom` nor `validTo` is provided, the certificate is valid
+    ///   “forever” (from 0 to `UInt64.max`).
+    /// - If only `validFrom` is provided, `validBefore` remains `UInt64.max`.
+    /// - If only `validTo` is provided, `validAfter` remains 0.
+    /// - For `.user` certificates, if `extensions` is empty, standard user
+    ///   permissions are added: `permit-X11-forwarding`, `permit-agent-forwarding`,
+    ///   `permit-port-forwarding`, `permit-pty`, and `permit-user-rc`.
+    /// - If `signatureAlgorithm` is not specified, a sensible default is chosen
+    ///   for the CA key type (RSA → `rsa-sha2-512`, Ed25519 → `ssh-ed25519`,
+    ///   ECDSA P-256/384/521 → `ecdsa-sha2-nistp256/384/521`).
+    ///
+    /// - Parameters:
+    ///   - publicKey: The subject key to certify. Supports RSA, ECDSA
+    ///     (P‑256/P‑384/P‑521), and Ed25519.
+    ///   - caKey: The certificate authority private key used to sign the
+    ///     certificate. Its type must be compatible with `signatureAlgorithm` (if
+    ///     provided).
+    ///   - keyId: A free‑form identifier recorded in the certificate’s key ID field
+    ///     (useful for auditing and tracking).
+    ///   - principals: Allowed principals for the certificate. For `.user` this is
+    ///     a list of usernames; for `.host` it is hostnames/wildcards. Limited to
+    ///     `SSHCertificate.maxPrincipals`. Defaults to an empty list.
+    ///   - serial: Optional serial number. If `nil`, a random non‑zero serial is
+    ///     generated.
+    ///   - validFrom: Optional start of the validity window. See default behavior
+    ///     notes above.
+    ///   - validTo: Optional end of the validity window. See default behavior
+    ///     notes above.
+    ///   - certificateType: The certificate type, `.user` (default) or `.host`.
+    ///     Drives default extension selection.
+    ///   - criticalOptions: Critical options to embed in the certificate (e.g.,
+    ///     `.forceCommand`, `.sourceAddress`).
+    ///   - extensions: Extensions to include. If empty for `.user`, default user
+    ///     permissions are applied as described above.
+    ///   - signatureAlgorithm: Explicit signature algorithm to use. If omitted, a
+    ///     default matching the CA key type is selected.
+    /// - Returns: A `CertifiedKey` containing the original key and its attached
+    ///   SSH certificate.
+    /// - Throws: `SSHKeyError.tooManyPrincipals` if `principals` exceeds
+    ///   `SSHCertificate.maxPrincipals`; `SSHKeyError.incompatibleSignatureAlgorithm`
+    ///   if `signatureAlgorithm` does not match `caKey`'s type; other `SSHKeyError`
+    ///   values for signing/encoding failures (e.g., unsupported CA key type).
+    ///
+    /// - SeeAlso: `CertificateVerifier.verifyCertificate(_:caKey:options:)`,
+    ///   `CertificateManager.saveCertificate(_:to:comment:)`
+    ///
+    /// ### Example
+    /// ```swift
+    /// let caKey = try SwiftKeyGen.generateKey(type: .ed25519)
+    /// let userKey = try SwiftKeyGen.generateKey(type: .ed25519)
+    ///
+    /// let cert = try CertificateAuthority.signCertificate(
+    ///     publicKey: userKey,
+    ///     caKey: caKey,
+    ///     keyId: "john.doe",
+    ///     principals: ["john", "jdoe"],
+    ///     validFrom: Date(),
+    ///     validTo: Date().addingTimeInterval(30 * 24 * 60 * 60),
+    ///     certificateType: .user
+    /// )
+    ///
+    /// try CertificateManager.saveCertificate(cert, to: "~/.ssh/id_ed25519-cert.pub")
+    /// ```
     public static func signCertificate(
         publicKey: any SSHKey,
         caKey: any SSHKey,
