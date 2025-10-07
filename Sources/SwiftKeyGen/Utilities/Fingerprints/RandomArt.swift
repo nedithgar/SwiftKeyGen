@@ -1,13 +1,44 @@
 import Foundation
 import Crypto
 
-/// Generate SSH randomart visualization for key fingerprints
+/// A generator for OpenSSH‑style ASCII "randomart" (Drunken Bishop) visualizations of key fingerprints.
+///
+/// Randomart provides a quick, coarse visual cue to help a human recognize whether a public key (or its
+/// fingerprint) has changed unexpectedly (e.g. on first SSH connection vs. subsequent ones). While it is **not**
+/// a cryptographic security control, it can surface accidental mismatches or obvious MITM scenarios to an
+/// attentive user.
+///
+/// The implementation here mirrors the behavior and dimensions used by `ssh-keygen` (17×9 board, start/end
+/// markers, and the canonical augmentation character sequence) while remaining self‑contained so it can be
+/// reused anywhere inside the library (CLI, tests, or higher‑level tooling).
+///
+/// ### Usage
+/// ```swift
+/// // Generate a key pair (example – assuming synchronous API in this codebase)
+/// let pair = try KeyGeneration.generateKeyPair(type: .ed25519)
+/// // Produce the randomart from the private (or public) key
+/// let art = RandomArt.generate(for: pair.privateKey)
+/// print(art)
+/// ```
+///
+/// - Note: MD5 is used here strictly for compatibility with OpenSSH randomart output expectations; the
+///   library should continue to use modern hashes (e.g. SHA‑256) for security decisions elsewhere.
+/// - SeeAlso: ``RandomArt/generate(for:)``, ``RandomArt/generate(from:keyType:keySize:)``
 public struct RandomArt {
     private static let fieldWidth = 17
     private static let fieldHeight = 9
     private static let augmentationString = " .o+=*BOX@%&#/^SE"
     
-    /// Generate randomart visualization for a key
+    /// Generates an ASCII randomart visualization for the supplied SSH key.
+    ///
+    /// This convenience method derives the MD5 hexadecimal fingerprint (matching classic OpenSSH output)
+    /// and then feeds it into the generic generator. The resulting string contains a header with the
+    /// algorithm (and size when derivable), the 17×9 art body, and a footer border.
+    ///
+    /// - Parameter key: A concrete type conforming to ``SSHKey`` whose fingerprint will be visualized.
+    /// - Returns: A multi‑line string containing the framed randomart block.
+    /// - Important: The MD5 hash usage here is for visual parity only; do not rely on MD5 elsewhere for
+    ///   security decisions.
     public static func generate(for key: any SSHKey) -> String {
         let fingerprint = key.fingerprint(hash: .md5, format: .hex)
         let hashData = extractHashBytes(from: fingerprint)
@@ -19,7 +50,20 @@ public struct RandomArt {
         )
     }
     
-    /// Generate randomart from fingerprint string
+    /// Generates randomart directly from a fingerprint string.
+    ///
+    /// Accepts the common OpenSSH fingerprint encodings:
+    /// - MD5 hex with colons (e.g. `aa:bb:cc:...`)
+    /// - Base64 forms prefixed with `SHA256:` or `SHA512:` (as output by modern `ssh-keygen`)
+    ///
+    /// The provided `keyType` and `keySize` values are used only for aesthetic labeling in the header; they
+    /// do not affect the walk.
+    ///
+    /// - Parameters:
+    ///   - fingerprint: A fingerprint string in one of the supported OpenSSH formats.
+    ///   - keyType: A short label describing the algorithm (e.g. "ED25519", "RSA"). Defaults to `"Key"`.
+    ///   - keySize: Nominal key size in bits for header display. Defaults to `0` (omitted).
+    /// - Returns: The fully rendered randomart ASCII block.
     public static func generate(from fingerprint: String, keyType: String = "Key", keySize: Int = 0) -> String {
         let hashData = extractHashBytes(from: fingerprint)
         return generate(hashData: hashData, keyType: keyType, keySize: keySize)
