@@ -1,9 +1,35 @@
 import Foundation
 import Crypto
 
-/// ECDSA private key (P-256/P-384/P-521) using CryptoKit.
+/// An elliptic curve (ECDSA) private key supporting NIST curves
+/// P-256, P-384, and P-521.
+///
+/// This type encapsulates the private key material and exposes SSH‑compatible
+/// public key emission, fingerprinting, and serialization utilities used
+/// throughout the library (e.g. for `authorized_keys`, certificate signing,
+/// and format conversion).
+///
+/// Instances are created via the ``ECDSAKeyGenerator`` factory which ensures
+/// correct curve selection and centralizes generation policy.
+///
+/// ### Supported Curves
+/// - ``KeyType/ecdsa256`` (nistp256 / P‑256)
+/// - ``KeyType/ecdsa384`` (nistp384 / P‑384)
+/// - ``KeyType/ecdsa521`` (nistp521 / P‑521)
+///
+/// ### Thread Safety
+/// Keys are immutable value types; concurrent reads are safe. Avoid copying
+/// instances unnecessarily to limit duplication of private key material in
+/// memory.
+///
+/// ### Security Notes
+/// - The private key's raw bytes can be accessed via ``privateKeyData()``.
+///   Only export or persist them using secure storage.
+/// - Use the provided SSH / PEM encoders instead of crafting ad‑hoc formats.
 public struct ECDSAKey: SSHKey {
+    /// The key's SSH key type representing curve / algorithm (e.g. ``KeyType/ecdsa256``).
     public let keyType: KeyType
+    /// Optional trailing comment preserved when emitting OpenSSH public key strings.
     public var comment: String?
     
     internal enum PrivateKeyStorage {
@@ -32,7 +58,16 @@ public struct ECDSAKey: SSHKey {
         self.comment = comment
     }
     
-    /// Return the SSH wire‑format public key (type, curve, point).
+    /// Returns the SSH wire‑format public key payload for this ECDSA key.
+    ///
+    /// The encoded structure is:.
+    /// ```
+    /// string    <key type>          (e.g. "ecdsa-sha2-nistp256")
+    /// string    <curve identifier>  (e.g. "nistp256")
+    /// string    <EC point (0x04 || X || Y) in uncompressed ANSI X9.63 form>
+    /// ```
+    /// - Returns: A `Data` value containing the SSH binary public key suitable
+    ///   for inclusion in higher‑level structures (e.g. OpenSSH public key line encoding).
     public func publicKeyData() -> Data {
         var encoder = SSHEncoder()
         encoder.encodeString(keyType.rawValue)
@@ -59,7 +94,13 @@ public struct ECDSAKey: SSHKey {
         return encoder.encode()
     }
     
-    /// Return the raw private key bytes for the selected curve.
+    /// Returns the raw private key bytes for the selected curve.
+    ///
+    /// For NIST curves this is the big‑endian integer `d` in fixed size per curve.
+    ///
+    /// - Important: Exposing raw private key material increases risk of leakage.
+    ///   Avoid persisting or logging this unless absolutely necessary and secured.
+    /// - Returns: Raw curve private scalar bytes.
     public func privateKeyData() -> Data {
         // Return raw private key data for now
         switch privateKeyStorage {
@@ -72,7 +113,15 @@ public struct ECDSAKey: SSHKey {
         }
     }
     
-    /// Return the OpenSSH public key string for `authorized_keys`.
+    /// Produces the OpenSSH public key line value (type + base64 + optional comment).
+    ///
+    /// Example output:
+    /// ```text
+    /// ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBB... user@host
+    /// ```
+    ///
+    /// - Returns: A UTF‑8 `String` appropriate for `authorized_keys`, `known_hosts`
+    ///   (after host prefixing), or clipboard export.
     public func publicKeyString() -> String {
         let publicData = publicKeyData()
         var result = keyType.rawValue + " " + publicData.base64EncodedString()
@@ -84,7 +133,17 @@ public struct ECDSAKey: SSHKey {
         return result
     }
     
-    /// Compute a fingerprint for the public key.
+    /// Computes a fingerprint over the SSH public key data using the selected hash.
+    ///
+    /// The hash is computed over the binary SSH wire representation returned by
+    /// ``publicKeyData()``. Formatting follows OpenSSH conventions:
+    /// - MD5 + hex: colon‑delimited lower‑case hex (`aa:bb:...`)
+    /// - SHA256/SHA512 + base64: `SHA256:<value>` or `SHA512:<value>` (padding removed)
+    ///
+    /// - Parameters:
+    ///   - hash: The digest algorithm to apply.
+    ///   - format: Output representation (default ``FingerprintFormat/base64``).
+    /// - Returns: The fingerprint string.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
         let digestData: Data
@@ -227,7 +286,14 @@ public struct ECDSAKey: SSHKey {
         return sigEncoder.encode()
     }
     
-    /// PEM representation of the private key in PKCS#8 format.
+    /// The key's PKCS#8 PEM representation.
+    ///
+    /// This delegates to CryptoKit's PKCS#8 encoder. The returned value includes:
+    /// - `-----BEGIN PRIVATE KEY-----` header
+    /// - Base64 body (wrapped)
+    /// - `-----END PRIVATE KEY-----` footer
+    ///
+    /// - Note: No encryption is applied. Wrap / protect externally if storing on disk.
     public var pemRepresentation: String {
         switch privateKeyStorage {
         case .p256(let key):
@@ -263,27 +329,46 @@ public struct ECDSAKey: SSHKey {
     }
 }
 
-/// Factory for generating ECDSA keys.
+/// Factory utilities for generating new ECDSA private keys.
+///
+/// Use these static helpers instead of constructing `ECDSAKey` directly to
+/// ensure consistent curve selection and future policy hooks (entropy sources,
+/// auditing, defaults, etc.).
 public struct ECDSAKeyGenerator {
-    /// Generate a P‑256 private key.
+    /// Generates a new P‑256 ECDSA private key.
+    ///
+    /// - Parameter comment: Optional comment stored with the key for display/export.
+    /// - Returns: A freshly generated ECDSA key on the P‑256 curve.
     public static func generateP256(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P256.Signing.PrivateKey()
         return ECDSAKey(p256Key: privateKey, comment: comment)
     }
     
-    /// Generate a P‑384 private key.
+    /// Generates a new P‑384 ECDSA private key.
+    ///
+    /// - Parameter comment: Optional comment stored with the key for display/export.
+    /// - Returns: A freshly generated ECDSA key on the P‑384 curve.
     public static func generateP384(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P384.Signing.PrivateKey()
         return ECDSAKey(p384Key: privateKey, comment: comment)
     }
     
-    /// Generate a P‑521 private key.
+    /// Generates a new P‑521 ECDSA private key.
+    ///
+    /// - Parameter comment: Optional comment stored with the key for display/export.
+    /// - Returns: A freshly generated ECDSA key on the P‑521 curve.
     public static func generateP521(comment: String? = nil) throws -> ECDSAKey {
         let privateKey = P521.Signing.PrivateKey()
         return ECDSAKey(p521Key: privateKey, comment: comment)
     }
     
-    /// Generate an ECDSA key for the requested curve type.
+    /// Generates an ECDSA private key for the specified SSH key type.
+    ///
+    /// - Parameters:
+    ///   - curve: One of ``KeyType/ecdsa256``, ``KeyType/ecdsa384``, ``KeyType/ecdsa521``.
+    ///   - comment: Optional comment stored with the key.
+    /// - Returns: A freshly generated key for the requested curve.
+    /// - Throws: ``SSHKeyError/unsupportedKeyType`` if `curve` is not an ECDSA curve.
     public static func generate(curve: KeyType, comment: String? = nil) throws -> ECDSAKey {
         switch curve {
         case .ecdsa256:
