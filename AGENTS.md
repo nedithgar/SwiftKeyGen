@@ -1,4 +1,4 @@
-# Copilot Instructions for SwiftKeyGen
+# Agent Instructions for SwiftKeyGen
 
 Purpose: Enable AI coding agents to work productively in this repository with minimal ramp‑up. Keep responses precise, follow existing patterns, and prefer real examples from this codebase.
 
@@ -111,9 +111,7 @@ swift package generate-xcodeproj
 - **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when size is static or when only a view is needed. This reduces allocations and improves cache locality while keeping memory safety.
 
 #### InlineArray & Span Usage (Swift 6.2)
-Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code.
-
-Refer to `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` for full guidance.
+Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code. Utilize MCP servers to progressively retrieve additional details until sufficient information is obtained.
 
 ### CLI Extensions
 - CLI logic lives in `Sources/SwiftKeyGenCLI/`. Keep library free of CLI-only concerns (argument parsing, stdout formatting).

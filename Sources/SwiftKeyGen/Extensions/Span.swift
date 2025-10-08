@@ -75,7 +75,7 @@ extension Span where Element == UInt8 {
     ///   // bytes read: BB CC AA BB -> w1 == 0xBBCCAABB, i == 2
     ///   ```
     @inlinable
-    public func readUInt32Cyclic(offset: inout Int) -> UInt32 {
+    func readUInt32Cyclic(offset: inout Int) -> UInt32 {
         var value: UInt32 = 0
         // Unroll fixed 4-byte accumulation for performance clarity
         for _ in 0..<4 {
@@ -97,7 +97,7 @@ extension Span where Element == UInt8 {
     /// - Returns: The big-endian 32-bit unsigned integer composed of 4 bytes.
     /// - Precondition: `index >= 0 && index + 4 <= count`.
     @inlinable
-    public func readUInt32BigEndian(at index: Int) -> UInt32 {
+    func readUInt32BigEndian(at index: Int) -> UInt32 {
         precondition(index >= 0 && index + 4 <= count, "Index out of range for 4-byte read")
         let b0 = UInt32(self[index])
         let b1 = UInt32(self[index + 1])
