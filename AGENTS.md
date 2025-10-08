@@ -108,9 +108,11 @@ swift package generate-xcodeproj
 - **Algorithm Naming**: Maintain consistency with OpenSSH (`ssh-ed25519`, `rsa-sha2-256`, etc.).
 
 ### Performance Considerations
-- **Memory**: Avoid unnecessary key material copies; pass `Data` by reference where possible.
-- **Big Numbers**: For large RSA support, rely on existing `BigInt` usage. Do not reinvent big number math.
-- **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when size is static or when only a view is needed. This reduces allocations and improves cache locality while keeping memory safety.
+- **Memory**: Avoid unnecessary key material copies; pass references (`Data` is a value type with copy-on-write—leverage that). Zero sensitive buffers promptly if you introduce temporary storage (follow existing patterns before adding new wipes).
+- **Big Numbers**: For large RSA support, rely on existing `BigInt` usage. Do not re‑implement big integer arithmetic.
+- **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when capacity is fixed or when only a transient, read‑only view is needed. This reduces allocations and improves cache locality while keeping memory safety.
+- **`InlineArray` vs `Data`**: Use `InlineArray<Fixed, UInt8>` for fixed cryptographic blocks (e.g., bcrypt blocks, digest buffers). Convert to `Data` only at API boundaries via existing extensions (`toData()`).
+- **Hot Paths**: Favor tight loops without heap traffic; check existing cipher/KDF implementations for style before adding similar code.
 
 #### InlineArray & Span Usage (Swift 6.2)
 Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code. Utilize MCP servers to progressively retrieve additional details until sufficient information is obtained.
