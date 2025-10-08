@@ -171,16 +171,29 @@ struct FormatEdgeCasesIntegrationTests {
             let lines = rfc4716Content.split(separator: "\n")
             #expect(lines.count > 3, "RFC4716 format should span multiple lines (header + wrapped base64 + footer)")
             
-            // Verify ssh-keygen can read it
-            let fingerprintResult = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", rfc4716Path.path])
-            #expect(fingerprintResult.succeeded, "ssh-keygen should read multi-line RFC4716 format")
+            // Verify ssh-keygen can import it (some ssh-keygen builds require -i/-m for RFC4716)
+            let importResult = try IntegrationTestSupporter.runSSHKeygen(["-i", "-f", rfc4716Path.path, "-m", "RFC4716"])
+            #expect(importResult.succeeded, "ssh-keygen should import multi-line RFC4716 format")
+            #expect(importResult.stdout.contains("ssh-ed25519"), "Imported key should contain ssh-ed25519 type")
+
+            // Write imported OpenSSH form to temp file for fingerprinting
+            let importedPubPath = tempDir.appendingPathComponent("imported_from_rfc.pub")
+            try IntegrationTestSupporter.write(importResult.stdout, to: importedPubPath)
+            let fingerprintResult = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", importedPubPath.path])
+            #expect(fingerprintResult.succeeded, "ssh-keygen should fingerprint imported RFC4716 key")
             
-            // Verify we can parse it back
-            _ = try KeyManager.readPrivateKey(from: rfc4716Path.path, passphrase: nil)
+            // Verify we can parse it back as RFC4716 public key (not a private key)
+            let parsed = try PublicKeyParser.parseRFC4716(rfc4716Content)
+            #expect(parsed.type == .ed25519, "Parsed RFC4716 key type should be ed25519")
+            #expect(parsed.comment == "test@host.com", "RFC4716 comment should be preserved")
             
-            // Compare fingerprints to verify key is preserved
-            let keyFP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", rfc4716Path.path])
-            #expect(keyFP.succeeded, "Should be able to get fingerprint of round-trip key")
+            // Compare fingerprints: our original OpenSSH vs imported-from-RFC4716
+            let originalOpenSSH = key.publicKeyString()
+            let originalPath = tempDir.appendingPathComponent("original.pub")
+            try IntegrationTestSupporter.write(originalOpenSSH, to: originalPath)
+            let originalFP = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", originalPath.path])
+            #expect(originalFP.succeeded, "ssh-keygen should fingerprint original key")
+            #expect(originalFP.stdout.split(separator: " ").last == fingerprintResult.stdout.split(separator: " ").last, "Fingerprints should match between original and RFC4716-imported key")
         }
     }
     
