@@ -715,4 +715,358 @@ struct CertificateAdvancedIntegrationTests {
             #expect(parsed.certificate.extensions.contains("permit-port-forwarding"), "Certificate should have permit-port-forwarding extension")
         }
     }
+    
+    // MARK: - Critical Options Testing
+    
+    @Test("Certificate with force-command critical option")
+    func testCertificateWithForceCommandOption() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with force-command critical option
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let forcedCommand = "/usr/bin/restricted-shell"
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "forced-command-test",
+                "-n", "restricteduser",
+                "-O", "force-command=\(forcedCommand)",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with force-command")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasForceCommand = certifiedKey.certificate.criticalOptions.contains { $0.0 == "force-command" }
+            #expect(hasForceCommand, "Certificate should have force-command critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("force-command"), "ssh-keygen should show force-command option")
+            #expect(listResult.stdout.contains(forcedCommand), "Should show the forced command value")
+        }
+    }
+    
+    @Test("Certificate with source-address restriction (IPv4)")
+    func testCertificateWithSourceAddressIPv4() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with source-address restriction (IPv4)
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let sourceAddress = "192.168.1.100"
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "ipv4-restricted",
+                "-n", "testuser",
+                "-O", "source-address=\(sourceAddress)",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with source-address (IPv4)")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasSourceAddress = certifiedKey.certificate.criticalOptions.contains { $0.0 == "source-address" }
+            #expect(hasSourceAddress, "Certificate should have source-address critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("source-address"), "ssh-keygen should show source-address option")
+            #expect(listResult.stdout.contains(sourceAddress), "Should show the IPv4 address")
+        }
+    }
+    
+    @Test("Certificate with source-address restriction (IPv6)")
+    func testCertificateWithSourceAddressIPv6() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with source-address restriction (IPv6)
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let sourceAddress = "2001:db8::1"
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "ipv6-restricted",
+                "-n", "testuser",
+                "-O", "source-address=\(sourceAddress)",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with source-address (IPv6)")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasSourceAddress = certifiedKey.certificate.criticalOptions.contains { $0.0 == "source-address" }
+            #expect(hasSourceAddress, "Certificate should have source-address critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("source-address"), "ssh-keygen should show source-address option")
+            #expect(listResult.stdout.contains(sourceAddress), "Should show the IPv6 address")
+        }
+    }
+    
+    @Test("Certificate with source-address restriction (CIDR notation)")
+    func testCertificateWithSourceAddressCIDR() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with source-address restriction (CIDR)
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let sourceAddress = "10.0.0.0/24"
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "cidr-restricted",
+                "-n", "testuser",
+                "-O", "source-address=\(sourceAddress)",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with source-address (CIDR)")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasSourceAddress = certifiedKey.certificate.criticalOptions.contains { $0.0 == "source-address" }
+            #expect(hasSourceAddress, "Certificate should have source-address critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("source-address"), "ssh-keygen should show source-address option")
+            #expect(listResult.stdout.contains("10.0.0.0"), "Should show the CIDR network")
+        }
+    }
+    
+    @Test("Certificate with verify-required option")
+    func testCertificateWithVerifyRequiredOption() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with verify-required option
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "verify-required-test",
+                "-n", "secureuser",
+                "-O", "verify-required",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with verify-required")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasVerifyRequired = certifiedKey.certificate.criticalOptions.contains { $0.0 == "verify-required" }
+            #expect(hasVerifyRequired, "Certificate should have verify-required critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("verify-required"), "ssh-keygen should show verify-required option")
+        }
+    }
+    
+    @Test("Certificate with no-presence-required option")
+    func testCertificateWithNoPresenceRequiredOption() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with no-presence-required option
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "no-presence-test",
+                "-n", "automateduser",
+                "-O", "no-touch-required",  // Note: ssh-keygen uses "no-touch-required" not "no-presence-required"
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with no-touch-required")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify critical option is present
+            let hasNoTouchRequired = certifiedKey.certificate.criticalOptions.contains { $0.0 == "no-touch-required" }
+            #expect(hasNoTouchRequired, "Certificate should have no-touch-required critical option")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains("no-touch-required"), "ssh-keygen should show no-touch-required option")
+        }
+    }
+    
+    @Test("Certificate with custom extensions (non-standard)")
+    func testCertificateWithCustomExtensions() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            // Generate CA and user keys with ssh-keygen
+            let caKeyPath = tempDir.appendingPathComponent("ca_key")
+            let caGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", caKeyPath.path,
+                "-N", "",
+                "-C", "ca@example.com"
+            ])
+            #expect(caGenResult.succeeded)
+            
+            let userKeyPath = tempDir.appendingPathComponent("user_key")
+            let userGenResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", userKeyPath.path,
+                "-N", "",
+                "-C", "user@example.com"
+            ])
+            #expect(userGenResult.succeeded)
+            
+            // Sign certificate with custom extension
+            let certPath = userKeyPath.appendingPathExtension("pub")
+            let customExtension = "custom-extension@example.com"
+            let signResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-s", caKeyPath.path,
+                "-I", "custom-ext-test",
+                "-n", "testuser",
+                "-O", "extension:\(customExtension)=value",
+                certPath.path
+            ])
+            #expect(signResult.succeeded, "ssh-keygen should create certificate with custom extension")
+            
+            // Parse the certificate
+            let certFilePath = tempDir.appendingPathComponent("user_key-cert.pub")
+            let certString = try String(contentsOf: certFilePath, encoding: .utf8)
+            let certifiedKey = try CertificateParser.parseCertificate(from: certString)
+            
+            // Verify custom extension is present
+            #expect(certifiedKey.certificate.extensions.contains(customExtension), 
+                   "Certificate should have custom extension")
+            
+            // Verify with ssh-keygen listing
+            let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
+            #expect(listResult.succeeded)
+            #expect(listResult.stdout.contains(customExtension), "ssh-keygen should show custom extension")
+        }
+    }
 }

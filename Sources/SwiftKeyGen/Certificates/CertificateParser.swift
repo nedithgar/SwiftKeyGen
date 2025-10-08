@@ -244,12 +244,16 @@ public struct CertificateParser {
             let name = try decoder.decodeString()
             let valueData = try decoder.decodeData()
             
-            // Decode the value if it contains data
+            // Decode the value if it contains data, otherwise use empty string (flag option)
+            let value: String
             if valueData.count > 0 {
                 var valueDecoder = SSHDecoder(data: valueData)
-                let value = try valueDecoder.decodeString()
-                options.append((name, value))
+                value = try valueDecoder.decodeString()
+            } else {
+                // Flag options like "verify-required" have empty value data
+                value = ""
             }
+            options.append((name, value))
         }
         
         return options

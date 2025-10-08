@@ -137,21 +137,21 @@ This document tracks missing integration tests for complete bidirectional intero
 - [ ] ~~**Performance test for large keys** (generation and parsing)~~
 
 ### Certificate Advanced Features
-- [ ] **Certificate with force-command critical option**
-- [ ] **Certificate with source-address restriction** (IPv4)
-- [ ] **Certificate with source-address restriction** (IPv6)
-- [ ] **Certificate with source-address restriction** (CIDR notation)
-- [ ] **Certificate with verify-required option**
-- [ ] **Certificate with no-presence-required option**
-- [ ] **Certificate with custom extensions** (non-standard)
-- [ ] **Certificate extension permit-X11-forwarding**
-- [ ] **Certificate extension permit-agent-forwarding**
-- [ ] **Certificate extension permit-port-forwarding**
-- [ ] **Certificate extension permit-pty**
-- [ ] **Certificate extension permit-user-rc**
-- [ ] **Multiple principals handling**
-- [ ] **Empty principals list** (wildcard access)
-- [ ] **Certificate serial number handling** (large values)
+- [x] **Certificate with force-command critical option**
+- [x] **Certificate with source-address restriction** (IPv4)
+- [x] **Certificate with source-address restriction** (IPv6)
+- [x] **Certificate with source-address restriction** (CIDR notation)
+- [x] **Certificate with verify-required option**
+- [x] **Certificate with no-presence-required option**
+- [x] **Certificate with custom extensions** (non-standard)
+- [x] **Certificate extension permit-X11-forwarding**
+- [x] **Certificate extension permit-agent-forwarding**
+- [x] **Certificate extension permit-port-forwarding**
+- [x] **Certificate extension permit-pty**
+- [x] **Certificate extension permit-user-rc**
+- [x] **Multiple principals handling**
+- [x] **Empty principals list** (wildcard access)
+- [x] **Certificate serial number handling** (large values)
 
 ### Certificate Validity Edge Cases
 - [ ] **Expired certificate handling** (past valid_before)
