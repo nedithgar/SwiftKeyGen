@@ -189,18 +189,22 @@ This document tracks missing integration tests for complete bidirectional intero
 
 ```
 Tests/SwiftKeyGenTests/Integration/
-├── SSHKeygenIntegrationTests.swift          # ✅ Existing (PEM/PKCS8 encryption)
-├── CertificateSSHKeygenIntegrationTests.swift # ✅ Existing (Certificate verification)
-├── OpenSSHFormatIntegrationTests.swift       # ✅ IMPLEMENTED (OpenSSH format bidirectional)
-├── FingerprintIntegrationTests.swift         # ✅ IMPLEMENTED (All fingerprint algorithms)
-├── RFC4716IntegrationTests.swift             # ✅ IMPLEMENTED (RFC4716 format)
-├── PassphraseIntegrationTests.swift          # ✅ IMPLEMENTED (Passphrase operations - OpenSSH, PEM, PKCS8)
-├── RandomartIntegrationTests.swift           # ✅ IMPLEMENTED (Randomart and bubble babble)
-├── ParseSSHKeygenKeysIntegrationTests.swift  # ✅ IMPLEMENTED - Parse ssh-keygen generated keys
+├── CertificateAdvancedIntegrationTests.swift      # ✅ IMPLEMENTED - Advanced certificate features & host certs
+├── CertificateSSHKeygenIntegrationTests.swift     # ✅ IMPLEMENTED - Certificate verification
+├── CertificateValidityIntegrationTests.swift      # ✅ IMPLEMENTED - Certificate validity edge cases
+├── ErrorHandlingParityIntegrationTests.swift      # ✅ IMPLEMENTED - Error handling parity with ssh-keygen
+├── FingerprintIntegrationTests.swift              # ✅ IMPLEMENTED - All fingerprint algorithms
+├── FormatConversionRoundTripIntegrationTests.swift # ✅ IMPLEMENTED - Format conversion round-trips
+├── FormatEdgeCasesIntegrationTests.swift          # ✅ IMPLEMENTED - Format edge cases
+├── KnownHostsIntegrationTests.swift               # ✅ IMPLEMENTED - known_hosts file handling
+├── OpenSSHFormatIntegrationTests.swift            # ✅ IMPLEMENTED - OpenSSH format bidirectional
 ├── ParseSSHKeygenCertificatesIntegrationTests.swift # ✅ IMPLEMENTED - Parse ssh-keygen certificates
-├── SignatureVerificationIntegrationTests.swift # ✅ IMPLEMENTED - Signature verification bidirectional
-├── CertificateAdvancedIntegrationTests.swift # ✅ IMPLEMENTED - Advanced certificate features & host certs
-└── KnownHostsIntegrationTests.swift          # ✅ NEW - known_hosts file handling (COMPLETED)
+├── ParseSSHKeygenKeysIntegrationTests.swift       # ✅ IMPLEMENTED - Parse ssh-keygen generated keys
+├── PassphraseIntegrationTests.swift               # ✅ IMPLEMENTED - Passphrase operations (OpenSSH, PEM, PKCS8)
+├── RandomartIntegrationTests.swift                # ✅ IMPLEMENTED - Randomart and bubble babble
+├── RFC4716IntegrationTests.swift                  # ✅ IMPLEMENTED - RFC4716 format
+├── SignatureVerificationIntegrationTests.swift    # ✅ IMPLEMENTED - Signature verification bidirectional
+└── SSHKeygenIntegrationTests.swift                # ✅ IMPLEMENTED - PEM/PKCS8 encryption
 ```
 
 ## 📝 Notes
