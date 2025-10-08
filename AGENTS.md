@@ -38,7 +38,6 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`, `KeyConversion`).
 - **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating helpers. Add new cross-cutting extensions here for project-wide reuse.
 - `Sources/SwiftKeyGenCLI/`: Main CLI logic (argument parsing, stdout formatting).
-- `Sources/CCommonCryptoShims/`: C shims for CommonCrypto (internal bridging headers).
 - `Tests/SwiftKeyGenTests/`: Organized by domain (e.g., `Keys/`, `Cryptography/`, `FormatConversion/`, `Integration/`, `Utilities/`, `Certificates/`).
 
 ## Build and Test Commands
