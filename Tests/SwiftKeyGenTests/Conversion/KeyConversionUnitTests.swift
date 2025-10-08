@@ -212,4 +212,44 @@ struct KeyConversionUnitTests {
         let e521Parsed = try PublicKeyParser.parseRFC4716(e521RFC)
         #expect(e521Parsed.type == .ecdsa521)
     }
+
+    // MARK: - ECDSA PKCS#8 (migrated & consolidated from ECDSAPKCS8Tests.swift)
+
+    @Test("ECDSA: toPEM vs toPKCS8 distinctions (SEC1 vs PKCS#8)")
+    func testECDSAPEMvsPKCS8() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa-pkcs8") as! ECDSAKey
+        // toPEM should emit traditional EC PRIVATE KEY (SEC1) if supported
+        let sec1 = try KeyConverter.toPEM(key: key)
+        #expect(sec1.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(sec1.contains("-----END EC PRIVATE KEY-----"))
+
+        // toPKCS8 should emit generic PRIVATE KEY (PKCS#8)
+        let pkcs8Data = try KeyConverter.toPKCS8(key: key)
+        let pkcs8 = String(decoding: pkcs8Data, as: UTF8.self)
+        #expect(pkcs8.contains("-----BEGIN PRIVATE KEY-----"))
+        #expect(pkcs8.contains("-----END PRIVATE KEY-----"))
+    }
+
+    @Test("ECDSA: PKCS#8 round-trip via Swift Crypto + PEMParser")
+    func testECDSAPKCS8RoundTrip() throws {
+        let original = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "round-trip") as! ECDSAKey
+        let pkcs8PEM = original.pemRepresentation // library emits PKCS#8 for ECDSA via property
+
+        // Validate usable by Crypto's P256
+        #expect(throws: Never.self) {
+            _ = try P256.Signing.PrivateKey(pemRepresentation: pkcs8PEM)
+        }
+
+        // Parse back with internal PEMParser
+        let parsed = try PEMParser.parseECDSAPrivateKey(pkcs8PEM)
+        #expect(parsed.keyType == original.keyType)
+        #expect(parsed.publicKeyData() == original.publicKeyData())
+    }
+
+    @Test("ECDSA: detectFormat recognizes PKCS#8 private")
+    func testECDSAPKCS8FormatDetection() throws {
+        let key = try SwiftKeyGen.generateKey(type: .ecdsa384) as! ECDSAKey
+        let pkcs8 = key.pemRepresentation
+        #expect(try KeyConversionManager.detectFormat(from: pkcs8) == .pkcs8)
+    }
 }
