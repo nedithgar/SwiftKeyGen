@@ -19,6 +19,6 @@ struct RSAKeyGenerationTimingTests {
         #expect(key.keyType == .rsa)
         #expect(key.publicKeyData().count > 0)
 
-        Issue.record("SwiftKeyGen RSA 2048 generation duration: \(String(format: "%.4f", duration)) s")
+        // Issue.record("SwiftKeyGen RSA 2048 generation duration: \(String(format: "%.4f", duration)) s")
     }
 }

@@ -40,45 +40,41 @@ extension Insecure {
                 throw SSHKeyError.invalidKeySize(bitSize, "RSA key size must be at least 512 bits and a multiple of 8")
             }
             
-            let maxAttempts = 100
-            var attempts = 0
-            
-            while attempts < maxAttempts {
-                attempts += 1
-                
-                // Generate two large prime numbers
-                let p = try generatePrime(bitSize: bitSize / 2)
-                let q = try generatePrime(bitSize: bitSize / 2)
+            // Public exponent (fixed)
+            let e = BigUInt(65537)
 
-                // Calculate n = p * q
-                let n = p * q
-                
-                // Check if n has the correct bit size
-                let nBitLength = n.bitWidth
-                if nBitLength < bitSize {
-                    // Try again if n is too small
-                    continue
+            // Generate primes separately ensuring gcd(e, p-1) == 1 before moving on.
+            let halfBits = bitSize / 2
+            let p = try generatePrime(bitSize: halfBits, ensureCoprimeWith: e)
+            var q: BigUInt
+            repeat {
+                q = try generatePrime(bitSize: halfBits, ensureCoprimeWith: e)
+            } while q == p // extremely unlikely, but guard uniqueness
+
+            // With top two bits forced for at least one prime the modulus will have full bitSize.
+            let n = p * q
+            // Sanity: guarantee we achieved requested size (should always hold with top-two-bit technique)
+            if n.bitWidth < bitSize {
+                // Fallback: regenerate q once (very rare) then recompute
+                q = try generatePrime(bitSize: halfBits, ensureCoprimeWith: e)
+                let n2 = p * q
+                guard n2.bitWidth >= bitSize else {
+                    throw SSHKeyError.generationFailed("Failed to reach target bit size for modulus")
                 }
-                
-                // Calculate Euler's totient: φ(n) = (p-1)(q-1)
-                let phi = (p - 1) * (q - 1)
-                
-                // Choose public exponent e (commonly 65537)
-                let e = BigUInt(65537)
-                
-                // Calculate private exponent d such that d * e ≡ 1 (mod φ(n))
-                guard let d = modularInverse(e, phi) else {
-                    // Try again if we can't find modular inverse
-                    continue
-                }
-                
-                let publicKey = PublicKey(n: n, e: e)
-                let privateKey = PrivateKey(n: n, e: e, d: d, p: p, q: q)
-                
-                return (privateKey, publicKey)
+                return try finalizeKey(e: e, p: p, q: q, n: n2)
             }
-            
-            throw SSHKeyError.generationFailed("Failed to generate RSA key pair after \(maxAttempts) attempts")
+            return try finalizeKey(e: e, p: p, q: q, n: n)
+        }
+        
+        /// Finalize key components computing d and constructing key types.
+        private static func finalizeKey(e: BigUInt, p: BigUInt, q: BigUInt, n: BigUInt) throws -> (privateKey: PrivateKey, publicKey: PublicKey) {
+            let phi = (p - 1) * (q - 1)
+            guard let d = modularInverse(e, phi) else {
+                throw SSHKeyError.generationFailed("Could not invert e modulo phi(n)")
+            }
+            let publicKey = PublicKey(n: n, e: e)
+            let privateKey = PrivateKey(n: n, e: e, d: d, p: p, q: q)
+            return (privateKey, publicKey)
         }
         
         // MARK: - Key Types
@@ -543,31 +539,65 @@ extension Insecure {
         
         // MARK: - Helper Functions
         
-        /// Generate a prime number with specified bit size
-        private static func generatePrime(bitSize: Int) throws -> BigUInt {
-            let maxAttempts = 10000 // Prevent infinite loops
+        /// Small prime list for trial division sieve (first primes up to < 1000, excluding 2).
+        /// Using UInt16 keeps them compact; this significantly cuts Miller–Rabin invocations.
+        private static let smallPrimes: [UInt16] = [
+            3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97,
+            101,103,107,109,113,127,131,137,139,149,151,157,163,167,173,179,181,191,193,197,199,
+            211,223,227,229,233,239,241,251,257,263,269,271,277,281,283,293,307,311,313,317,331,
+            337,347,349,353,359,367,373,379,383,389,397,401,409,419,421,431,433,439,443,449,457,
+            461,463,467,479,487,491,499,503,509,521,523,541,547,557,563,569,571,577,587,593,599,
+            601,607,613,617,619,631,641,643,647,653,659,661,673,677,683,691,701,709,719,727,733,
+            739,743,751,757,761,769,773,787,797,809,811,821,823,827,829,839,853,857,859,863,877,
+            881,883,887,907,911,919,929,937,941,947,953,967,971,977,983,991,997
+        ]
+
+        /// Recommended Miller–Rabin rounds based on bit size (probability of composite slipping past is negligible).
+        private static func recommendedMillerRabinRounds(bitWidth: Int) -> Int {
+            switch bitWidth {
+            case 0..<256: return 12
+            case 256..<512: return 10
+            case 512..<1024: return 8
+            case 1024..<2048: return 7
+            default: return 6 // 2048 bits and above
+            }
+        }
+
+        /// Quick trial division against small primes (excluding 2, we ensure oddness earlier).
+        private static func passesSmallPrimeSieve(_ n: BigUInt) -> Bool {
+            for p in smallPrimes {
+                let prime = BigUInt(p)
+                if n == prime { return true }
+                if n % prime == 0 { return false }
+            }
+            return true
+        }
+
+        /// Generate a prime number with specified bit size; ensures top two bits are set so the
+        /// eventual modulus achieves the target bit length when both primes share this property.
+        private static func generatePrime(bitSize: Int, ensureCoprimeWith e: BigUInt? = nil) throws -> BigUInt {
+            precondition(bitSize >= 16, "Prime size too small")
+            let byteCount = bitSize / 8
+            let rounds = recommendedMillerRabinRounds(bitWidth: bitSize)
+            let maxAttempts = 25_000
             var attempts = 0
-            
             while attempts < maxAttempts {
                 attempts += 1
-                
-                var randomBytes = try Data.generateSecureRandomBytes(count: bitSize / 8)
-                                
-                // Ensure the number has the correct bit size
-                randomBytes[0] |= 0x80  // Set MSB
-                randomBytes[randomBytes.count - 1] |= 0x01  // Ensure odd
-                
+                var randomBytes = try Data.generateSecureRandomBytes(count: byteCount)
+                // Set top two bits to guarantee candidate bit size and later modulus size.
+                randomBytes[0] |= 0xC0
+                // Force odd
+                randomBytes[randomBytes.count - 1] |= 0x01
                 let candidate = BigUInt(randomBytes)
-                
-                // Verify the candidate has the correct bit size
-                let bitLength = candidate.bitWidth
-                if bitLength == bitSize && isProbablePrime(candidate) {
-                    return candidate
-                }
+                // Bit width sanity
+                guard candidate.bitWidth == bitSize else { continue }
+                // Small prime sieve
+                guard passesSmallPrimeSieve(candidate) else { continue }
+                // Optional coprime check (Euler totient compatibility with public exponent)
+                if let e = e, gcd(e, candidate - 1) != 1 { continue }
+                // Miller–Rabin probabilistic test
+                if isProbablePrime(candidate, rounds: rounds) { return candidate }
             }
-            
-            // Fallback: generate a known prime of the correct size
-            // This ensures we always return a valid prime
             return generateFallbackPrime(bitSize: bitSize)
         }
         
@@ -577,15 +607,16 @@ extension Insecure {
             var candidate = BigUInt(1) << (bitSize - 1)
             candidate |= 1  // Make odd
             
-            while !isProbablePrime(candidate) {
+            // Use a conservative higher round count for deterministic fallback search.
+            while !isProbablePrime(candidate, rounds: recommendedMillerRabinRounds(bitWidth: bitSize) + 2) {
                 candidate += 2
             }
             
             return candidate
         }
         
-        /// Miller-Rabin primality test
-        private static func isProbablePrime(_ n: BigUInt, rounds: Int = 20) -> Bool {
+        /// Miller-Rabin primality test (probabilistic)
+        private static func isProbablePrime(_ n: BigUInt, rounds: Int) -> Bool {
             if n <= 1 { return false }
             if n <= 3 { return true }
             if n % 2 == 0 { return false }
@@ -600,7 +631,8 @@ extension Insecure {
             
             // Witness loop
             for _ in 0..<rounds {
-                let a = BigUInt.randomInteger(lessThan: n - 2) + 2
+                // Random base in [2, n-2]
+                let a = BigUInt.randomInteger(lessThan: n - 3) + 2
                 var x = a.power(d, modulus: n)
                 
                 if x == 1 || x == n - 1 {
@@ -622,6 +654,14 @@ extension Insecure {
             }
             
             return true
+        }
+
+        /// Euclidean greatest common divisor (BigUInt).
+        private static func gcd(_ a: BigUInt, _ b: BigUInt) -> BigUInt {
+            var x = a
+            var y = b
+            while y != 0 { (x, y) = (y, x % y) }
+            return x
         }
         
         /// Calculate modular inverse using Extended Euclidean Algorithm
