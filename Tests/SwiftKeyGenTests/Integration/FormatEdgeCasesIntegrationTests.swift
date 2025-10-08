@@ -268,7 +268,21 @@ struct FormatEdgeCasesIntegrationTests {
             let crlfPath = tempDir.appendingPathComponent("crlf_key")
             try IntegrationTestSupporter.write(crlfVersion, to: crlfPath)
             let crlfResult = try IntegrationTestSupporter.runSSHKeygen(["-l", "-f", crlfPath.path])
-            #expect(crlfResult.succeeded, "ssh-keygen should handle CRLF line endings")
+            if crlfResult.failed {
+                // Upstream OpenSSH is strict: it embeds an LF ("\n") in MARK_BEGIN / MARK_END
+                // constants and performs a raw memcmp. Rewriting the PEM markers to use CRLF
+                // therefore causes ssh-keygen to reject the file. We treat this as expected
+                // behavior and ensure *our* parser is tolerant.
+                print("Note: ssh-keygen rejects CRLF line endings (expected strict upstream behavior)")
+                let crlfData = try Data(contentsOf: crlfPath)
+                // Our parser should still accept the key (normalizing newlines).
+                let parsed = try OpenSSHPrivateKey.parse(data: crlfData, passphrase: nil)
+                // Sanity check: parsed key type matches what we generated (ed25519)
+                #expect((parsed as? Ed25519Key) != nil, "Parser should reconstruct Ed25519 key from CRLF variant")
+            } else {
+                // If a future ssh-keygen build becomes permissive, still validate success.
+                #expect(crlfResult.succeeded, "ssh-keygen should handle CRLF line endings if supported in future")
+            }
             
             // Test mixed version (this might fail with ssh-keygen, but we should handle it)
             let mixedPath = tempDir.appendingPathComponent("mixed_key")
