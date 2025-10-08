@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SwiftKeyGen
 
-@Suite("RSA Key Generation Timing", .tags(.slow, .rsa))
+@Suite("RSA Key Generation Timing", .tags(.rsa))
 struct RSAKeyGenerationTimingTests {
 
     /// Simple one-off timing of 2048-bit RSA key generation inside SwiftKeyGen.

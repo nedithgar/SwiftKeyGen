@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SwiftKeyGen
 
-@Suite("RSA Key Unit Tests", .tags(.unit, .rsa, .slow))
+@Suite("RSA Key Unit Tests", .tags(.unit, .rsa))
 struct RSAKeyUnitTests {
     
     @Test("Generate 2048-bit RSA key and verify components")

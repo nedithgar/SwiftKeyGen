@@ -7,7 +7,7 @@ import BigInt
 @Suite("RSA PKCS#1 + PEM", .tags(.unit, .rsa))
 struct RSAPEMUnitTests {
 
-    @Test("Unencrypted PKCS#1 PEM round-trip", .tags(.slow))
+    @Test("Unencrypted PKCS#1 PEM round-trip")
     func testUnencryptedRSAPKCS1PEMRoundTrip() throws {
         // Generate a small RSA key to keep tests fast
         let original = try RSAKeyGenerator.generate(bits: 1024)

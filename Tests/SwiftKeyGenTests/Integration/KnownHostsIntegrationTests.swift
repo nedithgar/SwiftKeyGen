@@ -237,7 +237,7 @@ struct KnownHostsIntegrationTests {
     
     // MARK: - ssh-keygen Reads Our known_hosts Format
     
-    @Test("ssh-keygen reads our known_hosts entries", .tags(.slow))
+    @Test("ssh-keygen reads our known_hosts entries")
     func testSSHKeygenReadsOurKnownHostsEntries() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let knownHostsPath = tempDir.appendingPathComponent("known_hosts")

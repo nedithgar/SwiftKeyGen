@@ -51,7 +51,7 @@ struct KeyConversionUnitTests {
 
     // MARK: - RSA behavior
 
-    @Test("RSA toPEM/PKCS8 and passphrase error", .tags(.rsa, .slow))
+    @Test("RSA toPEM/PKCS8 and passphrase error", .tags(.rsa))
     func testRSAToPEMAndPKCS8() throws {
         // Use smaller size for speed while still valid
         let key = try RSAKeyGenerator.generate(bits: 1024)
@@ -124,7 +124,7 @@ struct KeyConversionUnitTests {
         try PublicKeyParser.validatePublicKeyData(parsed.data, type: parsed.type)
     }
 
-    @Test("RFC4716 base64 lines wrapped at 70", .tags(.rsa, .slow))
+    @Test("RFC4716 base64 lines wrapped at 70", .tags(.rsa))
     func testRFC4716LongLinesRSA() throws {
         // RSA public key produces a long base64 payload
         let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-test") as! RSAKey
@@ -180,7 +180,7 @@ struct KeyConversionUnitTests {
         #expect(parsedRFC.data == key.publicKeyData())
     }
 
-    @Test("RFC4716 conversion across all key types", .tags(.rsa, .slow))
+    @Test("RFC4716 conversion across all key types", .tags(.rsa))
     func testAllKeyTypesRFC4716() throws {
         // Ed25519
         let ed = try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-test") as! Ed25519Key

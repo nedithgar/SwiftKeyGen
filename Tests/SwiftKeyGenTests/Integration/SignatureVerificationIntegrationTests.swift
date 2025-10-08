@@ -83,7 +83,7 @@ struct SignatureVerificationIntegrationTests {
         }
     }
     
-    @Test("Verify ssh-keygen RSA signature (rsa-sha2-256)", .tags(.rsa, .slow))
+    @Test("Verify ssh-keygen RSA signature (rsa-sha2-256)", .tags(.rsa))
     func testVerifyRSASHA256Signature() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let (caKey, certifiedKey, _) = try Self.createSSHKeygenSignedCertificate(
@@ -104,7 +104,7 @@ struct SignatureVerificationIntegrationTests {
         }
     }
     
-    @Test("Verify ssh-keygen RSA signature (rsa-sha2-512)", .tags(.rsa, .slow))
+    @Test("Verify ssh-keygen RSA signature (rsa-sha2-512)", .tags(.rsa))
     func testVerifyRSASHA512Signature() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let (caKey, certifiedKey, _) = try Self.createSSHKeygenSignedCertificate(
@@ -221,7 +221,7 @@ struct SignatureVerificationIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen verifies our RSA certificate signature (rsa-sha2-512)", .tags(.rsa, .slow))
+    @Test("ssh-keygen verifies our RSA certificate signature (rsa-sha2-512)", .tags(.rsa))
     func testSSHKeygenVerifiesOurRSASignature() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate RSA CA key with our implementation
@@ -342,7 +342,7 @@ struct SignatureVerificationIntegrationTests {
         }
     }
     
-    @Test("Verify certificate fails with wrong CA key (RSA)", .tags(.rsa, .slow))
+    @Test("Verify certificate fails with wrong CA key (RSA)", .tags(.rsa))
     func testVerifyCertificateFailsWithWrongCAKeyRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let (_, certifiedKey, _) = try Self.createSSHKeygenSignedCertificate(

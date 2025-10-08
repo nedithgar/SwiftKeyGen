@@ -333,7 +333,7 @@ struct CertificateVerifierUnitTests {
         }
     }
 
-    @Test("RSA CA signing Ed25519 user certificate", .tags(.slow, .rsa))
+    @Test("RSA CA signing Ed25519 user certificate", .tags(.rsa))
     func testRSACASigningEd25519UserCertificate() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca@example.com") as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .ed25519, comment: "user@example.com") as! Ed25519Key
@@ -354,7 +354,7 @@ struct CertificateVerifierUnitTests {
         #expect(publicResult == .valid)
     }
 
-    @Test("ECDSA P256 CA signing RSA user certificate", .tags(.slow, .rsa))
+    @Test("ECDSA P256 CA signing RSA user certificate", .tags(.rsa))
     func testECDSAP256CASigningRSAUserCertificate() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa-ca@example.com") as! ECDSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "user@example.com") as! RSAKey
@@ -396,7 +396,7 @@ struct CertificateVerifierUnitTests {
         #expect(publicResult == .valid)
     }
 
-    @Test("All key type combinations", .tags(.slow, .rsa))
+    @Test("All key type combinations", .tags(.rsa))
     func testAllKeyTypeCombinations() throws {
         let caKeys: [(any SSHKey, String)] = [
             (try SwiftKeyGen.generateKey(type: .ed25519, comment: "ed25519-ca"), "Ed25519"),

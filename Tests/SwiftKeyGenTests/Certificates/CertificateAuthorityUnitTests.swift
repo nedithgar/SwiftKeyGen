@@ -149,7 +149,7 @@ struct CertificateAuthorityUnitTests {
         #expect(cert.certificate.extensions.contains("no-touch-required"))
     }
 
-    @Test("RSA certificate with different signature algorithms", .tags(.rsa, .slow))
+    @Test("RSA certificate with different signature algorithms", .tags(.rsa))
     func testRSACertificateSignatureAlgorithms() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-ca") as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "user@test") as! RSAKey
@@ -174,7 +174,7 @@ struct CertificateAuthorityUnitTests {
         }
     }
 
-    @Test("RSA certificate with incompatible signature algorithm", .tags(.rsa, .slow))
+    @Test("RSA certificate with incompatible signature algorithm", .tags(.rsa))
     func testRSACertificateIncompatibleAlgorithm() throws {
         let caKey = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         let userKey = try SwiftKeyGen.generateKey(type: .ed25519) as! Ed25519Key
@@ -200,7 +200,7 @@ struct CertificateAuthorityUnitTests {
         }
     }
 
-    @Test("Default signature algorithm for RSA", .tags(.rsa, .slow))
+    @Test("Default signature algorithm for RSA", .tags(.rsa))
     func testDefaultSignatureAlgorithmRSA() throws {
         let rsaCA = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
         let rsaUser = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey

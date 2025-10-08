@@ -41,7 +41,7 @@ struct FingerprintIntegrationTests {
         }
     }
     
-    @Test("SHA256 fingerprint matches ssh-keygen (RSA)", .tags(.slow))
+    @Test("SHA256 fingerprint matches ssh-keygen (RSA)")
     func testSHA256FingerprintRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
@@ -129,7 +129,7 @@ struct FingerprintIntegrationTests {
         }
     }
     
-    @Test("SHA512 fingerprint matches ssh-keygen (RSA)", .tags(.slow))
+    @Test("SHA512 fingerprint matches ssh-keygen (RSA)")
     func testSHA512FingerprintRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
@@ -220,7 +220,7 @@ struct FingerprintIntegrationTests {
         }
     }
     
-    @Test("MD5 fingerprint matches ssh-keygen (RSA)", .tags(.slow))
+    @Test("MD5 fingerprint matches ssh-keygen (RSA)")
     func testMD5FingerprintRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
