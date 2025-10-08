@@ -154,11 +154,11 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Certificate serial number handling** (large values)
 
 ### Certificate Validity Edge Cases
-- [ ] **Expired certificate handling** (past valid_before)
-- [ ] **Not-yet-valid certificate handling** (future valid_after)
-- [ ] **Certificate valid for exactly 1 second**
-- [ ] **Certificate with forever validity** (0xFFFFFFFFFFFFFFFF)
-- [ ] **Certificate validity boundary conditions**
+- [x] **Expired certificate handling** (past valid_before)
+- [x] **Not-yet-valid certificate handling** (future valid_after)
+- [x] **Certificate valid for exactly 1 second**
+- [x] **Certificate with forever validity** (0xFFFFFFFFFFFFFFFF)
+- [x] **Certificate validity boundary conditions**
 
 ### Format Edge Cases
 - [ ] **Keys with unusual comments** (Unicode, special characters)
@@ -228,7 +228,7 @@ Successfully implemented comprehensive integration test coverage:
 **Lower Priority (New Test Files Created - Require API Alignment):**
 1. ✅ Known Hosts Interoperability - COMPLETED (11 tests, fully working)
 2. 🚧 Certificate Advanced Features - Extended with 5 new extension tests (requires minor fixes)
-3. 🚧 Certificate Validity Edge Cases - NEW FILE CREATED (5 tests - requires API signature adjustments for `validFrom`/`validTo` vs `validAfter`/`validBefore`)
+3. ✅ Certificate Validity Edge Cases - COMPLETED (5 tests implemented and passing; validity API alignment confirmed)
 4. 🚧 Format Edge Cases - NEW FILE CREATED (11 tests - requires clarification on key export/import APIs)
 5. 🚧 Error Handling Parity - NEW FILE CREATED (8 tests - requires API method verification)
 6. 🚧 Format Conversion Round-Trips - NEW FILE CREATED (9 tests - requires conversion API clarification)
@@ -248,6 +248,8 @@ These new test files need API alignment with the actual SwiftKeyGen implementati
 2. **Key Export**: Verify correct method names for exporting keys (e.g., `openSSHPrivateKey()` vs conversion APIs)
 3. **Parsing API**: Confirm correct static methods for parsing keys/certificates from strings
 4. **Conversion API**: Verify `KeyConversionManager` vs `KeyConversion` API patterns from existing working tests
+
+Status update: Certificate Validity Edge Cases file is now fully aligned with `signCertificate` API and requires no further action.
 
 **Test File Status:**
 - ✅ **12 Existing Test Files**: Fully working, 100+ tests passing
