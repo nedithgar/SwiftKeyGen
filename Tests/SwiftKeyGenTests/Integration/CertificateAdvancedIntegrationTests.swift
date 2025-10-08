@@ -1009,9 +1009,10 @@ struct CertificateAdvancedIntegrationTests {
             let certString = try String(contentsOf: certFilePath, encoding: .utf8)
             let certifiedKey = try CertificateParser.parseCertificate(from: certString)
             
-            // Verify critical option is present
-            let hasNoTouchRequired = certifiedKey.certificate.criticalOptions.contains { $0.0 == "no-touch-required" }
-            #expect(hasNoTouchRequired, "Certificate should have no-touch-required critical option")
+            // OpenSSH treats "no-touch-required" as an EXTENSION (non-critical flag) – see ssh-keygen.c finalise_cert_exts.
+            // Our parser therefore places it in certificate.extensions, not criticalOptions.
+            let hasNoTouchRequiredExt = certifiedKey.certificate.extensions.contains("no-touch-required")
+            #expect(hasNoTouchRequiredExt, "Certificate should have no-touch-required extension")
             
             // Verify with ssh-keygen listing
             let listResult = try IntegrationTestSupporter.runSSHKeygen(["-L", "-f", certFilePath.path])
