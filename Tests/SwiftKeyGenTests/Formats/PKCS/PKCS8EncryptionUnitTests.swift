@@ -24,6 +24,17 @@ struct PKCS8EncryptionUnitTests {
         #expect(dk4096.hexEncodedString() == "4b007901b765489abead49d926f721d065a429c1")
     }
 
+    // Additional differentiation check (consolidated from removed EncryptedPEMTests.swift)
+    @Test("PBKDF2 different iteration counts yield different keys")
+    func testPBKDF2IterationDifference() throws {
+        let password = "password"
+        let salt = Data("salt".utf8)
+        let dk1 = try PKCS8Encryption.pbkdf2(password: password, salt: salt, iterations: 1, keyLen: 20)
+        let dk2 = try PKCS8Encryption.pbkdf2(password: password, salt: salt, iterations: 2048, keyLen: 20)
+        #expect(dk1.count == 20 && dk2.count == 20)
+        #expect(dk1 != dk2)
+    }
+
     @Test("PBES2 AES-128-CBC encrypt/decrypt round-trip")
     func testEncryptPBES2RoundTrip() throws {
         let passphrase = "test-passphrase"
