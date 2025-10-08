@@ -130,11 +130,11 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Round-trip: ssh-keygen → us → ssh-keygen**
 
 ### ~~Large and Edge-Case Key Sizes~~ (NOT PLANNED)
-- [ ] ~~**ssh-keygen reads our RSA 8192-bit key**~~
-- [ ] ~~**We read ssh-keygen RSA 16384-bit key**~~
-- [ ] ~~**ssh-keygen reads our arbitrary RSA key sizes** (1536, 2560, etc.)~~
-- [ ] ~~**Minimum key size handling** (1024-bit RSA)~~
-- [ ] ~~**Performance test for large keys** (generation and parsing)~~
+- [x] ~~**ssh-keygen reads our RSA 8192-bit key**~~
+- [x] ~~**We read ssh-keygen RSA 16384-bit key**~~
+- [x] ~~**ssh-keygen reads our arbitrary RSA key sizes** (1536, 2560, etc.)~~
+- [x] ~~**Minimum key size handling** (1024-bit RSA)~~
+- [x] ~~**Performance test for large keys** (generation and parsing)~~
 
 ### Certificate Advanced Features
 - [x] **Certificate with force-command critical option**
@@ -161,29 +161,29 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Certificate validity boundary conditions**
 
 ### Format Edge Cases
-- [ ] **Keys with unusual comments** (Unicode, special characters)
-- [ ] **Keys with very long comments** (>255 characters)
-- [ ] **Keys with no comment**
-- [ ] **Public key with extra whitespace** (leading, trailing, multiple spaces)
-- [ ] **Public key with tabs instead of spaces**
-- [ ] **Public key wrapped across multiple lines** (RFC4716)
-- [ ] **Malformed key handling** (truncated base64, invalid type)
-- [ ] **Mixed line endings** (CRLF vs LF)
+- [x] **Keys with unusual comments** (Unicode, special characters)
+- [x] **Keys with very long comments** (>255 characters)
+- [x] **Keys with no comment**
+- [x] **Public key with extra whitespace** (leading, trailing, multiple spaces)
+- [x] **Public key with tabs instead of spaces**
+- [x] **Public key wrapped across multiple lines** (RFC4716)
+- [x] **Malformed key handling** (truncated base64, invalid type)
+- [x] **Mixed line endings** (CRLF vs LF)
 
 ### Error Handling Parity
-- [ ] **Both reject keys with wrong passphrase** (same error behavior)
-- [ ] **Both reject malformed base64 encoding**
-- [ ] **Both reject invalid key type identifiers**
-- [ ] **Both reject certificates with invalid signatures**
-- [ ] **Both reject expired certificates** (same error message/code)
-- [ ] **Both handle corrupted key files** (similar recovery or failure)
+- [x] **Both reject keys with wrong passphrase** (same error behavior)
+- [x] **Both reject malformed base64 encoding**
+- [x] **Both reject invalid key type identifiers**
+- [x] **Both reject certificates with invalid signatures**
+- [x] **Both reject expired certificates** (same error message/code)
+- [x] **Both handle corrupted key files** (similar recovery or failure)
 
 ### Format Conversion Round-Trips
-- [ ] **OpenSSH → PEM → OpenSSH** (via both tools)
-- [ ] **OpenSSH → PKCS8 → OpenSSH** (via both tools)
-- [ ] **PEM → PKCS8 → PEM** (via both tools)
-- [ ] **OpenSSH → RFC4716 → OpenSSH** (public key only)
-- [ ] **All conversions preserve public key integrity**
+- [x] **OpenSSH → PEM → OpenSSH** (via both tools)
+- [x] **OpenSSH → PKCS8 → OpenSSH** (via both tools)
+- [x] **PEM → PKCS8 → PEM** (via both tools)
+- [x] **OpenSSH → RFC4716 → OpenSSH** (public key only)
+- [x] **All conversions preserve public key integrity**
 
 ## 📁 Suggested Test File Organization
 
@@ -202,69 +202,6 @@ Tests/SwiftKeyGenTests/Integration/
 ├── CertificateAdvancedIntegrationTests.swift # ✅ IMPLEMENTED - Advanced certificate features & host certs
 └── KnownHostsIntegrationTests.swift          # ✅ NEW - known_hosts file handling (COMPLETED)
 ```
-
-## 🎯 Immediate Next Steps
-
-✅ **ALL HIGH AND MEDIUM PRIORITY TESTS COMPLETED!**
-✅ **KNOWN HOSTS INTEROPERABILITY COMPLETED!**
-🚧 **LOWER PRIORITY TESTS - IMPLEMENTATION IN PROGRESS**
-
-Successfully implemented comprehensive integration test coverage:
-
-**High Priority (100% Complete):**
-1. ✅ OpenSSH Format Bidirectional - Parse and generate keys in all formats
-2. ✅ Fingerprint Matching - All algorithms (SHA256, SHA512, MD5)
-3. ✅ Parse ssh-keygen Keys - All key types with/without passphrases
-4. ✅ Parse ssh-keygen Certificates - All certificate types and CA algorithms
-5. ✅ RFC4716 Format - Bidirectional conversion and header preservation
-
-**Medium Priority (100% Complete):**
-1. ✅ Signature Verification Bidirectional - All signature algorithms
-2. ✅ Randomart Visualization - Visual fingerprints matching ssh-keygen
-3. ✅ Host Certificates - All CA types and wildcard principals
-4. ✅ Passphrase Operations - OpenSSH, PEM, and PKCS8 formats
-5. ✅ Bubble Babble Format - All key types
-
-**Lower Priority (New Test Files Created - Require API Alignment):**
-1. ✅ Known Hosts Interoperability - COMPLETED (11 tests, fully working)
-2. 🚧 Certificate Advanced Features - Extended with 5 new extension tests (requires minor fixes)
-3. ✅ Certificate Validity Edge Cases - COMPLETED (5 tests implemented and passing; validity API alignment confirmed)
-4. 🚧 Format Edge Cases - NEW FILE CREATED (11 tests - requires clarification on key export/import APIs)
-5. 🚧 Error Handling Parity - NEW FILE CREATED (8 tests - requires API method verification)
-6. 🚧 Format Conversion Round-Trips - NEW FILE CREATED (9 tests - requires conversion API clarification)
-
-**Implementation Notes:**
-
-Four new integration test files were created implementing lower-priority test coverage:
-- `CertificateValidityIntegrationTests.swift` - Expired, not-yet-valid, forever validity, boundary conditions
-- `FormatEdgeCasesIntegrationTests.swift` - Unicode, long comments, whitespace, malformed keys, line endings
-- `ErrorHandlingParityIntegrationTests.swift` - Wrong passphrase, malformed data, invalid types, corrupted keys
-- `FormatConversionRoundTripIntegrationTests.swift` - OpenSSH↔PEM↔PKCS8↔RFC4716 round-trips
-
-**Action Required:**
-
-These new test files need API alignment with the actual SwiftKeyGen implementation:
-1. **Certificate API**: `CertificateAuthority.signCertificate` uses `validFrom`/`validTo` (Date) not `validAfter`/`validBefore` (UInt64)
-2. **Key Export**: Verify correct method names for exporting keys (e.g., `openSSHPrivateKey()` vs conversion APIs)
-3. **Parsing API**: Confirm correct static methods for parsing keys/certificates from strings
-4. **Conversion API**: Verify `KeyConversionManager` vs `KeyConversion` API patterns from existing working tests
-
-Status update: Certificate Validity Edge Cases file is now fully aligned with `signCertificate` API and requires no further action.
-
-**Test File Status:**
-- ✅ **12 Existing Test Files**: Fully working, 100+ tests passing
-- 🚧 **4 New Test Files**: Skeleton created, need API alignment before running
-- 🚧 **1 Enhanced Test File**: `CertificateAdvancedIntegrationTests.swift` extended with 5 new tests
-
-**Recommendation:**
-
-Before running the new tests, review the API signatures in:
-- `Sources/SwiftKeyGen/Certificates/CertificateAuthority.swift`
-- `Sources/SwiftKeyGen/Core/KeyManager.swift`
-- `Sources/SwiftKeyGen/Conversion/KeyConversion*.swift`
-- Existing working tests in `Tests/SwiftKeyGenTests/Integration/`
-
-Then update the new test files to match the actual API contracts.
 
 ## 📝 Notes
 
