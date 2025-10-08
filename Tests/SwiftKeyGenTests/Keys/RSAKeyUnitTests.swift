@@ -73,12 +73,10 @@ struct RSAKeyUnitTests {
             }
         }
     }
-    
-    @Test(.disabled("Prime generator falls back to a naïve loop")) // Disabled due to non-standard key size
+
+    @Test("Generate RSA key with arbitrary size (e.g., 3584 bits)", .tags(.rsa))
     func arbitraryKeySize() throws {
-        // Test non-standard key size that is not directly supported by CryptoExtras
-        let size = 3584  // Non-standard size between 3072 and 4096
-        
+        let size = 3584
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: size, comment: "test-\(size)") as! RSAKey
         
         // Verify key was generated
