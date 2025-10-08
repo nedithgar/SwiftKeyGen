@@ -7,5 +7,5 @@ extension Tag {
     @Tag static var critical: Self
 
     @Tag static var rsa: Self
-    @Tag static var slow: Self
+    @Tag static var slow: Self // > 10s
 }

@@ -49,6 +49,11 @@ public struct Ed25519PublicKey: SSHPublicKey {
     /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
+        // Match OpenSSH behavior: bubblebabble is always over SHA-1
+        if format == .bubbleBabble {
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
+        }
+
         let digestData: Data
         let prefix: String
         
@@ -76,13 +81,13 @@ public struct Ed25519PublicKey: SSHPublicKey {
             } else {
                 return prefix + digestData.hexEncodedString()
             }
-
         case .base64:
             let base64 = digestData.base64EncodedStringStrippingPadding()
             return prefix + base64
             
         case .bubbleBabble:
-            return BubbleBabble.encode(digestData)
+            // Already handled above
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
         }
     }
     
@@ -140,6 +145,11 @@ public struct RSAPublicKey: SSHPublicKey {
     /// Compute a fingerprint for the public key.
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
+        // Match OpenSSH behavior: bubblebabble is always over SHA-1
+        if format == .bubbleBabble {
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
+        }
+
         let digestData: Data
         let prefix: String
         
@@ -167,13 +177,13 @@ public struct RSAPublicKey: SSHPublicKey {
             } else {
                 return prefix + digestData.hexEncodedString()
             }
-
         case .base64:
             let base64 = digestData.base64EncodedStringStrippingPadding()
             return prefix + base64
             
         case .bubbleBabble:
-            return BubbleBabble.encode(digestData)
+            // Already handled above
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
         }
     }
     

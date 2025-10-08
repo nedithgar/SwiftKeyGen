@@ -127,7 +127,7 @@ public struct KeyConverter {
         // Base64 encode with 70-character line width
         output += publicKeyData.base64EncodedString(wrappedAt: 70) + "\n"
         
-        output += SSH_COM_PUBLIC_END
+        output += SSH_COM_PUBLIC_END + "\n"
         
         return output
     }

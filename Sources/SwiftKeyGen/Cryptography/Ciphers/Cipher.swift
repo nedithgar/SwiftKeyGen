@@ -131,8 +131,16 @@ enum Cipher {
         guard let cipherInfo = cipherByName(cipher) else {
             return nil
         }
-        
-        let ivSize = cipherInfo.ivLen > 0 ? cipherInfo.ivLen : cipherInfo.blockSize
+        // OpenSSH semantics:
+        // - For chacha20-poly1305@openssh.com, no IV is derived via bcrypt (ivSize = 0).
+        // - For other ciphers, if ivLen is zero in the table, the effective IV length is the
+        //   cipher block size (see OpenSSH cipher_ivlen implementation).
+        let ivSize: Int
+        if cipherInfo.flags.contains(.chachaPoly) {
+            ivSize = 0
+        } else {
+            ivSize = (cipherInfo.ivLen > 0) ? cipherInfo.ivLen : cipherInfo.blockSize
+        }
         return (cipherInfo.keyLen, ivSize)
     }
 }

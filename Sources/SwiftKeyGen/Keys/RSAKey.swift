@@ -109,6 +109,11 @@ public struct RSAKey: SSHKey {
     ///   mirrors OpenSSH conventions. MD5 fingerprints are colon‑separated hex (legacy compatibility).
     public func fingerprint(hash: HashFunction, format: FingerprintFormat = .base64) -> String {
         let publicKey = publicKeyData()
+        // Match OpenSSH behavior: bubblebabble is always over SHA-1
+        if format == .bubbleBabble {
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
+        }
+
         let digestData: Data
         let prefix: String
         
@@ -142,7 +147,8 @@ public struct RSAKey: SSHKey {
             return prefix + base64
             
         case .bubbleBabble:
-            return BubbleBabble.encode(digestData)
+            // Already handled above
+            return BubbleBabble.encode(publicKey.sha1DataInsecure())
         }
     }
     

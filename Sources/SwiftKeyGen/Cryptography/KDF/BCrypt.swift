@@ -73,9 +73,10 @@ struct BCryptPBKDF {
             var tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: sha2salt)
             var out = tmpout // accumulator
             
-            // Subsequent rounds
+            // Subsequent rounds: per OpenSSH, sha2salt = SHA512(previous tmpout)
+            // then tmpout = bcrypt_hash(sha2pass, sha2salt), and XOR into accumulator.
             for _ in 1..<rounds {
-                let hashedSalt = tmpout.toData()
+                let hashedSalt = tmpout.toData().sha512Data()
                 tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: hashedSalt)
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
