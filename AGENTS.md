@@ -204,5 +204,5 @@ Policy: Always run any test or suite tagged `.slow` in Release mode first: `swif
 4. Update README only if user-facing.
 
 ### Certificate Testing
-- Maintain ssh-keygen behavioral parity (validity defaults, principal handling, extension names).
+- Maintain ssh-keygen behavioral parity.
 - When modifying verification logic, update both `CertificateVerifier` and any helpers in `CertificateManager` plus associated tests (`Certificates/`).
