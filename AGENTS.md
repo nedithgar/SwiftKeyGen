@@ -8,11 +8,11 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 
 ### Technology Stack
 - **Language/Tooling**: Swift 6.2 Package (SPM)
-- **Test Framework**: Swift Testing (not XCTest)
+- **Test Framework**: Swift Testing (new framework, not XCTest)
 - **Primary Targets**: 
   - Library: `SwiftKeyGen`
-  - CLI Tools: `swiftkeygen`
-- **External Dependencies**: `swift-crypto`, `BigInt`
+  - CLI Tool: `swiftkeygen`
+- **External Dependencies**: `swift-crypto`, `BigInt` (see [Package.swift](./Package.swift))
 
 ### Core Domains
 - SSH key generation, parsing, conversion, fingerprinting
