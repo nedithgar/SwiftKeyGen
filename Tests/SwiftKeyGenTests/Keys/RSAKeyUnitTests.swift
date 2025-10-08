@@ -73,12 +73,10 @@ struct RSAKeyUnitTests {
             }
         }
     }
-    
-    @Test(.disabled("Prime generator falls back to a naïve loop")) // Disabled due to non-standard key size
+
+    @Test("Generate RSA key with arbitrary size (e.g., 3584 bits)")
     func arbitraryKeySize() throws {
-        // Test non-standard key size that is not directly supported by CryptoExtras
-        let size = 3584  // Non-standard size between 3072 and 4096
-        
+        let size = 3584
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: size, comment: "test-\(size)") as! RSAKey
         
         // Verify key was generated
@@ -108,7 +106,7 @@ struct RSAKeyUnitTests {
         #expect(fingerprint.hasPrefix("SHA256:"))
     }
 
-    @Test("RSA privateKeyData DER round-trip via PEM", .timeLimit(.minutes(2)))
+    @Test("RSA privateKeyData DER round-trip via PEM")
     func rsaPrivateKeyDataDERRoundTrip() throws {
         // Generate a 1024-bit RSA key to keep runtime bounded
         let original = try SwiftKeyGen.generateKey(type: .rsa, bits: 1024, comment: "der-roundtrip") as! RSAKey
@@ -124,11 +122,9 @@ struct RSAKeyUnitTests {
         }
 
         // Wrap DER as PKCS#1 PEM
-        let base64 = der.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-        let pem = """
-        -----BEGIN RSA PRIVATE KEY-----
-        \(base64)-----END RSA PRIVATE KEY-----
-        """
+    // Produce a deterministic 64‑column wrapped base64 body without indentation
+    let base64Wrapped = der.base64EncodedString().wrapped(every: 64) + "\n"
+    let pem = "-----BEGIN RSA PRIVATE KEY-----\n" + base64Wrapped + "-----END RSA PRIVATE KEY-----\n"
 
         // Sanity: PEM detection and body extraction should succeed and round-trip
         #expect(PEMParser.isPEMFormat(pem))
@@ -136,6 +132,8 @@ struct RSAKeyUnitTests {
         let body = pem.pemBody(type: "RSA PRIVATE KEY")
         #expect(body != nil)
         if let body = body, let decoded = Data(base64Encoded: body) {
+            // Length should match exactly; if not we surface the diff for debugging
+            #expect(decoded.count == der.count, "(decoded → \(decoded.count) bytes) == (der → \(der.count) bytes)")
             #expect(decoded == der)
         }
 

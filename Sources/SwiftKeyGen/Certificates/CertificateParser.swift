@@ -100,14 +100,49 @@ public struct CertificateParser {
         }
         
         // Read certificate blob
-        // The OpenSSH public key payload for certificates is:
-        //   string keytype || certificate-blob
-        // where certificate-blob is NOT wrapped in a single length field.
-        // It consists of a sequence of length‑prefixed fields ending with the
-        // signature. Therefore, after consuming the key type string, the
-        // remainder of the data is the certificate blob.
-        let certBlobData = try decoder.decodeBytes(count: decoder.remaining)
-        var certDecoder = SSHDecoder(data: Data(certBlobData))
+        // OpenSSH wire format for a certificate public key (base64 portion) is:
+        //   string keytype
+        //   string nonce
+        //   <pubkey fields ...>
+        //   uint64 serial
+        //   uint32 type
+        //   string key id
+        //   string principals (concatenated strings)
+        //   uint64 valid_after
+        //   uint64 valid_before
+        //   string critical options
+        //   string extensions
+        //   string reserved
+        //   string signature key
+        //   string signature
+        // However, our encoder currently emits: string keytype || length-prefixed(certBlob)
+        // where certBlob already contains the sequence above (without the type string).
+        // To maintain compatibility with both the spec and the current encoding, we
+        // detect and unwrap an accidental top-level length wrapper if present.
+
+        // Capture remaining raw bytes after reading key type
+        let remainingData = data.suffix(decoder.remaining)
+        let certBlobData: Data
+        let innerData: Data
+        if remainingData.count >= 4 {
+            // Read first 4 bytes as potential length prefix
+            let lengthField = remainingData.prefix(4)
+            let declared = lengthField.withUnsafeBytes { ptr -> UInt32 in
+                return ptr.load(as: UInt32.self).bigEndian
+            }
+            if Int(declared) == remainingData.count - 4 {
+                // Looks like a wrapped blob: unwrap it
+                innerData = Data(remainingData.dropFirst(4))
+                certBlobData = innerData
+            } else {
+                // Treat remainder as the blob directly
+                innerData = Data(remainingData)
+                certBlobData = innerData
+            }
+        } else {
+            throw SSHKeyError.invalidKeyData
+        }
+        var certDecoder = SSHDecoder(data: innerData)
         
         // Parse certificate components
         // Read nonce
@@ -208,7 +243,7 @@ public struct CertificateParser {
         
         // Create certified key
         let certifiedKey = underlyingKey.toCertified(type: certificateType)
-        certifiedKey.certificate.certBlob = Data(certBlobData)
+        certifiedKey.certificate.certBlob = certBlobData
         certifiedKey.certificate.serial = serial
         certifiedKey.certificate.keyId = keyId
         certifiedKey.certificate.principals = principals

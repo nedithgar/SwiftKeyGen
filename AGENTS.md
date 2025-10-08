@@ -187,6 +187,10 @@ struct CertificateIntegrationTests {
 - `.performance` — Benchmarks, large key generation
 - `.critical` — Core security/correctness tests (run in CI always)
 
+### Slow / RSA / Performance Policy
+
+Policy: Always run any test or suite tagged `.slow` in Release mode first: `swift test -c release --filter <SuiteOrTestName>`; default Debug loops should exclude them.
+
 ### Test Requirements
 - Add at least one cross-format round‑trip test when adding a new format or conversion path.
 - Test edge cases: parse failures (bad headers), boundary conditions, error paths.
