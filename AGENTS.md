@@ -2,6 +2,8 @@
 
 Purpose: Enable AI coding agents to work productively in this repository with minimal ramp‑up. Keep responses precise, follow existing patterns, and prefer real examples from this codebase.
 
+**IMPORTANT: Avoid using batch-editing tools (e.g. shell scripts, sed, awk, or mass-replacement commands). These operations are unsafe and may overwrite multiple files or entries unintentionally.**
+
 ## Project Overview
 
 ### Technology Stack
@@ -185,7 +187,7 @@ struct CertificateIntegrationTests {
 - `.performance` — Benchmarks, large key generation
 - `.critical` — Core security/correctness tests (run in CI always)
 
-### Slow / RSA / Performance Policy
+### Slow Policy
 
 Policy: Always run any test or suite tagged `.slow` in Release mode first: `swift test -c release --filter <SuiteOrTestName>`; default Debug loops should exclude them.
 
