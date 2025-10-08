@@ -187,7 +187,7 @@ struct RFC4716IntegrationTests {
         }
     }
     
-    @Test("ssh-keygen reads our RFC4716 RSA format", .tags(.rsa, .slow)) // TODO: Investigate slowness (> 800s???)
+    @Test("ssh-keygen reads our RFC4716 RSA format", .tags(.rsa))
     func testSSHKeygenReadsOurRFC4716RSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "our-rfc4716-rsa@example.com")

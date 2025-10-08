@@ -38,7 +38,7 @@ struct CertificateAdvancedIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen verifies our host certificate (RSA CA)", .tags(.rsa, .slow))
+    @Test("ssh-keygen verifies our host certificate (RSA CA)", .tags(.rsa))
     func testSSHKeygenVerifiesOurHostCertificateRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate RSA CA and host keys

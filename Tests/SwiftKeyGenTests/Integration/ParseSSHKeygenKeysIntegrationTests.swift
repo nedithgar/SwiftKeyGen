@@ -47,7 +47,7 @@ struct ParseSSHKeygenKeysIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen Ed25519 private key (with passphrase)", .tags(.slow))
+    @Test("Parse ssh-keygen Ed25519 private key (with passphrase)")
     func testParseSSHKeygenEd25519Encrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_ed25519_encrypted")
@@ -317,7 +317,7 @@ struct ParseSSHKeygenKeysIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen ECDSA P-256 private key (with passphrase)", .tags(.slow))
+    @Test("Parse ssh-keygen ECDSA P-256 private key (with passphrase)")
     func testParseSSHKeygenECDSAEncrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_ecdsa_encrypted")

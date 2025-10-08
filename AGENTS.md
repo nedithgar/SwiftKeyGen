@@ -1,16 +1,18 @@
-# Copilot Instructions for SwiftKeyGen
+# Agent Instructions for SwiftKeyGen
 
 Purpose: Enable AI coding agents to work productively in this repository with minimal ramp‑up. Keep responses precise, follow existing patterns, and prefer real examples from this codebase.
+
+**IMPORTANT: Avoid using batch-editing tools (e.g. shell scripts, sed, awk, or mass-replacement commands). These operations are unsafe and may overwrite multiple files or entries unintentionally.**
 
 ## Project Overview
 
 ### Technology Stack
 - **Language/Tooling**: Swift 6.2 Package (SPM)
-- **Test Framework**: Swift Testing (not XCTest)
+- **Test Framework**: Swift Testing (new framework, not XCTest)
 - **Primary Targets**: 
   - Library: `SwiftKeyGen`
-  - CLI Tools: `swiftkeygen`
-- **External Dependencies**: `swift-crypto`, `BigInt`
+  - CLI Tool: `swiftkeygen`
+- **External Dependencies**: `swift-crypto`, `BigInt` (see [Package.swift](./Package.swift))
 
 ### Core Domains
 - SSH key generation, parsing, conversion, fingerprinting
@@ -36,7 +38,6 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`, `KeyConversion`).
 - **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating helpers. Add new cross-cutting extensions here for project-wide reuse.
 - `Sources/SwiftKeyGenCLI/`: Main CLI logic (argument parsing, stdout formatting).
-- `Sources/CCommonCryptoShims/`: C shims for CommonCrypto (internal bridging headers).
 - `Tests/SwiftKeyGenTests/`: Organized by domain (e.g., `Keys/`, `Cryptography/`, `FormatConversion/`, `Integration/`, `Utilities/`, `Certificates/`).
 
 ## Build and Test Commands
@@ -106,14 +107,14 @@ swift package generate-xcodeproj
 - **Algorithm Naming**: Maintain consistency with OpenSSH (`ssh-ed25519`, `rsa-sha2-256`, etc.).
 
 ### Performance Considerations
-- **Memory**: Avoid unnecessary key material copies; pass `Data` by reference where possible.
-- **Big Numbers**: For large RSA support, rely on existing `BigInt` usage. Do not reinvent big number math.
-- **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when size is static or when only a view is needed. This reduces allocations and improves cache locality while keeping memory safety.
+- **Memory**: Avoid unnecessary key material copies; pass references (`Data` is a value type with copy-on-write—leverage that). Zero sensitive buffers promptly if you introduce temporary storage (follow existing patterns before adding new wipes).
+- **Big Numbers**: For large RSA support, rely on existing `BigInt` usage. Do not re‑implement big integer arithmetic.
+- **Value Containers**: Prefer Swift 6.2 value containers (`InlineArray`, `Span`) over heap-backed `[T]` or raw pointer slices when capacity is fixed or when only a transient, read‑only view is needed. This reduces allocations and improves cache locality while keeping memory safety.
+- **`InlineArray` vs `Data`**: Use `InlineArray<Fixed, UInt8>` for fixed cryptographic blocks (e.g., bcrypt blocks, digest buffers). Convert to `Data` only at API boundaries via existing extensions (`toData()`).
+- **Hot Paths**: Favor tight loops without heap traffic; check existing cipher/KDF implementations for style before adding similar code.
 
 #### InlineArray & Span Usage (Swift 6.2)
-Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code.
-
-Refer to `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` for full guidance.
+Swift 6.2 adds `InlineArray` (fixed-size, inline storage) and `Span` (a safe, non-owning view over contiguous memory) which we adopt for low-level, performance‑critical code. Utilize MCP servers to progressively retrieve additional details until sufficient information is obtained.
 
 ### CLI Extensions
 - CLI logic lives in `Sources/SwiftKeyGenCLI/`. Keep library free of CLI-only concerns (argument parsing, stdout formatting).
@@ -131,18 +132,7 @@ Refer to `Docs/InlineArray`, `Docs/Span`, and `Docs/Data.md` for full guidance.
 - **Single Test Target**: Keep all tests in one target (`SwiftKeyGenTests`); use tags to organize by type rather than creating separate targets.
 
 ### Test Tags (Swift Testing)
-Tags allow categorization and selective execution of tests without separate test targets. Define custom tags by extending `Tag`:
-
-```swift
-import Testing
-
-extension Tag {
-    @Tag static var unit: Self
-    @Tag static var integration: Self
-    @Tag static var performance: Self
-    @Tag static var critical: Self
-}
-```
+Tags allow categorization and selective execution of tests without separate test targets. Current tag definitions: [`Tests/SwiftKeyGenTests/Tags.swift`](Tests/SwiftKeyGenTests/Tags.swift)
 
 **Apply tags to tests:**
 ```swift
@@ -165,37 +155,33 @@ struct CertificateIntegrationTests {
 ```
 
 **Run tests by tag:**
-- **In Xcode**: Test navigator auto-groups by tags; select a tag to run those tests
-- **Command line with xcodebuild** (requires Xcode 16.3+):
+- **In Xcode**: Test navigator auto‑groups by tags; select a tag to run those tests.
+- **Command line (xcodebuild, Xcode 26.0+)**:
   ```bash
   # Run only tests with unit tag
   xcodebuild test -scheme SwiftKeyGen -only-testing-tags unit
-  
+
   # Run all except integration tests
   xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration
-  
-  # Combine multiple tags
+
+  # Combine multiple tag skips
   xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration,performance
   ```
 - **SPM (swift test)**: Tag filtering is **not yet supported** in SPM command-line tools (tracked as [swift-testing #591](https://github.com/swiftlang/swift-testing/issues/591)). Current workaround: use `--filter` with regex patterns matching test names
 
-> Local guidance: Because this is a cryptography‑focused project, avoid running `swift test` without filters. Use `swift test --filter <TestNameOrRegex>` to run only the relevant unit/integration tests. In Xcode, prefer running by tag (e.g., only `.unit` or `.critical`).
+> Local guidance: Because this is a cryptography‑focused project, avoid running `swift test` without filters. Use `swift test --filter <TestNameOrRegex>` to run only the relevant unit/integration tests. In Xcode, prefer running by tag (e.g., only `.unit`, `.critical`, or domain‑specific tags like `.rsa`).
 
-**Recommended tags for this project:**
-- `.unit` — Fast, focused tests of individual functions/types
-- `.integration` — Multi-component tests (e.g., format conversion round-trips, CLI workflows)
-- `.performance` — Benchmarks, large key generation
-- `.critical` — Core security/correctness tests (run in CI always)
-
-### Slow / RSA / Performance Policy
+### Slow Policy
 
 Policy: Always run any test or suite tagged `.slow` in Release mode first: `swift test -c release --filter <SuiteOrTestName>`; default Debug loops should exclude them.
 
 ### Test Requirements
 - Add at least one cross-format round‑trip test when adding a new format or conversion path.
-- Test edge cases: parse failures (bad headers), boundary conditions, error paths.
-- Integration tests via CLI if applicable.
+- Provide a negative test (malformed header / unsupported algorithm) alongside each new parser.
+- Test edge cases: parse failures (bad headers), boundary conditions, error paths, minimal & maximal key sizes.
+- Add CLI integration coverage if user-visible behavior changes.
 - Tag tests appropriately to enable selective execution during development vs. CI.
+- For new cryptographic primitives: include at least one known-answer test (KAT) vector when implementing from scratch. For wrappers around `swift-crypto` or validating interoperability with external tools (e.g., ssh-keygen, OpenSSL), property-based tests (determinism, round-trip, avalanche effect) are acceptable, though KAT vectors from authoritative sources (NIST, RFCs, reference implementations) are strongly recommended where available.
 
 ### Adding Formats / Conversions
 1. Implement low-level parse/serialize in `Formats/<FormatName>/`.
@@ -204,5 +190,5 @@ Policy: Always run any test or suite tagged `.slow` in Release mode first: `swif
 4. Update README only if user-facing.
 
 ### Certificate Testing
-- Maintain ssh-keygen behavioral parity (validity defaults, principal handling, extension names).
+- Maintain ssh-keygen behavioral parity.
 - When modifying verification logic, update both `CertificateVerifier` and any helpers in `CertificateManager` plus associated tests (`Certificates/`).

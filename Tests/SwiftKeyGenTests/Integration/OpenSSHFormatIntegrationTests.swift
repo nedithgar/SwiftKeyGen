@@ -80,7 +80,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen RSA 3072 key (unencrypted)", .tags(.slow))
+    @Test("Parse ssh-keygen RSA 3072 key (unencrypted)")
     func testParseSSHKeygenRSA3072Unencrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
@@ -100,7 +100,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen RSA 4096 key (unencrypted)", .tags(.slow))
+    @Test("Parse ssh-keygen RSA 4096 key (unencrypted)")
     func testParseSSHKeygenRSA4096Unencrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
@@ -191,7 +191,7 @@ struct OpenSSHFormatIntegrationTests {
     
     // MARK: - Parse ssh-keygen Generated Keys (Encrypted)
     
-    @Test("Parse ssh-keygen Ed25519 key (encrypted)", .tags(.slow))
+    @Test("Parse ssh-keygen Ed25519 key (encrypted)")
     func testParseSSHKeygenEd25519Encrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_ed25519")
@@ -225,7 +225,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen RSA key (encrypted)", .tags(.rsa, .slow))
+    @Test("Parse ssh-keygen RSA key (encrypted)", .tags(.rsa))
     func testParseSSHKeygenRSAEncrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_rsa")
@@ -255,7 +255,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("Parse ssh-keygen ECDSA key (encrypted)", .tags(.slow))
+    @Test("Parse ssh-keygen ECDSA key (encrypted)")
     func testParseSSHKeygenECDSAEncrypted() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("id_ecdsa")
@@ -313,7 +313,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
 
-    @Test("ssh-keygen extracts public key from our RSA OpenSSH format", .tags(.rsa, .slow))
+    @Test("ssh-keygen extracts public key from our RSA OpenSSH format", .tags(.rsa))
     func testSSHKeygenReadsOurRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate key with our implementation
@@ -370,7 +370,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen decrypts our encrypted OpenSSH format Ed25519", .tags(.slow))
+    @Test("ssh-keygen decrypts our encrypted OpenSSH format Ed25519")
     func testSSHKeygenDecryptsOurEncryptedEd25519() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "encrypted-our-ed25519@example.com") as! Ed25519Key
@@ -394,7 +394,7 @@ struct OpenSSHFormatIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen decrypts our encrypted OpenSSH format RSA", .tags(.rsa, .slow))
+    @Test("ssh-keygen decrypts our encrypted OpenSSH format RSA", .tags(.rsa))
     func testSSHKeygenDecryptsOurEncryptedRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "encrypted-our-rsa@example.com") as! RSAKey

@@ -198,4 +198,24 @@ struct ECDSAKeyUnitTests {
             _ = try ECDSAKeyGenerator.generate(curve: .rsa)
         }
     }
+
+    // MARK: - PKCS#8 pemRepresentation (moved from former ECDSAPKCS8Tests.swift)
+    @Test("pemRepresentation emits PKCS#8 PRIVATE KEY for all curves")
+    func testPKCS8PEMRepresentationAllCurves() throws {
+        // This consolidates the previous per-curve PKCS#8 export assertions
+        // ensuring ECDSAKey.pemRepresentation uses generic PRIVATE KEY (PKCS#8)
+        // instead of SEC1 EC PRIVATE KEY, for every supported curve.
+        let cases: [(KeyType, String)] = [
+            (.ecdsa256, "nistp256"),
+            (.ecdsa384, "nistp384"),
+            (.ecdsa521, "nistp521")
+        ]
+        for (type, _) in cases {
+            let key = try SwiftKeyGen.generateKey(type: type, comment: "pkcs8-\(type)") as! ECDSAKey
+            let pem = key.pemRepresentation
+            #expect(pem.hasPrefix("-----BEGIN PRIVATE KEY-----"))
+            #expect(pem.contains("-----END PRIVATE KEY-----"))
+            #expect(!pem.contains("-----BEGIN EC PRIVATE KEY-----"))
+        }
+    }
 }

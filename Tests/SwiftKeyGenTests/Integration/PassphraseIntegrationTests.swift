@@ -2,12 +2,12 @@ import Testing
 @testable import SwiftKeyGen
 import Foundation
 
-@Suite("Passphrase Integration Tests", .tags(.integration, .slow))
+@Suite("Passphrase Integration Tests", .tags(.integration))
 struct PassphraseIntegrationTests {
     
     // MARK: - ssh-keygen Modifies Our Keys
     
-    @Test("ssh-keygen changes passphrase on our OpenSSH Ed25519 key", .tags(.slow))
+    @Test("ssh-keygen changes passphrase on our OpenSSH Ed25519 key")
     func testSSHKeygenChangesPassphraseOnOurEd25519() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate key with our implementation (with initial passphrase)
@@ -43,7 +43,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen removes passphrase from our OpenSSH Ed25519 key", .tags(.slow))
+    @Test("ssh-keygen removes passphrase from our OpenSSH Ed25519 key")
     func testSSHKeygenRemovesPassphraseFromOurKey() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "passphrase-remove@example.com") as! Ed25519Key
@@ -72,7 +72,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen adds passphrase to our unencrypted OpenSSH key", .tags(.slow))
+    @Test("ssh-keygen adds passphrase to our unencrypted OpenSSH key")
     func testSSHKeygenAddsPassphraseToOurKey() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "passphrase-add@example.com") as! Ed25519Key
@@ -107,7 +107,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen changes passphrase on our OpenSSH RSA key", .tags(.rsa, .slow))
+    @Test("ssh-keygen changes passphrase on our OpenSSH RSA key", .tags(.rsa))
     func testSSHKeygenChangesPassphraseOnOurRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-passphrase@example.com") as! RSAKey
@@ -134,7 +134,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("ssh-keygen changes passphrase on our OpenSSH ECDSA key", .tags(.slow))
+    @Test("ssh-keygen changes passphrase on our OpenSSH ECDSA key")
     func testSSHKeygenChangesPassphraseOnOurECDSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa-passphrase@example.com") as! ECDSAKey
@@ -163,7 +163,7 @@ struct PassphraseIntegrationTests {
     
     // MARK: - We Modify ssh-keygen Keys
     
-    @Test("We change passphrase on ssh-keygen Ed25519 key", .tags(.slow))
+    @Test("We change passphrase on ssh-keygen Ed25519 key")
     func testWeChangePassphraseOnSSHKeygenKey() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("ssh_key")
@@ -205,7 +205,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("We remove passphrase from ssh-keygen key", .tags(.slow))
+    @Test("We remove passphrase from ssh-keygen key")
     func testWeRemovePassphraseFromSSHKeygenKey() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("ssh_key")
@@ -242,7 +242,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("We change passphrase on ssh-keygen RSA key", .tags(.rsa, .slow))
+    @Test("We change passphrase on ssh-keygen RSA key", .tags(.rsa))
     func testWeChangePassphraseOnSSHKeygenRSA() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let keyPath = tempDir.appendingPathComponent("ssh_rsa_key")
@@ -282,7 +282,7 @@ struct PassphraseIntegrationTests {
     
     // MARK: - Passphrase Integrity Tests
     
-    @Test("Passphrase change preserves key integrity", .tags(.slow))
+    @Test("Passphrase change preserves key integrity")
     func testPassphraseChangePreservesIntegrity() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate key and sign a message
@@ -319,7 +319,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("Wrong passphrase fails consistently", .tags(.slow))
+    @Test("Wrong passphrase fails consistently")
     func testWrongPassphraseFails() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "wrong-pass@example.com") as! Ed25519Key
@@ -355,7 +355,7 @@ struct PassphraseIntegrationTests {
         }
     }
     
-    @Test("Empty passphrase is distinct from no passphrase", .tags(.slow))
+    @Test("Empty passphrase is distinct from no passphrase")
     func testEmptyPassphraseHandling() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "empty-pass@example.com") as! Ed25519Key

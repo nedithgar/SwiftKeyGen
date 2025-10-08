@@ -43,6 +43,66 @@ struct PEMEncryptionUnitTests {
         }
     }
 
+    // Consolidated from former EncryptedPEMTests.swift
+    @Test("EVP_BytesToKey derives expected key/iv lengths")
+    func testEVPBytesToKeyLengths() throws {
+        let password = "test"
+        let salt = Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
+
+        let (key128, iv128) = PEMEncryption.evpBytesToKey(password: password, salt: salt, keyLen: 16, ivLen: 16)
+        #expect(key128.count == 16)
+        #expect(iv128.count == 16)
+
+        let (key256, iv256) = PEMEncryption.evpBytesToKey(password: password, salt: salt, keyLen: 32, ivLen: 16)
+        #expect(key256.count == 32)
+        #expect(iv256.count == 16)
+        // Deterministic OpenSSL-compatible expansion: first 16 bytes identical
+        #expect(key256.prefix(16) == key128)
+    }
+
+    @Test("PKCS#7 pad/unpad happy-path cases")
+    func testPKCS7PadAndUnpad() throws {
+        let cases: [(Data, Int, Int)] = [
+            (Data([0x01, 0x02, 0x03]), 8, 5),                // partial block
+            (Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]), 8, 8), // full block => full padding block
+            (Data([0x01]), 16, 15),                          // minimal length
+            (Data(repeating: 0x00, count: 16), 16, 16)       // exactly one block => full block padding
+        ]
+        for (plain, blockSize, expectedPad) in cases {
+            let padded = PEMEncryption.pkcs7Pad(data: plain, blockSize: blockSize)
+            #expect(padded.count % blockSize == 0)
+            #expect(padded.count == plain.count + expectedPad)
+            let padByte = padded.last!
+            #expect(Int(padByte) == expectedPad)
+            let unpadded = try PEMEncryption.pkcs7Unpad(data: padded, blockSize: blockSize)
+            #expect(unpadded == plain)
+        }
+    }
+
+    @Test("Encrypted SEC1 PEM headers emitted for default cipher (AES-128-CBC)")
+    func testEncryptedSEC1PEMHeaders() throws {
+        let key = try ECDSAKeyGenerator.generateP256(comment: "enc-hdrs")
+        let pem = try key.sec1PEMRepresentation(passphrase: "secret123")
+        #expect(pem.contains("-----BEGIN EC PRIVATE KEY-----"))
+        #expect(pem.contains("-----END EC PRIVATE KEY-----"))
+        #expect(pem.contains("Proc-Type: 4,ENCRYPTED"))
+        #expect(pem.contains("DEK-Info: AES-128-CBC,"))
+        // Salt/IV hex length for AES-128-CBC should be 32 chars (16 bytes)
+        if let dekLine = pem.split(separator: "\n").first(where: { $0.hasPrefix("DEK-Info:") }) {
+            let parts = dekLine.split(separator: ":")[1].trimmingCharacters(in: .whitespaces).split(separator: ",")
+            if parts.count == 2 { #expect(parts[1].count == 32) }
+        }
+    }
+
+    @Test("SEC1 PEM supports all configured ciphers")
+    func testSEC1PEMAllCipherHeaders() throws {
+        let key = try ECDSAKeyGenerator.generateP256()
+        for cipher in PEMEncryption.PEMCipher.allCases {
+            let pem = try key.sec1PEMRepresentation(passphrase: "ciphertest", cipher: cipher)
+            #expect(pem.contains("DEK-Info: \(cipher.rawValue),"))
+        }
+    }
+
     @Test("PKCS#7 unpad rejects malformed inputs")
     func testPKCS7UnpadInvalidCases() {
         // Empty input

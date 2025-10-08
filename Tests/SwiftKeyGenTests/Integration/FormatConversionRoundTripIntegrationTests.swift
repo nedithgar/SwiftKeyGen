@@ -156,7 +156,7 @@ struct FormatConversionRoundTripIntegrationTests {
     
     // MARK: - PEM ↔ PKCS8 Round-Trips
     
-    @Test("PEM → PKCS8 → PEM round-trip via both tools", .tags(.rsa, .slow))
+    @Test("PEM → PKCS8 → PEM round-trip via both tools", .tags(.rsa))
     func testPEMToPKCS8ToPEMRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // IMPORTANT: Use RSA here instead of Ed25519.
@@ -277,7 +277,7 @@ struct FormatConversionRoundTripIntegrationTests {
     
     // MARK: - Multiple Key Types Round-Trip
     
-    @Test("All key types preserve integrity through format conversions", .tags(.slow, .rsa))
+    @Test("All key types preserve integrity through format conversions", .tags(.rsa))
     func testAllKeyTypesPreserveIntegrityThroughConversions() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Test with different key types
@@ -362,7 +362,7 @@ struct FormatConversionRoundTripIntegrationTests {
     
     // TODO: Swift Crypto does not support encrypted RSA PEM/PKCS#8.
     // ssh-keygen does not support encrypted Ed25519 PKCS#8 PEM.
-    @Test("Encrypted keys preserve integrity through format conversions", .tags(.slow), .disabled())
+    @Test("Encrypted keys preserve integrity through format conversions", .disabled())
     func testEncryptedKeysPreserveIntegrityThroughConversions() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             let passphrase = "test-passphrase-123"
