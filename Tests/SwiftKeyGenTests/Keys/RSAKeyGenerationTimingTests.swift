@@ -13,7 +13,8 @@ struct RSAKeyGenerationTimingTests {
     func generateSingleRSA2048Timing() throws {
         let start = CFAbsoluteTimeGetCurrent()
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
-        let duration = CFAbsoluteTimeGetCurrent() - start
+    let duration = CFAbsoluteTimeGetCurrent() - start
+    _ = duration // silence unused variable warning; uncomment Issue.record if needed
 
         // Sanity checks (keep minimal to avoid extra overhead)
         #expect(key.keyType == .rsa)
