@@ -26,6 +26,8 @@ private struct AESBlock {
         self.storage = tmp
     }
     init(raw: InlineArray<16, UInt8>) { self.storage = raw }
+    /// Expose the raw 16-byte block for engine operations without extra copies
+    func raw() -> InlineArray<16, UInt8> { storage }
     func toData() -> Data {
         var d = Data(count: 16)
         var outSpan = d.mutableSpan
@@ -78,12 +80,13 @@ struct AESCBC {
             for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
             let plainBlock = AESBlock(raw: blockBuf)
             let xored = plainBlock ^ previous
-            let cipherData = try aes.encryptBlock(xored.toData())
-            let cSpan = cipherData.span
-            for i in 0..<16 { outSpan[offset + i] = cSpan[i] }
-            previous = AESBlock(raw: blockBuf) // will overwrite next loop anyway
-            // Reload previous from ciphertext for correctness
-            previous = AESBlock(data: cipherData, offset: 0)
+            // Use InlineArray-based encrypt to avoid transient Data lifetimes in error paths
+            let cipherInline = try aes.encryptBlock(xored.raw())
+            // Write cipher block to output
+            let ci = cipherInline.span
+            for i in 0..<16 { outSpan[offset + i] = ci[i] }
+            // Chain CBC
+            previous = AESBlock(raw: cipherInline)
         }
         return result
     }

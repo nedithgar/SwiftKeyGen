@@ -73,7 +73,7 @@ jobs:
         run: swift package resolve
 
       - name: Build (Release)
-        run: swift build -c release --build-tests
+        run: swift build -c release
 
       - name: Run Full Test Suite (Release Mode)
         run: |
