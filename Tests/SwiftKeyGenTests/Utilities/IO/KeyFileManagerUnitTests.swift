@@ -31,8 +31,7 @@ struct KeyFileManagerUnitTests {
         try body()
         // Close writer so reader sees EOF
         close(writeFd)
-        // Restore stdout
-        fflush(stdout)
+    // Restore stdout (no fflush to avoid concurrency-safety violations on Linux)
         if dup2(originalStdout, STDOUT_FILENO) == -1 { fatalError("restore stdout failed") }
         close(originalStdout)
         // Read captured data
@@ -68,7 +67,6 @@ struct KeyFileManagerUnitTests {
         if originalStdin == -1 { fatalError("dup stdin failed") }
         if dup2(readFd, STDIN_FILENO) == -1 { fatalError("dup2 stdin failed") }
         defer {
-            fflush(stdin)
             if dup2(originalStdin, STDIN_FILENO) == -1 { fatalError("restore stdin failed") }
             close(originalStdin)
             close(readFd)

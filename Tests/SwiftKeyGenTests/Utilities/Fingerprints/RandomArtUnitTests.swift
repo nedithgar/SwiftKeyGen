@@ -122,7 +122,9 @@ struct RandomArtUnitTests {
         
         // Verify S and E markers exist
         let fieldContent = lines[1...9].joined()
-        #expect(fieldContent.contains("S"))
+        // OpenSSH behavior note: the end marker 'E' overwrites 'S' if the
+        // random walk ends at the starting position (center). In that rare
+        // case 'S' will be absent. Only require 'E' here.
         #expect(fieldContent.contains("E"))
     }
     
@@ -162,7 +164,8 @@ struct RandomArtUnitTests {
                 #expect(lines[i].count == 19)
             }
             let field = lines[1...9].joined()
-            #expect(field.contains("S"))
+            // OpenSSH parity: 'S' may be overwritten by 'E' if the end point
+            // equals the start. Require 'E' only to avoid flakiness.
             #expect(field.contains("E"))
         }
     }
