@@ -238,4 +238,110 @@ struct KeyManagerTests {
         #expect(unencryptedInfo.isEncrypted == false)
         #expect(unencryptedInfo.cipherName == nil)
     }
+
+    // MARK: - Additional Coverage
+
+    @Test("Parse Ed25519 PKCS#8 (unencrypted) via KeyManager")
+    func testParseEd25519PKCS8Unencrypted() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        // Generate Ed25519 key and export as PKCS#8 (unencrypted)
+        let keyPair = try SwiftKeyGen.generateKeyPair(type: .ed25519, comment: "pkcs8-ed25519@example.com")
+        let key = keyPair.privateKey as! Ed25519Key
+        let pkcs8Data = try KeyConverter.toPKCS8(key: key) // returns PEM formatted data
+        let pkcs8Path = testDirectory.appendingPathComponent("ed25519_pkcs8").path
+        try pkcs8Data.write(to: URL(fileURLWithPath: pkcs8Path))
+
+        // Read through KeyManager (exercise PKCS#8 detection fast path)
+        let parsed = try KeyManager.readPrivateKey(from: pkcs8Path)
+        #expect(parsed.keyType == .ed25519)
+        // PKCS#8 unencrypted path currently discards comment; ensure either nil or original
+        #expect(parsed.comment == nil || parsed.comment == "pkcs8-ed25519@example.com")
+        // Public key string may omit comment; match prefix and key material
+        let originalNoComment = key.publicKeyString().components(separatedBy: " ").prefix(2).joined(separator: " ")
+        let parsedNoComment = parsed.publicKeyString().components(separatedBy: " ").prefix(2).joined(separator: " ")
+        #expect(parsedNoComment == originalNoComment)
+    }
+
+    @Test("Parse RSA PKCS#1 (traditional PEM) via KeyManager")
+    func testParseRSAPKCS1ViaKeyManager() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        // Generate a small RSA key (1024 bits to keep runtime small)
+        let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 1024, comment: "rsa-pkcs1") as! RSAKey
+        let der = rsa.privateKeyData()
+        let base64 = der.base64EncodedString().wrapped(every: 64) + "\n"
+        let pem = "-----BEGIN RSA PRIVATE KEY-----\n" + base64 + "-----END RSA PRIVATE KEY-----\n"
+        let path = testDirectory.appendingPathComponent("rsa_pkcs1").path
+        try pem.write(toFile: path, atomically: true, encoding: .utf8)
+
+        let parsed = try KeyManager.readPrivateKey(from: path)
+        #expect(parsed.keyType == .rsa)
+        // Comments may be dropped during PKCS#1 parsing; compare key material only
+        let rsaOriginalNoComment = rsa.publicKeyString().components(separatedBy: " ").prefix(2).joined(separator: " ")
+        let rsaParsedNoComment = parsed.publicKeyString().components(separatedBy: " ").prefix(2).joined(separator: " ")
+        #expect(rsaParsedNoComment == rsaOriginalNoComment)
+    }
+
+    @Test("Update comment on encrypted key and sync .pub")
+    func testUpdateCommentOnEncryptedKey() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        let pair = try SwiftKeyGen.generateKeyPair(type: .ed25519, comment: "enc-old")
+        let pass = "change-me"
+        let keyData = try OpenSSHPrivateKey.serialize(key: pair.privateKey, passphrase: pass)
+        let keyPath = testDirectory.appendingPathComponent("encrypted_comment").path
+        let pubPath = keyPath + ".pub"
+        try keyData.write(to: URL(fileURLWithPath: keyPath))
+        try pair.publicKeyString.write(toFile: pubPath, atomically: true, encoding: .utf8)
+
+        let newComment = "enc-new@example.com"
+        try KeyManager.updateComment(keyPath: keyPath, passphrase: pass, newComment: newComment)
+
+        // Reading with correct passphrase should show new comment
+        let updated = try KeyManager.readPrivateKey(from: keyPath, passphrase: pass)
+        #expect(updated.comment == newComment)
+        // Public key file updated
+        let pubContents = try String(contentsOfFile: pubPath, encoding: .utf8)
+        #expect(pubContents.hasSuffix(" " + newComment + "\n") || pubContents.hasSuffix(" " + newComment))
+    }
+
+    @Test("getKeyInfo invalid format errors")
+    func testGetKeyInfoInvalidErrors() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        // Case 1: Not a PEM at all
+        let randomPath = testDirectory.appendingPathComponent("random.bin").path
+        try Data([0x01, 0x02, 0x03]).write(to: URL(fileURLWithPath: randomPath))
+        #expect(throws: SSHKeyError.invalidFormat) {
+            _ = try KeyManager.getKeyInfo(keyPath: randomPath)
+        }
+
+        // Case 2: PEM but not OpenSSH private key
+        let bogus = "-----BEGIN RSA PUBLIC KEY-----\nAAAA\n-----END RSA PUBLIC KEY-----\n"
+        let bogusPath = testDirectory.appendingPathComponent("bogus.pem").path
+        try bogus.write(toFile: bogusPath, atomically: true, encoding: .utf8)
+        #expect(throws: SSHKeyError.invalidFormat) {
+            _ = try KeyManager.getKeyInfo(keyPath: bogusPath)
+        }
+    }
+
+    @Test("verifyPassphrase on unencrypted key path")
+    func testVerifyPassphraseUnencryptedKey() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+        let pair = try SwiftKeyGen.generateKeyPair(type: .ed25519)
+        let keyData = try OpenSSHPrivateKey.serialize(key: pair.privateKey)
+        let path = testDirectory.appendingPathComponent("plain_key").path
+        try keyData.write(to: URL(fileURLWithPath: path))
+
+        // Should succeed with nil passphrase
+        #expect(KeyManager.verifyPassphrase(keyPath: path, passphrase: nil))
+        // Passing an arbitrary passphrase for an unencrypted key should still succeed
+        #expect(KeyManager.verifyPassphrase(keyPath: path, passphrase: "anything"))
+    }
 }
