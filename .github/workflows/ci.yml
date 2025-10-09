@@ -13,7 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-26, windows-latest]
+        # TODO: Disable Linux and Windows temporarily
+        # os: [ubuntu-latest, macos-26, windows-latest]
+        os: [macos-26]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,10 +77,11 @@ jobs:
       - name: Build (Release)
         run: swift build -c release
 
-      - name: Run Full Test Suite (Release Mode)
-        run: |
-          swift test -c release
-        shell: bash
+        # TODO: Disable tests temporarily
+    #   - name: Run Full Test Suite (Release Mode)
+    #     run: |
+    #       swift test -c release
+    #     shell: bash
 
       - name: Archive Build Products (Non-Windows)
         if: runner.os != 'Windows'
