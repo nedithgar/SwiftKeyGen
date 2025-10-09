@@ -220,7 +220,10 @@ extension ECDSAKey {
     
     /// Get encrypted PKCS#8 PEM representation
     /// This matches ssh-keygen's -m PKCS8 output with passphrase
-    public func pkcs8PEMRepresentation(passphrase: String, iterations: Int = PKCS8Encryption.defaultIterations) throws -> String {
+    public func pkcs8PEMRepresentation(passphrase: String,
+                                       iterations: Int = PKCS8Encryption.defaultIterations,
+                                       prf: PKCS8Encryption.PRF = .hmacSHA1,
+                                       cipher: PKCS8Encryption.Cipher = .aes128cbc) throws -> String {
         // Get PKCS#8 DER data
         let pkcs8DER: Data
         switch privateKeyStorage {
@@ -246,14 +249,16 @@ extension ECDSAKey {
         }
         
         // Encrypt using PBES2
-        let (encryptedData, parameters) = try PKCS8Encryption.encryptPBES2(
+        let (encryptedData, parameters, prfUsed, cipherUsed) = try PKCS8Encryption.encryptPBES2(
             data: pkcs8DER,
             passphrase: passphrase,
-            iterations: iterations
+            iterations: iterations,
+            prf: prf,
+            cipher: cipher
         )
-        
-        // Create algorithm identifier
-        let algorithmIdentifier = PKCS8Encryption.createPBES2AlgorithmIdentifier(parameters: parameters)
+
+        // Create algorithm identifier with actual prf/cipher used
+        let algorithmIdentifier = PKCS8Encryption.createPBES2AlgorithmIdentifier(parameters: parameters, prf: prfUsed, cipher: cipherUsed)
         
         // Encode as EncryptedPrivateKeyInfo
         let encryptedPrivateKeyInfo = PKCS8Encryption.encodeEncryptedPrivateKeyInfo(

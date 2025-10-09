@@ -60,7 +60,7 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] OpenSSH private key format (default)
 - [x] OpenSSH public key format
 - [x] PEM format
-- [x] PKCS#8 format (basic)
+- [x] PKCS#8 format (unencrypted & encrypted PBES2: AES-128/256-CBC, HMAC-SHA1/SHA256)
 
 ### Output Options
 - [x] Fingerprint output in hex (MD5) or base64 (SHA256/512)

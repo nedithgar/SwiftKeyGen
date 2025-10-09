@@ -44,7 +44,10 @@ extension RSAKey {
     ///   - passphrase: Passphrase used for PBES2 (PBKDF2 + AES‑128‑CBC).
     ///   - iterations: PBKDF2 iteration count (defaults to `PKCS8Encryption.defaultIterations`).
     /// - Returns: PEM string beginning with `-----BEGIN ENCRYPTED PRIVATE KEY-----`.
-    public func pkcs8PEMRepresentation(passphrase: String, iterations: Int = PKCS8Encryption.defaultIterations) throws -> String {
+    public func pkcs8PEMRepresentation(passphrase: String,
+                                       iterations: Int = PKCS8Encryption.defaultIterations,
+                                       prf: PKCS8Encryption.PRF = .hmacSHA1,
+                                       cipher: PKCS8Encryption.Cipher = .aes128cbc) throws -> String {
         let pkcs1 = privateKeyData() // PKCS#1 DER (RSAPrivateKey)
         guard !pkcs1.isEmpty else { throw SSHKeyError.invalidKeyData }
 
@@ -59,12 +62,14 @@ extension RSAKey {
     let privateKeyInfo = ASN1PKCS8.sequence(version + algorithmIdentifier + privateKeyOctet)
 
         // Encrypt via PBES2
-        let (encrypted, params) = try PKCS8Encryption.encryptPBES2(
+        let (encrypted, params, prfUsed, cipherUsed) = try PKCS8Encryption.encryptPBES2(
             data: privateKeyInfo,
             passphrase: passphrase,
-            iterations: iterations
+            iterations: iterations,
+            prf: prf,
+            cipher: cipher
         )
-        let algId = PKCS8Encryption.createPBES2AlgorithmIdentifier(parameters: params)
+        let algId = PKCS8Encryption.createPBES2AlgorithmIdentifier(parameters: params, prf: prfUsed, cipher: cipherUsed)
         let encryptedInfo = PKCS8Encryption.encodeEncryptedPrivateKeyInfo(
             algorithmIdentifier: algId,
             encryptedData: encrypted

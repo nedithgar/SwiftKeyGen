@@ -52,4 +52,38 @@ struct PKCS8DecryptionIntegrationTests {
             #expect(decrypted.contains(Data([0x06])) )
         }
     }
+
+    @Test("Our ECDSA AES-256/HMAC-SHA256 PBES2", .tags(.integration))
+    func testDecryptOurECDSAAES256SHA256PKCS8() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { _ in
+            let key = try SwiftKeyGen.generateKey(type: .ecdsa256, comment: "ecdsa-aes256-sha256") as! ECDSAKey
+            let pass = "ecdsa-256-sha256-pass"
+            let pem = try key.pkcs8PEMRepresentation(passphrase: pass,
+                                                     iterations: 4096,
+                                                     prf: .hmacSHA256,
+                                                     cipher: .aes256cbc)
+            let parsed = try PKCS8Parser.parseEncryptedPrivateKeyInfo(pem: pem)
+            #expect(parsed.cipher == "aes-256-cbc")
+            #expect(parsed.prf == "hmacWithSHA256")
+            let dec = try PKCS8Parser.decrypt(info: parsed, passphrase: pass)
+            #expect(dec.first == 0x30)
+        }
+    }
+
+    @Test("Our RSA AES-256/HMAC-SHA256 PBES2", .tags(.integration, .rsa))
+    func testDecryptOurRSAAES256SHA256PKCS8() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { _ in
+            let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "rsa-aes256-sha256") as! RSAKey
+            let pass = "rsa-256-sha256-pass"
+            let pem = try key.pkcs8PEMRepresentation(passphrase: pass,
+                                                     iterations: 4096,
+                                                     prf: .hmacSHA256,
+                                                     cipher: .aes256cbc)
+            let parsed = try PKCS8Parser.parseEncryptedPrivateKeyInfo(pem: pem)
+            #expect(parsed.cipher == "aes-256-cbc")
+            #expect(parsed.prf == "hmacWithSHA256")
+            let dec = try PKCS8Parser.decrypt(info: parsed, passphrase: pass)
+            #expect(dec.first == 0x30)
+        }
+    }
 }

@@ -113,8 +113,8 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Decrypt our encrypted PKCS8 key (ECDSA AES-128-CBC)**
 - [x] **Decrypt ssh-keygen encrypted PKCS8 key (ECDSA)**
 - [x] **Decrypt ssh-keygen encrypted PKCS8 key (RSA 2048)**
-- [ ] Decrypt PKCS8 with AES-256-CBC (when emission added)
-- [ ] Decrypt PKCS8 with HMAC-SHA256 PRF (when emission added)
+- [x] Decrypt PKCS8 with AES-256-CBC (our emission)
+- [x] Decrypt PKCS8 with HMAC-SHA256 PRF (our emission)
 - [ ] Decrypt PKCS8 Ed25519 (after PKCS8 Ed25519 emission implementation)
 - [ ] Validate decrypted PrivateKeyInfo → re-emit and compare ssh-keygen output (canonical DER)
 

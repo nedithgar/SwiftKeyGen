@@ -40,7 +40,7 @@ struct PKCS8EncryptionUnitTests {
         let passphrase = "test-passphrase"
         let plain = Data("hello pkcs8 secrets".utf8)
 
-        let (ciphertext, params) = try PKCS8Encryption.encryptPBES2(data: plain, passphrase: passphrase, iterations: 2048)
+        let (ciphertext, params, _, _) = try PKCS8Encryption.encryptPBES2(data: plain, passphrase: passphrase, iterations: 2048)
 
         // Parameters sanity
         #expect(params.salt.count == 8)
