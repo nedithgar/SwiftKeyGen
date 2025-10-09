@@ -1,7 +1,9 @@
 import Foundation
+import CommonCrypto
 
-/// Minimal parser for encrypted PKCS#8 (ENCRYPTED PRIVATE KEY) supporting
-/// the subset we emit: PBES2 { PBKDF2(HMAC-SHA1), AES-128-CBC }.
+/// Minimal parser + decryptor for encrypted PKCS#8 (ENCRYPTED PRIVATE KEY)
+/// supporting PBES2 with PBKDF2(HMAC-SHA1 | HMAC-SHA256) and
+/// AES-128-CBC / AES-256-CBC content encryption.
 ///
 /// This is intentionally narrow – it validates structure and extracts the
 /// encrypted payload + PBKDF2 parameters for negative testing and future
@@ -12,8 +14,8 @@ struct PKCS8Parser {
         let iterations: Int
         let keyLength: Int?
         let iv: Data
-        let cipher: String
-        let prf: String
+        let cipher: String   // "aes-128-cbc" | "aes-256-cbc"
+        let prf: String      // "hmacWithSHA1" | "hmacWithSHA256"
         let encryptedData: Data
     }
     
@@ -25,6 +27,7 @@ struct PKCS8Parser {
         case unsupportedAlgorithm(String)
         case invalidPBES2Parameters
         case invalidPBKDF2Parameters
+        case decryptionFailed
     }
     
     static func parseEncryptedPrivateKeyInfo(pem: String) throws -> ParsedEncryptedPrivateKeyInfo {
@@ -59,19 +62,26 @@ struct PKCS8Parser {
         if pbkdf2Cursor.hasRemaining, pbkdf2Cursor.peekTag() == 0x02 { // INTEGER key length
             keyLength = try pbkdf2Cursor.readInteger()
         }
-        var prf = "hmacWithSHA1" // default
+    var prf = "hmacWithSHA1" // default per RFC if absent
         if pbkdf2Cursor.hasRemaining { // PRF sequence
             let prfSeq = try pbkdf2Cursor.readSequence()
             var prfCursor = DERCursor(data: prfSeq)
             let prfOid = try prfCursor.readOID()
-            prf = prfOid.description
+            if prfOid == OID.hmacWithSHA256 { prf = "hmacWithSHA256" }
+            else if prfOid == OID.hmacWithSHA1 { prf = "hmacWithSHA1" }
+            else { prf = prfOid.description }
         }
         // encryptionScheme
         let encScheme = try pbes2Cursor.readSequence()
         var encCursor = DERCursor(data: encScheme)
         let encOid = try encCursor.readOID()
-        // AES-128-CBC OID 2.16.840.1.101.3.4.1.2
-        guard encOid == OID.aes128cbc else { throw ParserError.unsupportedAlgorithm(encOid.description) }
+        // Accept AES-128-CBC or AES-256-CBC
+        let cipher: String
+        if encOid == OID.aes128cbc {
+            cipher = "aes-128-cbc"
+        } else if encOid == OID.aes256cbc {
+            cipher = "aes-256-cbc"
+        } else { throw ParserError.unsupportedAlgorithm(encOid.description) }
         let iv = try encCursor.readOctetString()
         // Validate trailing bytes consumed
         guard !topCursor.hasRemaining else { throw ParserError.invalidPBES2Parameters }
@@ -80,10 +90,49 @@ struct PKCS8Parser {
             iterations: iterations,
             keyLength: keyLength,
             iv: iv,
-            cipher: "aes-128-cbc",
+            cipher: cipher,
             prf: prf,
             encryptedData: encryptedOctet
         )
+    }
+
+    /// Decrypt an encrypted PKCS#8 given parsed parameters and passphrase.
+    /// Performs PBKDF2 with selected PRF and AES-CBC + PKCS#7 unpadding.
+    static func decrypt(info: ParsedEncryptedPrivateKeyInfo, passphrase: String) throws -> Data {
+        // Derive key length from cipher
+        let keyLen = (info.cipher == "aes-256-cbc") ? 32 : 16
+        let derivedKey: Data
+        if info.prf == "hmacWithSHA1" {
+            derivedKey = try pbkdf2(password: passphrase, salt: info.salt, iterations: info.iterations, keyLen: keyLen, sha256: false)
+        } else if info.prf == "hmacWithSHA256" {
+            derivedKey = try pbkdf2(password: passphrase, salt: info.salt, iterations: info.iterations, keyLen: keyLen, sha256: true)
+        } else {
+            throw ParserError.unsupportedAlgorithm(info.prf)
+        }
+        let plaintextPadded = try AESCBC.decrypt(data: info.encryptedData, key: derivedKey, iv: info.iv)
+        guard let unpadded = try? PEMEncryption.pkcs7Unpad(data: plaintextPadded, blockSize: 16) else {
+            throw ParserError.decryptionFailed
+        }
+        return unpadded
+    }
+
+    private static func pbkdf2(password: String, salt: Data, iterations: Int, keyLen: Int, sha256: Bool) throws -> Data {
+        guard let passData = password.data(using: .utf8) else { throw SSHKeyError.invalidPassphrase }
+        var derived = Data(count: keyLen)
+        let prfAlg: CCPseudoRandomAlgorithm = sha256 ? CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256) : CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1)
+        let status = derived.withUnsafeMutableBytes { dPtr in
+            passData.withUnsafeBytes { pPtr in
+                salt.withUnsafeBytes { sPtr in
+                    CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2),
+                                         pPtr.bindMemory(to: Int8.self).baseAddress!, passData.count,
+                                         sPtr.bindMemory(to: UInt8.self).baseAddress!, salt.count,
+                                         prfAlg, UInt32(iterations),
+                                         dPtr.bindMemory(to: UInt8.self).baseAddress!, keyLen)
+                }
+            }
+        }
+        guard status == kCCSuccess else { throw ParserError.decryptionFailed }
+        return derived
     }
 }
 
@@ -135,6 +184,11 @@ fileprivate struct OID: Equatable {
     static let pbes2 = OID(raw: Data([0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x05,0x0D]))
     static let pbkdf2 = OID(raw: Data([0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x05,0x0C]))
     static let aes128cbc = OID(raw: Data([0x60,0x86,0x48,0x01,0x65,0x03,0x04,0x01,0x02]))
+    static let aes256cbc = OID(raw: Data([0x60,0x86,0x48,0x01,0x65,0x03,0x04,0x01,0x2A]))
+    // PRF HMAC-SHA256 OID 1.2.840.113549.2.9
+    static let hmacWithSHA256 = OID(raw: Data([0x2A,0x86,0x48,0x86,0xF7,0x0D,0x02,0x09]))
+    // PRF HMAC-SHA1 OID 1.2.840.113549.2.7
+    static let hmacWithSHA1 = OID(raw: Data([0x2A,0x86,0x48,0x86,0xF7,0x0D,0x02,0x07]))
     var description: String {
         // Not decoding fully; provide hex for unsupported message clarity
         return raw.map { String(format: "%02X", $0) }.joined(separator: ".")

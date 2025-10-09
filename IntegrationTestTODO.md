@@ -109,6 +109,15 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **We remove passphrase from ssh-keygen key** (if KeyManager supports)
 - [x] **Passphrase operation preserves key integrity**
 
+### PKCS8 Decryption (Parser & Round-Trip)
+- [x] **Decrypt our encrypted PKCS8 key (ECDSA AES-128-CBC)**
+- [x] **Decrypt ssh-keygen encrypted PKCS8 key (ECDSA)**
+- [x] **Decrypt ssh-keygen encrypted PKCS8 key (RSA 2048)**
+- [ ] Decrypt PKCS8 with AES-256-CBC (when emission added)
+- [ ] Decrypt PKCS8 with HMAC-SHA256 PRF (when emission added)
+- [ ] Decrypt PKCS8 Ed25519 (after PKCS8 Ed25519 emission implementation)
+- [ ] Validate decrypted PrivateKeyInfo → re-emit and compare ssh-keygen output (canonical DER)
+
 ### Bubble Babble Format
 - [x] **Bubble babble matches ssh-keygen** (Ed25519)
 - [x] **Bubble babble matches ssh-keygen** (RSA)
@@ -202,6 +211,7 @@ Tests/SwiftKeyGenTests/Integration/
 ├── ParseSSHKeygenCertificatesIntegrationTests.swift # ✅ IMPLEMENTED - Parse ssh-keygen certificates
 ├── ParseSSHKeygenKeysIntegrationTests.swift       # ✅ IMPLEMENTED - Parse ssh-keygen generated keys
 ├── PassphraseIntegrationTests.swift               # ✅ IMPLEMENTED - Passphrase operations (OpenSSH, PEM, PKCS8)
+├── PKCS8DecryptionIntegrationTests.swift          # ✅ IMPLEMENTED - PKCS8 parser + decryption (PBES2/AES-128-CBC)
 ├── RandomartIntegrationTests.swift                # ✅ IMPLEMENTED - Randomart and bubble babble
 ├── RFC4716IntegrationTests.swift                  # ✅ IMPLEMENTED - RFC4716 format
 ├── SignatureVerificationIntegrationTests.swift    # ✅ IMPLEMENTED - Signature verification bidirectional
