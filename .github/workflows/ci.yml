@@ -159,10 +159,26 @@ jobs:
       - name: Build (Release)
         run: swift build -c release
 
-      - name: Run Full Test Suite (Release Mode)
+      - name: Run Full Test Suite (Release Mode - Unix)
+        if: runner.os != 'Windows'
         run: |
           swift test -c release
         shell: bash
+
+      # NOTE: Running swift test under Bash on Windows can hang due to PTY/process issues.
+      # Use PowerShell, skip rebuild (we built already), and add verbosity + timeout for safety.
+      - name: Run Full Test Suite (Release Mode - Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 45
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          swift --version
+          Write-Host "Listing discovered tests (release, skip build)"
+          swift test -c release --skip-build --list-tests
+          Write-Host "Running tests (release, skip build, verbose)"
+          # Use single job to reduce concurrency-related flakes on Windows file/handle operations
+          swift test -c release --skip-build --verbose -j 1
 
       - name: Archive Build Products (Non-Windows)
         if: runner.os != 'Windows'
