@@ -114,8 +114,9 @@ struct AESCBC {
             var bbSpan = blockBuf.mutableSpan
             for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
             let cipherBlock = AESBlock(raw: blockBuf)
-            let decryptedData = try aes.decryptBlock(cipherBlock.raw().toData())
-            let decrypted = AESBlock(data: decryptedData, offset: 0)
+            // Use InlineArray-based decrypt to avoid Data allocations
+            let decryptedInline = aes.decryptBlock(cipherBlock.raw())
+            let decrypted = AESBlock(raw: decryptedInline)
             let plain = decrypted ^ previous
             let pSpan = plain.raw().span
             for i in 0..<16 { outSpan[offset + i] = pSpan[i] }
