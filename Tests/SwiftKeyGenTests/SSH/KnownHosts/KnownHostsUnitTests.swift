@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Crypto
 @testable import SwiftKeyGen
 
 @Suite("KnownHosts Unit Tests", .tags(.unit))
@@ -202,6 +203,39 @@ struct KnownHostsUnitTests {
         // Non-matching hostnames shouldn't be found
         #expect(try mgr.findHost("wrong.com").isEmpty)
         #expect(try mgr.findHost("example.com").isEmpty) // missing bracket/port
+    }
+
+    @Test("Deterministic HMAC-SHA1 hashed hostname vectors (fixed salt)")
+    func testDeterministicHashedHostnameVectors() throws {
+        // Fixed 20-byte salt used to produce stable ssh-keygen style |1| entries
+        let fixedSalt = Data([
+            0x1d, 0xa3, 0x4f, 0x08, 0x29, 0x2e, 0xaf, 0xaa,
+            0x98, 0x65, 0x70, 0xb3, 0x22, 0x9a, 0x65, 0xfd,
+            0x3a, 0x1d, 0x2e, 0xac
+        ])
+
+        // Base64 of the salt is constant; reuse for clarity
+        let saltB64 = fixedSalt.base64EncodedString()
+        #expect(saltB64 == "HaNPCCkur6qYZXCzIppl/TodLqw=")
+
+        // Expected vectors (hostname → full |1|salt|hash string) sourced from previous standalone HMACCompatibilityTests
+        let expected: [(String, String)] = [
+            ("test.example.com", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|7DBFvfIIAxNY7UMj5O3hNRxfTrk="),
+            ("localhost", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|e46EZf40DiTd9NkZyO15Ko9hl/U="),
+            ("10.0.0.1", "|1|HaNPCCkur6qYZXCzIppl/TodLqw=|82B4NA5XRpnF1kvRst2lgEMNZqc=")
+        ]
+
+        for (hostname, expectedLine) in expected {
+            let hostData = Data(hostname.utf8)
+            let mac = HMAC<Insecure.SHA1>.authenticationCode(for: hostData, using: SymmetricKey(data: fixedSalt))
+            let produced = "|1|\(saltB64)|\(Data(mac).base64EncodedString())"
+            #expect(produced == expectedLine, "Deterministic hashed hostname mismatch for \(hostname)")
+            // Sanity: Output format pieces. Splitting with omitting empty segments produces ["1", salt, hash]
+            let parts = produced.split(separator: "|", omittingEmptySubsequences: true)
+            #expect(parts.count == 3) // "1", salt, hash
+            #expect(parts[0] == "1")
+            #expect(Data(base64Encoded: String(parts[1])) == fixedSalt)
+        }
     }
 
     @Test("hashHostnames handles comma-separated host patterns and remains matchable")
