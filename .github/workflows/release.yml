@@ -1,0 +1,300 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  preflight:
+    name: Preflight Version & Release Check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
+      release_exists: ${{ steps.check_release.outputs.release_exists }}
+      head_after_changelog: ${{ steps.changelog_update.outputs.head_after_changelog }}
+      changelog_updated: ${{ steps.changelog_update.outputs.updated }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Version from main.swift
+        id: extract
+        shell: bash
+        run: |
+          set -euo pipefail
+          LINE=$(grep -E 'private static let version = "' Sources/SwiftKeyGenCLI/main.swift || true)
+          if [[ -z "$LINE" ]]; then
+            echo "Could not locate version constant in main.swift" >&2
+            exit 1
+          fi
+            VERSION=$(sed -E 's/.*version = "([^"]+)".*/\1/' <<< "$LINE")
+          if [[ -z "$VERSION" ]]; then
+            echo "Failed to parse version string" >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Parsed version: $VERSION (tag: $TAG)"
+
+      - name: Tag Strategy Note
+        shell: bash
+        run: |
+          echo "No git tag precondition. Version in main.swift governs the release."
+          echo "If tag ${{ steps.extract.outputs.tag }} is absent, the release job will create it automatically."
+
+      - name: Check for Existing Release
+        id: check_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ steps.extract.outputs.tag }}"
+          API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$API_URL")
+          if [[ "$STATUS" == "200" ]]; then
+            echo "Release for ${TAG} already exists." >&2
+            echo "release_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "No existing release for ${TAG}. Proceeding." 
+            echo "release_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compare with Previous Release (fail if version decreased)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW_VER="${{ steps.extract.outputs.version }}"
+          # Fetch releases (paginated: only first page needed for latest)
+          JSON=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases?per_page=20")
+          if command -v jq >/dev/null 2>&1; then
+            PREV_TAG=$(echo "$JSON" | jq -r '[.[] | select(.draft==false and .prerelease==false) | .tag_name] | map(select(startswith("v"))) | .[0]') || true
+          else
+            PREV_TAG=$(echo "$JSON" | grep -E '"tag_name"' | head -n1 | sed -E 's/.*"tag_name": "([^"]+)".*/\1/' || true)
+          fi
+          if [[ -z "$PREV_TAG" || "$PREV_TAG" == "null" ]]; then
+            echo "No previous release found; skipping downgrade check."; exit 0
+          fi
+          PREV_VER=${PREV_TAG#v}
+          echo "Previous release: $PREV_VER; New: $NEW_VER"
+          ver_to_nums() { IFS='.' read -r a b c <<< "$1"; echo "${a:-0} ${b:-0} ${c:-0}"; }
+          read -r pA pB pC <<< $(ver_to_nums "$PREV_VER")
+          read -r nA nB nC <<< $(ver_to_nums "$NEW_VER")
+          if (( nA < pA )) || { (( nA == pA )) && (( nB < pB )); } || { (( nA == pA )) && (( nB == pB )) && (( nC < pC )); }; then
+            echo "Version regression detected: $NEW_VER < $PREV_VER" >&2
+            exit 1
+          fi
+          echo "Version is not a downgrade."
+
+      - name: Update CHANGELOG.md (insert new section if missing)
+        id: changelog_update
+        if: steps.check_release.outputs.release_exists == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.extract.outputs.version }}"
+          DATE=$(date -u +%Y-%m-%d)
+          TAG="v$VERSION"
+          # Determine previous tag (already computed in earlier step by reusing API again if necessary)
+          PREV_TAG=$(git tag --list 'v*' --sort=-creatordate | head -n1 || true)
+          if [[ "$PREV_TAG" == "$TAG" ]]; then
+            PREV_TAG="" # ignore same tag
+          fi
+          if [[ -f CHANGELOG.md ]]; then
+            if grep -q "^## $VERSION" CHANGELOG.md; then
+              echo "Changelog already contains section for $VERSION; skipping update."; echo "updated=false" >> $GITHUB_OUTPUT; echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT; exit 0
+            fi
+          fi
+          # Collect commits between previous tag (if exists) and HEAD
+          if git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
+            RANGE="$PREV_TAG..HEAD"
+          else
+            FIRST=$(git rev-list --max-parents=0 HEAD)
+            RANGE="$FIRST..HEAD"
+          fi
+          COMMITS=$(git log --no-merges --pretty=format:'- %s' $RANGE | grep -v '\[skip release\]' || true)
+          if [[ -z "$COMMITS" ]]; then
+            COMMITS='- Internal maintenance'
+          fi
+          # Create or prepend changelog
+          if [[ -f CHANGELOG.md ]]; then
+            { echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; cat CHANGELOG.md; } > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+          else
+            { echo "# Changelog"; echo; echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; } > CHANGELOG.md
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG for v$VERSION" || echo "Nothing to commit"
+          # Do not push to avoid mismatch if running on PR; only push on main branch
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+          echo "updated=true" >> $GITHUB_OUTPUT
+          echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build Release Binaries (${{ matrix.os }})
+    needs: preflight
+    if: needs.preflight.outputs.release_exists == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Swift 6.2 (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SWIFT_VERSION=6.2
+          for DIST in ubuntu24.04 ubuntu22.04; do
+            TARBALL="swift-${SWIFT_VERSION}-RELEASE-${DIST}.tar.gz"
+            BASE_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/${DIST}/swift-${SWIFT_VERSION}-RELEASE"
+            URL="${BASE_URL}/${TARBALL}"
+            echo "Attempting download: $URL"
+            if curl -fSOL "$URL"; then
+              tar -xzf "$TARBALL"
+              sudo mv "swift-${SWIFT_VERSION}-RELEASE-${DIST}" /opt/swift-${SWIFT_VERSION}
+              echo "/opt/swift-${SWIFT_VERSION}/usr/bin" >> "$GITHUB_PATH"
+              break
+            fi
+          done
+          swift --version
+
+      - name: Install Swift 6.2 (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SWIFT_VERSION=6.2
+          PKG="swift-${SWIFT_VERSION}-RELEASE-osx.pkg"
+          URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/xcode/swift-${SWIFT_VERSION}-RELEASE/${PKG}"
+          curl -fSOL "$URL"
+          sudo installer -pkg "$PKG" -target /
+          TOOLCHAIN="/Library/Developer/Toolchains/swift-${SWIFT_VERSION}-RELEASE.xctoolchain/usr/bin"
+          echo "$TOOLCHAIN" >> "$GITHUB_PATH"
+          swift --version
+
+      - name: Install Swift 6.2 (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '6.2'
+          winget install --id Swift.Toolchain -e --version $version --accept-source-agreements --accept-package-agreements
+          $toolchain = Get-ChildItem 'C:\Library\Developer\Toolchains' | Where-Object { $_.Name -like "*${version}*" } | Select-Object -First 1
+          if (-not $toolchain) { Write-Error 'Swift toolchain not found after install.' }
+          "$($toolchain.FullName)\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          swift --version
+
+      - name: Build (Release)
+        run: swift build -c release
+
+      - name: Package Artifact
+        id: package
+        shell: bash
+        run: |
+          mkdir -p dist
+          BIN_PATH=".build/release/swiftkeygen"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            BIN_PATH=".build\\release\\swiftkeygen.exe"
+          fi
+          cp "$BIN_PATH" "dist/"
+          cp LICENSE dist/ || true
+          ARCHIVE_NAME="swiftkeygen-${{ needs.preflight.outputs.version }}-${{ runner.os }}.tar.gz"
+          tar -czf "$ARCHIVE_NAME" -C dist .
+          # Generate SHA256 checksum (portable)
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$ARCHIVE_NAME" > "$ARCHIVE_NAME".sha256
+          elif command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ARCHIVE_NAME" > "$ARCHIVE_NAME".sha256
+          else
+            echo "No SHA256 tool found" >&2; exit 1
+          fi
+          cat "$ARCHIVE_NAME".sha256
+          echo "archive=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [preflight, build]
+    if: needs.preflight.outputs.release_exists == 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Updated Commit (if changelog updated)
+        if: needs.preflight.outputs.changelog_updated == 'true'
+        run: |
+          git fetch origin ${GITHUB_REF_NAME} --depth=1
+          git checkout ${{ needs.preflight.outputs.head_after_changelog }}
+
+      - name: Gather Artifacts
+        uses: actions/download-artifact@v3
+
+      - name: List Artifacts
+        run: ls -alR
+
+      - name: Extract Changelog Section
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.preflight.outputs.version }}"
+          if [[ -f CHANGELOG.md ]]; then
+            echo "Extracting changelog for $VERSION"
+            awk -v ver="$VERSION" 'BEGIN{in=0} /^## /{ if(in){exit} if($0 ~ ver){in=1; next} } in{print}' CHANGELOG.md > release_body.md || true
+            if [[ ! -s release_body.md ]]; then
+              echo "No dedicated section for $VERSION; generating generic notes." > release_body.md
+            fi
+          else
+            echo "CHANGELOG.md not found. Auto-generated release." > release_body.md
+          fi
+          echo "--- Release Notes Preview ---"; cat release_body.md
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.preflight.outputs.tag }}
+          name: SwiftKeyGen ${{ needs.preflight.outputs.tag }}
+          draft: false
+          prerelease: false
+          target_commitish: ${{ needs.preflight.outputs.head_after_changelog || github.sha }}
+          body_path: release_body.md
+          files: |
+            **/swiftkeygen-*.tar.gz
+            **/swiftkeygen-*.tar.gz.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-exists-note:
+    name: Release Already Exists (Skip)
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.release_exists == 'true'
+    steps:
+      - name: Note
+        run: echo "Release for tag ${{ needs.preflight.outputs.tag }} already exists. Skipping build and publish."

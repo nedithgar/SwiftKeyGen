@@ -2,6 +2,10 @@
 
 A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms.
 
+> [!WARNING]
+> **Experimental software.** This project is provided for **evaluation and research** only and is **not** intended for production use.  
+> **Semantic versioning is not guaranteed**—breaking changes may occur in minor or patch releases. Use at your own risk.
+
 ## Features
 
 ### Key Generation
