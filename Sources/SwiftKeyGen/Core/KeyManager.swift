@@ -52,12 +52,12 @@ public struct KeyManager {
                     return key
                 }
                 // Attempt RSA PKCS#8 decode (OpenSSH may emit/accept PKCS#1 too)
-                if let rsa = try? parseRSAPKCS8PEM(trimmed) {
-                    return rsa
-                }
-                // TODO: Add ECDSA PKCS#8 parsing as needed.
+                if let rsa = try? parseRSAPKCS8PEM(trimmed) { return rsa }
+                // Attempt ECDSA PKCS#8 decode (unencrypted). CryptoKit emits PKCS#8 for ECDSA via `pemRepresentation`.
+                if let ecdsa = try? parseECDSAPKCS8PEM(trimmed) { return ecdsa }
             } else if trimmed.contains("-----BEGIN EC PRIVATE KEY-----") && trimmed.contains("-----END EC PRIVATE KEY-----") {
-                // Placeholder for future ECDSA SEC1 parsing.
+                // Attempt ECDSA SEC1 (possibly encrypted) parsing
+                if let ecdsa = try? PEMParser.parseECPrivateKey(trimmed, passphrase: passphrase) { return ecdsa }
             } else if trimmed.contains("-----BEGIN RSA PRIVATE KEY-----") && trimmed.contains("-----END RSA PRIVATE KEY-----") {
                 if let rsa = try? parseRSAPKCS1PEM(trimmed) { return rsa }
             }
@@ -368,13 +368,12 @@ private extension KeyManager {
     /// OID mismatch occurs we quietly return `nil` so callers can continue
     /// format probing.
     static func parseEd25519PKCS8PEM(_ pem: String) throws -> Ed25519Key? {
-        // Extract base64 body between the PRIVATE KEY markers
-        guard let base64 = pem.pemBody(type: "PRIVATE KEY"),
-              let derData = Data(base64Encoded: base64) else {
-            return nil
-        }
-        // Leverage the PKCS#8 DER initializer we already vend via extension
-        if let priv = try? Curve25519.Signing.PrivateKey(pkcs8DERRepresentation: derData) {
+        // CryptoKit's Curve25519 Signing key exposes a PKCS#8 DER initializer in some versions;
+        // fall back to constructing a PEM and using the PEM initializer for portability.
+        guard let base64 = pem.pemBody(type: "PRIVATE KEY"), Data(base64Encoded: base64) != nil else { return nil }
+        // Reconstruct canonical wrapped PEM
+        let reconstructed = "-----BEGIN PRIVATE KEY-----\n" + base64.chunked(into: 64).joined(separator: "\n") + "\n-----END PRIVATE KEY-----"
+        if let priv = try? Curve25519.Signing.PrivateKey(pemRepresentation: reconstructed) {
             return Ed25519Key(privateKey: priv, comment: nil)
         }
         return nil
@@ -392,5 +391,35 @@ private extension KeyManager {
         // Delegate to the existing PEMParser which handles optional encryption headers.
         if let rsa = try? PEMParser.parseRSAPrivateKey(pem) { return rsa }
         return nil
+    }
+
+    /// Parse an ECDSA private key from unencrypted PKCS#8 PEM ("PRIVATE KEY"). Tries P-256, P-384, P-521.
+    /// Returns nil on structure/curve mismatch so callers can continue probing other formats.
+    static func parseECDSAPKCS8PEM(_ pem: String) throws -> ECDSAKey? {
+        guard let base64 = pem.pemBody(type: "PRIVATE KEY"), Data(base64Encoded: base64) != nil else { return nil }
+        // Try each curve's PKCS#8 DER initializer in order of most common usage.
+        // CryptoKit provides PEM initializers for ECDSA curves which accept PKCS#8 content.
+        // Reconstruct a standalone PEM for each attempt to avoid issues if caller trimmed differently.
+        let reconstructed = "-----BEGIN PRIVATE KEY-----\n" + base64.chunked(into: 64).joined(separator: "\n") + "\n-----END PRIVATE KEY-----"
+        if let p256 = try? P256.Signing.PrivateKey(pemRepresentation: reconstructed) { return ECDSAKey(p256Key: p256, comment: nil) }
+        if let p384 = try? P384.Signing.PrivateKey(pemRepresentation: reconstructed) { return ECDSAKey(p384Key: p384, comment: nil) }
+        if let p521 = try? P521.Signing.PrivateKey(pemRepresentation: reconstructed) { return ECDSAKey(p521Key: p521, comment: nil) }
+        return nil
+    }
+}
+
+// MARK: - Local Helpers
+
+private extension String {
+    func chunked(into size: Int) -> [String] {
+        guard size > 0 else { return [self] }
+        var result: [String] = []
+        var index = startIndex
+        while index < endIndex {
+            let end = self.index(index, offsetBy: size, limitedBy: endIndex) ?? endIndex
+            result.append(String(self[index..<end]))
+            index = end
+        }
+        return result
     }
 }

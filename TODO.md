@@ -140,10 +140,15 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 6. **OpenSSH-Compatible Encryption**: Supports multiple cipher modes including AES-CTR and AES-CBC variants, matching OpenSSH's encryption options.
 
+### Recent Additions (In Progress Tracking)
+
+- [x] Encrypted ECDSA SEC1 (EC PRIVATE KEY) PEM parsing (legacy OpenSSL AES-CBC + EVP_BytesToKey) implemented
+- [ ] Encrypted ECDSA PKCS#8 PRIVATE KEY parsing (PBES2 / PBKDF2 variants) — planned next
+
 ### Limitations
 
 1. **No DSA Support**: DSA is considered legacy and not recommended for new deployments.
 
 2. **No PKCS#11**: Hardware token support would require additional dependencies.
 
-3. **Private Key Import**: SwiftKeyGen now supports importing RSA and ECDSA private keys from PEM/PKCS#8 formats using Swift Crypto's built-in `init(pemRepresentation:)` methods. Ed25519 keys are not supported for PEM import as Swift Crypto's Curve25519 implementation doesn't include PEM parsing. For Ed25519, users must use the OpenSSH format.
+3. **Private Key Import**: SwiftKeyGen supports importing RSA and ECDSA private keys from PEM/PKCS#8 formats (including legacy encrypted SEC1 for ECDSA). Ed25519 keys: OpenSSH private key format supported; generic PEM (RFC 8410 / PKCS#8) import may be limited due to Swift Crypto constraints. Use OpenSSH for Ed25519 interoperability.

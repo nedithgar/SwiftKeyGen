@@ -195,7 +195,12 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **OpenSSH → RFC4716 → OpenSSH** (public key only)
 - [x] **All conversions preserve public key integrity**
 
-## 📁 Suggested Test File Organization
+## � Recently Implemented / Upcoming
+
+- [x] Encrypted ECDSA SEC1 (EC PRIVATE KEY) PEM parsing (legacy OpenSSL AES-CBC via EVP_BytesToKey) now supported and internally round-tripped in `FormatConversionRoundTripIntegrationTests`.
+- [ ] Encrypted ECDSA PKCS#8 PRIVATE KEY parsing (PBES2 / PBKDF2) internal import parity (we emit & decrypt ours, need full import for ssh-keygen generated variants if any divergence) — NEXT.
+
+## �📁 Suggested Test File Organization
 
 ```
 Tests/SwiftKeyGenTests/Integration/

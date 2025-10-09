@@ -438,11 +438,13 @@ struct FormatConversionRoundTripIntegrationTests {
             }
             #expect(pemPubResult.succeeded, "ssh-keygen should decrypt encrypted SEC1 PEM")
 
-            // TODO: Implement ECDSA SEC1 (encrypted) PEM parsing in KeyManager to enable
-            // round-trip verification via our own parser. For now we rely on ssh-keygen
-            // successfully decrypting the artifact as interoperability proof.
-            // (KeyManager currently lacks SEC1 parsing; attempting it yields invalidFormat.)
-            print("[INFO][EncryptedRoundTrip] Skipping internal parse of encrypted SEC1 PEM (parser not yet implemented)")
+            // Verify we can parse the encrypted SEC1 PEM ourselves (now implemented)
+            let reparsed = try measure("KeyManager.readPrivateKey (encrypted SEC1 PEM reparsed)") {
+                try KeyManager.readPrivateKey(from: pemPath.path, passphrase: passphrase)
+            }
+            #expect(reparsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " ") ==
+                    parsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " "),
+                    "Internal SEC1 reparse should preserve algorithm + base64 public key data")
         }
     }
 
