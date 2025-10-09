@@ -2,6 +2,9 @@ import Foundation
 import SwiftKeyGen
 
 struct SwiftKeyGenCLI {
+    // Update this value when publishing a new release (match the git tag)
+    private static let version = "0.1.0"
+
     static func main() {
         let arguments = CommandLine.arguments
         
@@ -19,6 +22,9 @@ struct SwiftKeyGenCLI {
             handleExport(Array(arguments.dropFirst(2)))
         case "generate":
             handleGenerate(Array(arguments.dropFirst(2)))
+        case "version", "--version", "-V":
+            printVersion()
+            exit(0)
         case "help", "-h", "--help":
             printUsage()
         default:
@@ -31,6 +37,7 @@ struct SwiftKeyGenCLI {
     static func printUsage() {
         print("""
         SwiftKeyGen - SSH Key Generation and Conversion Tool
+        Version: \(version)
         
         Usage:
             swiftkeygen <command> [options]
@@ -39,6 +46,7 @@ struct SwiftKeyGenCLI {
             generate    Generate a new SSH key pair
             convert     Convert key between formats
             export      Export key to stdout or file
+            version     Show the swiftkeygen tool version
             
         Examples:
             # Generate new Ed25519 key
@@ -53,6 +61,10 @@ struct SwiftKeyGenCLI {
         For more help on a specific command:
             swiftkeygen <command> --help
         """)
+    }
+
+    static func printVersion() {
+        print("swiftkeygen version \(version)")
     }
     
     static func handleConvert(_ args: [String]) {
