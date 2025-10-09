@@ -159,11 +159,10 @@ jobs:
       - name: Build (Release)
         run: swift build -c release
 
-        # TODO: Disable tests temporarily
-    #   - name: Run Full Test Suite (Release Mode)
-    #     run: |
-    #       swift test -c release
-    #     shell: bash
+      - name: Run Full Test Suite (Release Mode)
+        run: |
+          swift test -c release
+        shell: bash
 
       - name: Archive Build Products (Non-Windows)
         if: runner.os != 'Windows'
