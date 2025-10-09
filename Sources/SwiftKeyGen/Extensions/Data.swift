@@ -195,7 +195,7 @@ extension Data {
         #else
         // Fill using the system CSPRNG via SystemRandomNumberGenerator.
         data.withUnsafeMutableBytes { rawBuffer in
-            guard var ptr = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
+            guard let ptr = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
             var rng = SystemRandomNumberGenerator()
             for i in 0..<rawBuffer.count {
                 ptr.advanced(by: i).pointee = UInt8.random(in: UInt8.min...UInt8.max, using: &rng)
