@@ -1,5 +1,5 @@
 import Foundation
-import CommonCrypto
+import _CryptoExtras
 
 /// Minimal parser + decryptor for encrypted PKCS#8 (ENCRYPTED PRIVATE KEY)
 /// supporting PBES2 with PBKDF2(HMAC-SHA1 | HMAC-SHA256) and
@@ -118,21 +118,22 @@ struct PKCS8Parser {
 
     private static func pbkdf2(password: String, salt: Data, iterations: Int, keyLen: Int, sha256: Bool) throws -> Data {
         guard let passData = password.data(using: .utf8) else { throw SSHKeyError.invalidPassphrase }
-        var derived = Data(count: keyLen)
-        let prfAlg: CCPseudoRandomAlgorithm = sha256 ? CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256) : CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1)
-        let status = derived.withUnsafeMutableBytes { dPtr in
-            passData.withUnsafeBytes { pPtr in
-                salt.withUnsafeBytes { sPtr in
-                    CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2),
-                                         pPtr.bindMemory(to: Int8.self).baseAddress!, passData.count,
-                                         sPtr.bindMemory(to: UInt8.self).baseAddress!, salt.count,
-                                         prfAlg, UInt32(iterations),
-                                         dPtr.bindMemory(to: UInt8.self).baseAddress!, keyLen)
-                }
+        let hash: KDF.Insecure.PBKDF2.HashFunction = sha256 ? .sha256 : .insecureSHA1
+        let symKey = try KDF.Insecure.PBKDF2.deriveKey(
+            from: passData,
+            salt: salt,
+            using: hash,
+            outputByteCount: keyLen,
+            unsafeUncheckedRounds: iterations
+        )
+        var out = Data(count: keyLen)
+        out.withUnsafeMutableBytes { outPtr in
+            symKey.withUnsafeBytes { keyPtr in
+                precondition(keyPtr.count == keyLen)
+                outPtr.copyMemory(from: keyPtr)
             }
         }
-        guard status == kCCSuccess else { throw ParserError.decryptionFailed }
-        return derived
+        return out
     }
 }
 
