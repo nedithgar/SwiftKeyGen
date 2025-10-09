@@ -1,6 +1,6 @@
 import Foundation
-import CommonCrypto
 import Crypto
+import _CryptoExtras
 
 /// High–level helpers for producing **encrypted PKCS#8 (``ENCRYPTED PRIVATE KEY``)** blobs
 /// using the PBES2 scheme (Password‑Based Encryption Scheme 2) with PBKDF2 key
@@ -103,33 +103,26 @@ public struct PKCS8Encryption {
         guard let passwordData = password.data(using: .utf8) else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        var derivedKey = Data(count: keyLen)
-        
-        let result = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
-            passwordData.withUnsafeBytes { passwordBytes in
-                salt.withUnsafeBytes { saltBytes in
-                    let alg = (prf == .hmacSHA1) ? CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA1) : CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256)
-                    return CCKeyDerivationPBKDF(
-                        CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.bindMemory(to: Int8.self).baseAddress!,
-                        passwordData.count,
-                        saltBytes.bindMemory(to: UInt8.self).baseAddress!,
-                        salt.count,
-                        alg,
-                        UInt32(iterations),
-                        derivedKeyBytes.bindMemory(to: UInt8.self).baseAddress!,
-                        keyLen
-                    )
-                }
+
+        // Use _CryptoExtras portable PBKDF2 implementation (CommonCrypto on Apple, BoringSSL elsewhere)
+    let hash: KDF.Insecure.PBKDF2.HashFunction = (prf == .hmacSHA1) ? .insecureSHA1 : .sha256
+        let symKey = try KDF.Insecure.PBKDF2.deriveKey(
+            from: passwordData,
+            salt: salt,
+            using: hash,
+            outputByteCount: keyLen,
+            unsafeUncheckedRounds: iterations
+        )
+
+        // Convert SymmetricKey to Data
+        var out = Data(count: keyLen)
+        out.withUnsafeMutableBytes { outPtr in
+            symKey.withUnsafeBytes { keyPtr in
+                precondition(keyPtr.count == keyLen)
+                outPtr.copyMemory(from: keyPtr)
             }
         }
-        
-        guard result == kCCSuccess else {
-            throw SSHKeyError.keyDerivationFailed
-        }
-        
-        return derivedKey
+        return out
     }
     
     /// Encrypt data using PBES2 scheme

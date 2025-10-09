@@ -1,5 +1,8 @@
 import Foundation
 import Crypto
+#if canImport(Security)
+import Security
+#endif
 
 /// Convenience utilities for common binary processing used across SwiftKeyGen.
 ///
@@ -182,12 +185,24 @@ extension Data {
         guard count >= 0 else { throw SecureRandomError.negativeCount }
 
         var data = Data(count: count)
-        let status = data.withUnsafeMutableBytes { bytes in 
+        #if canImport(Security)
+        let status: OSStatus = data.withUnsafeMutableBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return errSecAllocate }
             return SecRandomCopyBytes(kSecRandomDefault, bytes.count, baseAddress)
         }
         guard status == errSecSuccess else { throw SecureRandomError.generationFailed(status) }
         return data
+        #else
+        // Fill using the system CSPRNG via SystemRandomNumberGenerator.
+        data.withUnsafeMutableBytes { rawBuffer in
+            guard var ptr = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return }
+            var rng = SystemRandomNumberGenerator()
+            for i in 0..<rawBuffer.count {
+                ptr.advanced(by: i).pointee = UInt8.random(in: UInt8.min...UInt8.max, using: &rng)
+            }
+        }
+        return data
+        #endif
     }
 
     /// Errors that can occur during secure random byte generation.
@@ -195,7 +210,11 @@ extension Data {
         /// The requested byte count was negative.
         case negativeCount
         /// The underlying system call failed with the given status code.
+        #if canImport(Security)
         case generationFailed(OSStatus)
+        #else
+        case generationFailed(Int32)
+        #endif
     }
 
 }
