@@ -442,7 +442,6 @@ struct PassphraseIntegrationTests {
     func testSSHKeygenChangesPassphraseOnOurPKCS8() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
             // Generate ECDSA key and export to PKCS8 with passphrase
-            // TODO: Add negative tests for malformed PBES2 parameters once parser implemented.
             // Note: Previously commented that RSA encrypted PKCS#8 was "not supported" –
             // that referred to missing convenience API. We now implement RSA PKCS#8
             // encryption internally; see `RSA+PKCS8.swift`.

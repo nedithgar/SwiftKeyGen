@@ -128,6 +128,33 @@ enum IntegrationTestSupporter {
         return try run(url, arguments: arguments, input: input, environment: [:], workingDirectory: workingDirectory, timeout: timeout)
     }
 
+    /// Run `ssh-keygen` supplying a passphrase non‑interactively via SSH_ASKPASS to avoid
+    /// blocking on a TTY prompt. This is necessary because piping the passphrase to stdin
+    /// (`echo pass | ssh-keygen -y -f key`) is ignored by OpenSSH; it insists on a TTY unless
+    /// an askpass program is configured.
+    /// - Parameters:
+    ///   - arguments: ssh-keygen arguments (e.g. `["-y", "-f", path]`). Do NOT include `-P`/`-N` here.
+    ///   - passphrase: Passphrase to supply when prompted.
+    ///   - timeout: Optional timeout to prevent hangs.
+    /// - Returns: CommandResult with stdout/stderr.
+    static func runSSHKeygenAskPass(_ arguments: [String],
+                                    passphrase: String,
+                                    timeout: TimeInterval? = nil) throws -> CommandResult {
+        let url = try #require(Self.sshKeygenURL, "ssh-keygen not found at /usr/bin/ssh-keygen")
+        // Create ephemeral askpass script
+        let scriptURL = FileManager.default.temporaryDirectory.appendingPathComponent("askpass-\(UUID().uuidString)")
+        let script = "#!/bin/sh\necho \"\(passphrase)\"\n"
+        try script.data(using: .utf8)?.write(to: scriptURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: scriptURL.path)
+        defer { try? FileManager.default.removeItem(at: scriptURL) }
+        var env: [String: String] = [:]
+        env["SSH_ASKPASS"] = scriptURL.path
+        env["SSH_ASKPASS_REQUIRE"] = "force"
+        // DISPLAY must be set (non-empty) for askpass to trigger in many OpenSSH builds.
+        env["DISPLAY"] = "swiftkeygen-test" // dummy value
+        return try run(url, arguments: arguments, input: nil, environment: env, workingDirectory: nil, timeout: timeout)
+    }
+
     // MARK: - swiftkeygen Helpers
     /// Resolve the built `swiftkeygen` executable.
     ///
