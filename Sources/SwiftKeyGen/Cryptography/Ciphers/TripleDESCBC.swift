@@ -10,21 +10,6 @@ private typealias DESBlock = InlineArray<8, UInt8>
 private typealias RoundKey = InlineArray<6, UInt8> // 48-bit subkey per round
 private typealias DESHalf = InlineArray<4, UInt8>
 
-extension InlineArray<8, UInt8> {
-    @inline(__always) func toData() -> Data {
-        var d = Data(count: 8)
-        for i in 0..<8 { d[i] = self[i] }
-        return d
-    }
-}
-extension InlineArray<4, UInt8> {
-    @inline(__always) func toData() -> Data {
-        var d = Data(count: 4)
-        for i in 0..<4 { d[i] = self[i] }
-        return d
-    }
-}
-
 struct TripleDESCBC {
     /// Encrypt data using 3DES-CBC mode (EDE)
     static func encrypt(data: Data, key: Data, iv: Data) throws -> Data {
