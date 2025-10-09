@@ -225,7 +225,7 @@ private struct Poly1305 {
         var offset = 0
         
         // Process full blocks
-    while offset + 16 <= message.count {
+        while offset + 16 <= message.count {
             let t0 = UInt32(message[offset]) | UInt32(message[offset+1]) << 8 | UInt32(message[offset+2]) << 16 | UInt32(message[offset+3]) << 24
             let t1 = UInt32(message[offset+4]) | UInt32(message[offset+5]) << 8 | UInt32(message[offset+6]) << 16 | UInt32(message[offset+7]) << 24
             let t2 = UInt32(message[offset+8]) | UInt32(message[offset+9]) << 8 | UInt32(message[offset+10]) << 16 | UInt32(message[offset+11]) << 24
