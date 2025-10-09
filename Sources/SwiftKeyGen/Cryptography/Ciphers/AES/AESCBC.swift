@@ -74,7 +74,7 @@ struct AESCBC {
             let plainBlock = AESBlock(raw: blockBuf)
             let xored = plainBlock ^ previous
             // Use non-throwing InlineArray-based encrypt to avoid try_apply in hot path
-            let cipherInline = aes.encryptBlockExact(xored.raw())
+            let cipherInline = aes.encryptBlock(xored.raw())
             // Write cipher block to output
             let ci = cipherInline.span
             for i in 0..<16 { outSpan[offset + i] = ci[i] }
@@ -114,8 +114,9 @@ struct AESCBC {
             var bbSpan = blockBuf.mutableSpan
             for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
             let cipherBlock = AESBlock(raw: blockBuf)
-            let decryptedData = try aes.decryptBlock(cipherBlock.raw().toData())
-            let decrypted = AESBlock(data: decryptedData, offset: 0)
+            // Use InlineArray-based decrypt to avoid Data allocations
+            let decryptedInline = aes.decryptBlock(cipherBlock.raw())
+            let decrypted = AESBlock(raw: decryptedInline)
             let plain = decrypted ^ previous
             let pSpan = plain.raw().span
             for i in 0..<16 { outSpan[offset + i] = pSpan[i] }

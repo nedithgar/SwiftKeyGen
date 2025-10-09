@@ -44,32 +44,10 @@ struct AESEngine {
     }
 
     /// Encrypt a single 16-byte block (InlineArray variant to avoid interim Data allocations)
-    func encryptBlock(_ input: InlineArray<16, UInt8>) throws -> InlineArray<16, UInt8> {
+    /// Remove `throws` to avoid try_apply error paths that can trigger compiler issues
+    func encryptBlock(_ input: InlineArray<16, UInt8>) -> InlineArray<16, UInt8> {
         var state = AESState(repeating: 0)
         // Load (column-major) from flat 16-byte block laid out identical to Data version
-        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
-        Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
-        if rounds > 1 {
-            for round in 1..<rounds {
-                Self.subBytes(&state)
-                Self.shiftRows(&state)
-                Self.mixColumns(&state)
-                Self.addRoundKey(&state, expandedKey: expandedKey, round: round)
-            }
-        }
-        Self.subBytes(&state)
-        Self.shiftRows(&state)
-        Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
-        var out = InlineArray<16, UInt8>(repeating: 0)
-        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
-        return out
-    }
-
-    /// Encrypt a single 16-byte block without throwing (input is exactly 16 bytes by type)
-    /// Useful in tight loops to avoid try_apply error paths that can trigger compiler issues.
-    @inline(__always)
-    func encryptBlockExact(_ input: InlineArray<16, UInt8>) -> InlineArray<16, UInt8> {
-        var state = AESState(repeating: 0)
         for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
         Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
         if rounds > 1 {
@@ -109,6 +87,31 @@ struct AESEngine {
         Self.invSubBytes(&state)
     Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: 0)
         var out = Data(count: 16)
+        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
+        return out
+    }
+
+    /// Decrypt a single 16-byte block (InlineArray variant to avoid interim Data allocations)
+    func decryptBlock(_ input: InlineArray<16, UInt8>) -> InlineArray<16, UInt8> {
+        var state = AESState(repeating: 0)
+        // Load (column-major) from flat 16-byte block
+        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
+        // Initial round key (last)
+        Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: rounds)
+        // Main reverse rounds
+        if rounds > 1 {
+            for round in (1..<rounds).reversed() {
+                Self.invShiftRows(&state)
+                Self.invSubBytes(&state)
+                Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: round)
+                Self.invMixColumns(&state)
+            }
+        }
+        // Final round
+        Self.invShiftRows(&state)
+        Self.invSubBytes(&state)
+        Self.addRoundKeyDecrypt(&state, expandedKey: expandedKey, round: 0)
+        var out = InlineArray<16, UInt8>(repeating: 0)
         for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
         return out
     }
@@ -225,15 +228,18 @@ struct AESEngine {
         let r3c0 = state[idx(3,0)], r3c1 = state[idx(3,1)], r3c2 = state[idx(3,2)], r3c3 = state[idx(3,3)]
         state[idx(3,0)] = r3c3; state[idx(3,1)] = r3c0; state[idx(3,2)] = r3c1; state[idx(3,3)] = r3c2
     }
-    // MixColumns
+    // MixColumns (optimized using xtime operations)
     private static func mixColumns(_ state: inout AESState) {
+        @inline(__always) func xtime(_ x: UInt8) -> UInt8 { (x << 1) ^ ((x & 0x80) != 0 ? 0x1b : 0x00) }
+        @inline(__always) func mul2(_ x: UInt8) -> UInt8 { xtime(x) }
+        @inline(__always) func mul3(_ x: UInt8) -> UInt8 { xtime(x) ^ x }
         for c in 0..<4 {
             let i0 = idx(0,c), i1 = idx(1,c), i2 = idx(2,c), i3 = idx(3,c)
             let a0 = state[i0], a1 = state[i1], a2 = state[i2], a3 = state[i3]
-            state[i0] = gfMul(0x02, a0) ^ gfMul(0x03, a1) ^ a2 ^ a3
-            state[i1] = a0 ^ gfMul(0x02, a1) ^ gfMul(0x03, a2) ^ a3
-            state[i2] = a0 ^ a1 ^ gfMul(0x02, a2) ^ gfMul(0x03, a3)
-            state[i3] = gfMul(0x03, a0) ^ a1 ^ a2 ^ gfMul(0x02, a3)
+            state[i0] = mul2(a0) ^ mul3(a1) ^ a2 ^ a3
+            state[i1] = a0 ^ mul2(a1) ^ mul3(a2) ^ a3
+            state[i2] = a0 ^ a1 ^ mul2(a2) ^ mul3(a3)
+            state[i3] = mul3(a0) ^ a1 ^ a2 ^ mul2(a3)
         }
     }
     
@@ -276,35 +282,37 @@ struct AESEngine {
         state[idx(3,0)] = r3c1; state[idx(3,1)] = r3c2; state[idx(3,2)] = r3c3; state[idx(3,3)] = r3c0
     }
     private static func invMixColumns(_ state: inout AESState) {
+        @inline(__always) func xtime(_ x: UInt8) -> UInt8 { (x << 1) ^ ((x & 0x80) != 0 ? 0x1b : 0x00) }
+        @inline(__always) func mul2(_ x: UInt8) -> UInt8 { xtime(x) }
+        @inline(__always) func mul4(_ x: UInt8) -> UInt8 { xtime(xtime(x)) }
+        @inline(__always) func mul8(_ x: UInt8) -> UInt8 { xtime(mul4(x)) }
+        @inline(__always) func mul9(_ x: UInt8) -> UInt8 { mul8(x) ^ x }
+        @inline(__always) func mul11(_ x: UInt8) -> UInt8 { mul8(x) ^ mul2(x) ^ x }
+        @inline(__always) func mul13(_ x: UInt8) -> UInt8 { mul8(x) ^ mul4(x) ^ x }
+        @inline(__always) func mul14(_ x: UInt8) -> UInt8 { mul8(x) ^ mul4(x) ^ mul2(x) }
         for c in 0..<4 {
             let i0 = idx(0,c), i1 = idx(1,c), i2 = idx(2,c), i3 = idx(3,c)
             let a0 = state[i0], a1 = state[i1], a2 = state[i2], a3 = state[i3]
-            state[i0] = gfMul(0x0e, a0) ^ gfMul(0x0b, a1) ^ gfMul(0x0d, a2) ^ gfMul(0x09, a3)
-            state[i1] = gfMul(0x09, a0) ^ gfMul(0x0e, a1) ^ gfMul(0x0b, a2) ^ gfMul(0x0d, a3)
-            state[i2] = gfMul(0x0d, a0) ^ gfMul(0x09, a1) ^ gfMul(0x0e, a2) ^ gfMul(0x0b, a3)
-            state[i3] = gfMul(0x0b, a0) ^ gfMul(0x0d, a1) ^ gfMul(0x09, a2) ^ gfMul(0x0e, a3)
+            state[i0] = mul14(a0) ^ mul11(a1) ^ mul13(a2) ^ mul9(a3)
+            state[i1] = mul9(a0) ^ mul14(a1) ^ mul11(a2) ^ mul13(a3)
+            state[i2] = mul13(a0) ^ mul9(a1) ^ mul14(a2) ^ mul11(a3)
+            state[i3] = mul11(a0) ^ mul13(a1) ^ mul9(a2) ^ mul14(a3)
         }
     }
     
-    /// Galois field multiplication
-    private static func gfMul(_ a: UInt8, _ b: UInt8) -> UInt8 {
+    // Note: gfMul was replaced in hot paths by xtime-based multipliers above.
+    // Keeping a reference implementation here in case it's needed for tables/tests.
+    @inline(__always) private static func gfMul(_ a: UInt8, _ b: UInt8) -> UInt8 {
         var p: UInt8 = 0
-        var hi: UInt8 = 0
-        var a = a
-        var b = b
-        
+        var aa = a
+        var bb = b
         for _ in 0..<8 {
-            if b & 1 != 0 {
-                p ^= a
-            }
-            hi = a & 0x80
-            a <<= 1
-            if hi != 0 {
-                a ^= 0x1b  // x^8 + x^4 + x^3 + x + 1
-            }
-            b >>= 1
+            if (bb & 1) != 0 { p ^= aa }
+            let hi = aa & 0x80
+            aa &<<= 1
+            if hi != 0 { aa ^= 0x1b }
+            bb &>>= 1
         }
-        
         return p
     }
 

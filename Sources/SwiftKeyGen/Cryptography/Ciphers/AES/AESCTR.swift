@@ -31,7 +31,7 @@ struct AESCTR {
         let inSpan = data.span
         var keystream: Block = Block(repeating: 0)
         for offset in stride(from: 0, to: data.count, by: 16) {
-            keystream = try! engine.encryptBlock(counter)
+            keystream = engine.encryptBlock(counter)
             let chunk = min(16, data.count - offset)
             for i in 0..<chunk { outSpan[offset + i] = inSpan[offset + i] ^ keystream[i] }
             increment(&counter)
