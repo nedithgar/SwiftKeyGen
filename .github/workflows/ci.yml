@@ -13,9 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: Disable Linux and Windows temporarily
         os: [ubuntu-latest, macos-26, windows-latest]
-        # os: [ubuntu-latest, macos-26]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,52 +54,89 @@ jobs:
             echo "$TOOLCHAIN" >> "$GITHUB_PATH"
             swift --version
 
-      - name: Install prerequisites (Windows)
+      - name: Install Swift 6.2 (Windows - manual)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # Install required Visual Studio components only if MSVC tools aren't already available
-          if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
-            Write-Host "Installing Visual Studio 2022 components required by Swift..."
-            winget install --id Microsoft.VisualStudio.2022.Community --exact --force --accept-source-agreements --accept-package-agreements --custom "--add Microsoft.VisualStudio.Component.Windows11SDK.22000 --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          $SwiftVersion = 'swift-6.2-release'
+          $SwiftBuild = '6.2-RELEASE'
+          $Arch = 'amd64'
+
+          # Compose download URL for official swift.org release
+          if ($Arch -eq 'amd64') {
+            $URL = "https://download.swift.org/$SwiftVersion/windows10/swift-$SwiftBuild/swift-$SwiftBuild-windows10.exe"
           } else {
-            Write-Host "MSVC tools detected; skipping Visual Studio installation."
+            $URL = "https://download.swift.org/$SwiftVersion/windows10-$Arch/swift-$SwiftBuild/swift-$SwiftBuild-windows10-$Arch.exe"
           }
 
-      - name: Install Swift 6.2 (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $versionsToTry = @('6.2','6.2.0')
-          $installed = $false
-          foreach ($v in $versionsToTry) {
-            try {
-              winget install --id Swift.Toolchain -e --version $v --accept-source-agreements --accept-package-agreements
-              $installed = $true
-              $swiftVersion = $v
-              break
-            } catch {
-              Write-Host "Failed to install Swift.Toolchain version $v, trying next..."
-            }
-          }
-          if (-not $installed) { throw "Unable to install Swift.Toolchain 6.2.x via winget." }
+          $Installer = Join-Path $env:TEMP 'swift-installer.exe'
+          Write-Host "Downloading Swift installer: $URL"
+          Invoke-WebRequest -Uri $URL -OutFile $Installer
 
-          $toolchainRoot = 'C:\\Library\\Developer\\Toolchains'
-          if (Test-Path $toolchainRoot) {
-            $candidates = Get-ChildItem $toolchainRoot | Sort-Object LastWriteTime -Descending
-            $selected = $null
-            foreach ($c in $candidates) {
-              if ($c.Name -match '6\\.2') { $selected = $c; break }
-            }
-            if (-not $selected) { $selected = $candidates | Select-Object -First 1 }
-            if (-not $selected) { throw "Swift toolchain directory not found in $toolchainRoot" }
-            "$(($selected.FullName))\\usr\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          } else {
-            throw "Toolchain root $toolchainRoot not found after installation."
+          $Log = Join-Path $env:TEMP 'swift-install.log'
+          $Args = "/quiet /norestart /lv*x `"$Log`""
+          Write-Host "Running installer silently... (log: $Log)"
+          $Process = Start-Process -FilePath $Installer -ArgumentList $Args -Wait -PassThru -Verb RunAs
+          if ($Process.ExitCode -ne 0 -and $Process.ExitCode -ne 3010) {
+            Write-Host "::error::Installer returned exit code $($Process.ExitCode). See log: $Log"
+            exit $Process.ExitCode
           }
+
+          # Refresh environment for current process so PATH includes Swift without reboot
+          foreach ($level in 'Machine','User') {
+            [Environment]::GetEnvironmentVariables($level).GetEnumerator() | ForEach-Object {
+              if ($_.Name -eq 'Path') {
+                $_.Value = ("$env:Path;$($_.Value)" -split ';' | Select-Object -Unique) -join ';'
+              }
+              $_
+            } | Set-Content -Path { "Env:$($_.Name)" }
+          }
+
+          # Export updated PATH and env for subsequent steps
+          $env:Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+          Get-ChildItem Env: | ForEach-Object { "$($_.Name)=$($_.Value)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append }
+
           swift --version
+
+      - name: Update SDK module definitions (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Determine Swift root and SDKROOT
+          $SwiftExe = (Get-Command swift).Source
+          if (-not $SwiftExe) { throw 'swift not found on PATH after installation.' }
+          $SwiftRoot = Split-Path -Path (Split-Path -Path $SwiftExe -Parent) -Parent
+          if (-not $env:SDKROOT -or -not (Test-Path $env:SDKROOT)) {
+            # Fallback: infer SDKROOT from swift.exe path: <toolchain>\usr
+            $ToolchainRoot = Split-Path -Path $SwiftRoot -Parent
+            # On Windows layout is <toolchain>\usr\bin\swift.exe; so SwiftRoot is <toolchain>\usr
+            $InferredSDKRoot = Split-Path -Path $SwiftRoot -Parent
+            if (-not (Test-Path $InferredSDKRoot)) { throw "Unable to infer SDKROOT from $SwiftExe" }
+            $env:SDKROOT = $InferredSDKRoot
+            echo "SDKROOT=$env:SDKROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+          $Targets = @{
+            'WinSDK(UM) Module Map'     = @{ Url = 'https://raw.githubusercontent.com/swiftlang/swift/main/stdlib/public/Platform/winsdk_um.modulemap';      Dest = Join-Path $env:SDKROOT 'usr/share/winsdk_um.modulemap' };
+            'WinSDK(Shared) Module Map' = @{ Url = 'https://raw.githubusercontent.com/swiftlang/swift/main/stdlib/public/Platform/winsdk_shared.modulemap';  Dest = Join-Path $env:SDKROOT 'usr/share/winsdk_shared.modulemap' };
+            'UCRT Module Map'           = @{ Url = 'https://raw.githubusercontent.com/swiftlang/swift/main/stdlib/public/Platform/ucrt.modulemap';          Dest = Join-Path $env:SDKROOT 'usr/share/ucrt.modulemap' };
+            'VCRuntime Module Map'      = @{ Url = 'https://raw.githubusercontent.com/swiftlang/swift/main/stdlib/public/Platform/vcruntime.modulemap';     Dest = Join-Path $env:SDKROOT 'usr/share/vcruntime.modulemap' };
+            'VCRuntime API Notes'       = @{ Url = 'https://raw.githubusercontent.com/swiftlang/swift/main/stdlib/public/Platform/vcruntime.apinotes';      Dest = Join-Path $env:SDKROOT 'usr/share/vcruntime.apinotes' };
+            'Clang Module Map'          = @{ Url = 'https://raw.githubusercontent.com/llvm/llvm-project/main/clang/lib/Headers/module.modulemap';           Dest = Join-Path $SwiftRoot 'lib/swift/clang/include/module.modulemap' };
+          }
+
+          foreach ($item in $Targets.GetEnumerator()) {
+            $name = $item.Key
+            $url = $item.Value.Url
+            $dest = $item.Value.Dest
+            Write-Host "Updating $name -> $dest"
+            $destDir = Split-Path -Path $dest -Parent
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+            curl.exe --fail --silent --show-error --retry 3 --retry-delay 5 --location $url --output $dest
+            if ($LASTEXITCODE -ne 0) { Write-Host "::error::Failed to update $name"; exit 1 }
+          }
 
       - name: Configure Git (Windows NTFS quirk)
         if: runner.os == 'Windows'
