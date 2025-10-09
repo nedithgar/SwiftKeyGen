@@ -117,6 +117,7 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] Decrypt PKCS8 with HMAC-SHA256 PRF (our emission)
  - [x] Decrypt PKCS8 Ed25519 (our emission)
  - [x] Validate decrypted PrivateKeyInfo → re-emit and compare (canonical DER) (Ed25519 & ECDSA)
+ - [x] Internal import (decrypt + parse) of our ECDSA encrypted PKCS#8 (PBES2 AES-128/256-CBC, HMAC-SHA1/SHA256) with round-trip assertion
 
 ### Bubble Babble Format
 - [x] **Bubble babble matches ssh-keygen** (Ed25519)
@@ -194,11 +195,8 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **PEM → PKCS8 → PEM** (via both tools)
 - [x] **OpenSSH → RFC4716 → OpenSSH** (public key only)
 - [x] **All conversions preserve public key integrity**
+ - [x] Encrypted ECDSA SEC1 and PKCS#8 conversions internally re‑parsed (integrity validated)
 
-## � Recently Implemented / Upcoming
-
-- [x] Encrypted ECDSA SEC1 (EC PRIVATE KEY) PEM parsing (legacy OpenSSL AES-CBC via EVP_BytesToKey) now supported and internally round-tripped in `FormatConversionRoundTripIntegrationTests`.
-- [ ] Encrypted ECDSA PKCS#8 PRIVATE KEY parsing (PBES2 / PBKDF2) internal import parity (we emit & decrypt ours, need full import for ssh-keygen generated variants if any divergence) — NEXT.
 
 ## �📁 Suggested Test File Organization
 

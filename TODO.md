@@ -22,6 +22,8 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] Display key fingerprints as randomart images
 - [x] Print public key from private key
 - [x] Read encrypted OpenSSH private keys
+- [x] Read encrypted ECDSA SEC1 (legacy OpenSSL) private keys
+- [x] Read encrypted ECDSA PKCS#8 (PBES2 AES-128/256-CBC, HMAC-SHA1/SHA256) private keys
 - [x] Verify passphrases without decrypting keys
 - [x] Get key information without decryption
 
@@ -140,15 +142,10 @@ This document compares the features implemented in SwiftKeyGen with the original
 
 6. **OpenSSH-Compatible Encryption**: Supports multiple cipher modes including AES-CTR and AES-CBC variants, matching OpenSSH's encryption options.
 
-### Recent Additions (In Progress Tracking)
-
-- [x] Encrypted ECDSA SEC1 (EC PRIVATE KEY) PEM parsing (legacy OpenSSL AES-CBC + EVP_BytesToKey) implemented
-- [ ] Encrypted ECDSA PKCS#8 PRIVATE KEY parsing (PBES2 / PBKDF2 variants) — planned next
-
 ### Limitations
 
 1. **No DSA Support**: DSA is considered legacy and not recommended for new deployments.
 
 2. **No PKCS#11**: Hardware token support would require additional dependencies.
 
-3. **Private Key Import**: SwiftKeyGen supports importing RSA and ECDSA private keys from PEM/PKCS#8 formats (including legacy encrypted SEC1 for ECDSA). Ed25519 keys: OpenSSH private key format supported; generic PEM (RFC 8410 / PKCS#8) import may be limited due to Swift Crypto constraints. Use OpenSSH for Ed25519 interoperability.
+3. **Private Key Import**: SwiftKeyGen supports importing RSA, ECDSA (unencrypted + legacy SEC1 encrypted + PBES2 encrypted PKCS#8), and Ed25519 (OpenSSH format; unencrypted PKCS#8 supported). Encrypted PKCS#8 for Ed25519 may be limited by underlying CryptoKit capabilities.

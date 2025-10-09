@@ -17,6 +17,7 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 - ✅ Import public keys from PEM/PKCS#8 formats
 - ✅ Import/export keys from stdin/stdout
 - ✅ Import ECDSA private keys from SEC1 (EC PRIVATE KEY) PEM (unencrypted & legacy encrypted)
+- ✅ Import ECDSA private keys from encrypted PKCS#8 (PBES2: AES-128/256-CBC, HMAC-SHA1/SHA256)
 - ✅ Multiple fingerprint algorithms (SHA256, SHA512, MD5)
 - ✅ Fingerprint randomart visualization
 - ✅ Key parsing and validation

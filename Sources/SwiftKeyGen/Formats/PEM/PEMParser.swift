@@ -253,6 +253,10 @@ public struct PEMParser {
                 throw SSHKeyError.passphraseRequired
             }
             return try parseEncryptedECDSAPrivateKey(trimmedPEM, passphrase: passphrase)
+        } else if trimmedPEM.contains("BEGIN ENCRYPTED PRIVATE KEY") {
+            // PBES2 (PKCS#8) encrypted ECDSA path
+            guard let passphrase = passphrase else { throw SSHKeyError.passphraseRequired }
+            return try parseEncryptedPKCS8ECDSAPrivateKey(trimmedPEM, passphrase: passphrase)
         } else {
             // Unencrypted - try to parse as different curve types
             if let p256Key = try? P256.Signing.PrivateKey(pemRepresentation: pemString) {
@@ -327,6 +331,16 @@ public struct PEMParser {
         
         // Parse decrypted data as EC private key
         return try parseECDSAPrivateKeyFromDER(decryptedData)
+    }
+
+    /// Parse ECDSA key from encrypted PKCS#8 (PBES2) ENCRYPTED PRIVATE KEY PEM.
+    /// Decrypts PBES2 envelope then decodes inner PrivateKeyInfo + SEC1.
+    private static func parseEncryptedPKCS8ECDSAPrivateKey(_ pemString: String, passphrase: String) throws -> ECDSAKey {
+        // Reuse PKCS8Parser to extract parameters and ciphertext
+        let info = try PKCS8Parser.parseEncryptedPrivateKeyInfo(pem: pemString)
+        let decrypted = try PKCS8Parser.decrypt(info: info, passphrase: passphrase)
+        // decrypted is DER of PrivateKeyInfo (PKCS#8). Reuse existing path.
+        return try parseECDSAPrivateKeyFromPKCS8(decrypted)
     }
     
     /// Parse ECDSA private key from DER data (SEC1 or PKCS#8 format)

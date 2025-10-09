@@ -46,6 +46,10 @@ public struct KeyManager {
         if let pemString = String(data: data, encoding: .utf8) {
             // Normalize by trimming leading/trailing whitespace/newlines
             let trimmed = pemString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.contains("-----BEGIN ENCRYPTED PRIVATE KEY-----") {
+                // Attempt PBES2 encrypted PKCS#8 (ECDSA first, Ed25519 optional, RSA possible). Only ECDSA implemented.
+                if let passphrase = passphrase, let ecdsa = try? PEMParser.parseECDSAPrivateKey(trimmed, passphrase: passphrase) { return ecdsa }
+            }
             if trimmed.contains("-----BEGIN PRIVATE KEY-----") && trimmed.contains("-----END PRIVATE KEY-----") {
                 // Attempt Ed25519 PKCS#8 decode first
                 if let key = try? parseEd25519PKCS8PEM(trimmed) {

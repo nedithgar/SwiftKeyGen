@@ -469,9 +469,12 @@ struct FormatConversionRoundTripIntegrationTests {
             }
             #expect(pkcs8PubResult.succeeded, "ssh-keygen should decrypt encrypted PKCS#8 PEM")
 
-            // TODO: Implement ECDSA PKCS#8 parsing in KeyManager (see existing TODO in KeyManager).
-            // We skip internal parsing verification here until support is added.
-            print("[INFO][EncryptedRoundTrip] Skipping internal parse of encrypted PKCS#8 PEM (parser not yet implemented)")
+            let reparsed = try measure("KeyManager.readPrivateKey (encrypted PKCS#8 PEM reparsed)") {
+                try KeyManager.readPrivateKey(from: pkcs8Path.path, passphrase: passphrase)
+            }
+            #expect(reparsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " ") ==
+                    parsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " "),
+                    "Internal PKCS#8 encrypted reparse should preserve algorithm + base64 public key data")
         }
     }
 
