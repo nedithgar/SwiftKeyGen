@@ -104,6 +104,7 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **ssh-keygen adds passphrase to our unencrypted OpenSSH key**
 - [x] **ssh-keygen changes passphrase on our PEM key**
 - [x] **ssh-keygen changes passphrase on our PKCS8 key**
+	- [x] RSA key (encrypted PKCS#8) passphrase change (added via RSA PKCS#8 implementation)
 - [x] **We change passphrase on ssh-keygen OpenSSH key** (if KeyManager supports)
 - [x] **We remove passphrase from ssh-keygen key** (if KeyManager supports)
 - [x] **Passphrase operation preserves key integrity**
