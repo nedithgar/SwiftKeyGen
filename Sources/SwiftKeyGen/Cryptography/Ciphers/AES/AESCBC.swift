@@ -74,7 +74,7 @@ struct AESCBC {
             let plainBlock = AESBlock(raw: blockBuf)
             let xored = plainBlock ^ previous
             // Use non-throwing InlineArray-based encrypt to avoid try_apply in hot path
-            let cipherInline = aes.encryptBlockExact(xored.raw())
+            let cipherInline = aes.encryptBlock(xored.raw())
             // Write cipher block to output
             let ci = cipherInline.span
             for i in 0..<16 { outSpan[offset + i] = ci[i] }
