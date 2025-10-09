@@ -6,8 +6,8 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 
 ### Key Generation
 - ✅ **Ed25519** key generation (recommended)
-- ✅ **RSA** key generation (2048, 3072, 4096 bits)
 - ✅ **ECDSA** key generation (P-256, P-384, P-521)
+- ✅ RSA key generation (2048, 3072, 4096 bits)
 - ✅ Batch key generation for multiple hosts
 - ✅ Generate all key types for a single identity
 
