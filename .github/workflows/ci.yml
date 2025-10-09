@@ -71,15 +71,24 @@ jobs:
           }
 
           $Installer = Join-Path $env:TEMP 'swift-installer.exe'
-          Write-Host "Downloading Swift installer: $URL"
-          Invoke-WebRequest -Uri $URL -OutFile $Installer
+          Write-Host "Validating Swift installer URL: $URL"
+          # Quick HEAD check to fail fast if the artifact path changes
+          curl.exe -sS -I --fail --location $URL
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::Installer URL not reachable: $URL"; exit 1 }
+
+          Write-Host "Downloading Swift installer with retries: $URL"
+          # Use curl with retries and a max time to avoid indefinite hangs
+          curl.exe -sS --fail --location --retry 5 --retry-delay 5 --max-time 900 --output $Installer $URL
+          if ($LASTEXITCODE -ne 0) { Write-Host "::error::Download failed for: $URL"; exit 1 }
 
           $Log = Join-Path $env:TEMP 'swift-install.log'
           $Args = "/quiet /norestart /lv*x `"$Log`""
           Write-Host "Running installer silently... (log: $Log)"
-          $Process = Start-Process -FilePath $Installer -ArgumentList $Args -Wait -PassThru -Verb RunAs
+          # Run without Verb RunAs to avoid UAC prompts on CI
+          $Process = Start-Process -FilePath $Installer -ArgumentList $Args -Wait -PassThru
           if ($Process.ExitCode -ne 0 -and $Process.ExitCode -ne 3010) {
             Write-Host "::error::Installer returned exit code $($Process.ExitCode). See log: $Log"
+            if (Test-Path $Log) { Write-Host '--- installer log (tail) ---'; Get-Content $Log -Tail 200 }
             exit $Process.ExitCode
           }
 
@@ -107,12 +116,10 @@ jobs:
           # Determine Swift root and SDKROOT
           $SwiftExe = (Get-Command swift).Source
           if (-not $SwiftExe) { throw 'swift not found on PATH after installation.' }
-          $SwiftRoot = Split-Path -Path (Split-Path -Path $SwiftExe -Parent) -Parent
+          $SwiftRoot = Split-Path -Path (Split-Path -Path $SwiftExe -Parent) -Parent  # <toolchain>\usr
           if (-not $env:SDKROOT -or -not (Test-Path $env:SDKROOT)) {
-            # Fallback: infer SDKROOT from swift.exe path: <toolchain>\usr
-            $ToolchainRoot = Split-Path -Path $SwiftRoot -Parent
-            # On Windows layout is <toolchain>\usr\bin\swift.exe; so SwiftRoot is <toolchain>\usr
-            $InferredSDKRoot = Split-Path -Path $SwiftRoot -Parent
+            # Fallback: use <toolchain>\usr as SDKROOT
+            $InferredSDKRoot = $SwiftRoot
             if (-not (Test-Path $InferredSDKRoot)) { throw "Unable to infer SDKROOT from $SwiftExe" }
             $env:SDKROOT = $InferredSDKRoot
             echo "SDKROOT=$env:SDKROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
