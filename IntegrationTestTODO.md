@@ -115,8 +115,8 @@ This document tracks missing integration tests for complete bidirectional intero
 - [x] **Decrypt ssh-keygen encrypted PKCS8 key (RSA 2048)**
 - [x] Decrypt PKCS8 with AES-256-CBC (our emission)
 - [x] Decrypt PKCS8 with HMAC-SHA256 PRF (our emission)
-- [ ] Decrypt PKCS8 Ed25519 (after PKCS8 Ed25519 emission implementation)
-- [ ] Validate decrypted PrivateKeyInfo → re-emit and compare ssh-keygen output (canonical DER)
+ - [x] Decrypt PKCS8 Ed25519 (our emission)
+ - [x] Validate decrypted PrivateKeyInfo → re-emit and compare (canonical DER) (Ed25519 & ECDSA)
 
 ### Bubble Babble Format
 - [x] **Bubble babble matches ssh-keygen** (Ed25519)

@@ -30,6 +30,9 @@ This document compares the features implemented in SwiftKeyGen with the original
 - [x] Export keys to PKCS#8 format
 - [x] Export ECDSA keys with encrypted PEM (SEC1/RFC5915 format)
 - [x] Export ECDSA keys with encrypted PKCS#8 (PBES2)
+- [x] Export RSA keys with encrypted PKCS#8 (PBES2)
+- [x] Export Ed25519 keys with encrypted PKCS#8 (PBES2, RFC 8410)
+- [x] Canonical DER stability for PKCS#8 (Ed25519, ECDSA) round-trip
 - [x] Read and validate key formats
 - [x] Parse OpenSSH private key format
 - [x] Full DER/PEM encoding for RSA keys (PKCS#1 format)
