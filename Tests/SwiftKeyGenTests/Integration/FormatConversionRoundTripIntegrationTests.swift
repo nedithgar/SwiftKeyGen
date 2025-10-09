@@ -375,16 +375,14 @@ struct FormatConversionRoundTripIntegrationTests {
         //    which prefers the proprietary OpenSSH container, leading to flaky runs.
         //  - ECDSA P‑256 offers deterministic, interoperable encrypted SEC1 + PKCS#8 paths.
         let keyPath = tempDir.appendingPathComponent("encrypted_ecdsa_key")
-        let genResult = try measure("ssh-keygen generate encrypted ECDSA (low rounds)") {
-            try IntegrationTestSupporter.runSSHKeygen([
-                "-t", "ecdsa",
-                "-b", "256",
-                "-a", "4", // Reduce bcrypt KDF rounds to speed up test execution
-                "-f", keyPath.path,
-                "-N", passphrase,
-                "-C", "encrypted@test.com"
-            ])
-        }
+        let genResult = try IntegrationTestSupporter.runSSHKeygen([
+            "-t", "ecdsa",
+            "-b", "256",
+            "-a", "4", // Reduce bcrypt KDF rounds to speed up test execution
+            "-f", keyPath.path,
+            "-N", passphrase,
+            "-C", "encrypted@test.com"
+        ])
         #expect(genResult.succeeded, "ssh-keygen should generate encrypted ECDSA key")
 
         // NOTE: We intentionally skip an early `ssh-keygen -y` passphrase probe here because
@@ -393,9 +391,7 @@ struct FormatConversionRoundTripIntegrationTests {
         // against the encrypted SEC1 + PKCS#8 artifacts we produce, providing equivalent
         // interoperability coverage without the early potential hang.
 
-        let parsed = try measure("KeyManager.readPrivateKey (encrypted OpenSSH)") {
-            try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
-        }
+        let parsed = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
         let originalPublicKey = parsed.publicKeyString()
         return (parsed, originalPublicKey, keyPath)
     }
@@ -407,16 +403,6 @@ struct FormatConversionRoundTripIntegrationTests {
         return parts[0...1].joined(separator: " ")
     }
 
-    // Execute ssh-keygen with a soft timeout (seconds). If the command exceeds the timeout,
-    // it is terminated and we throw an error to surface the hang.
-    private func runSSHKeygenWithTimeout(_ args: [String], input: Data? = nil, label: String, timeout: TimeInterval = 5.0) throws -> IntegrationTestSupporter.CommandResult {
-        let start = Date()
-        let result = try IntegrationTestSupporter.runSSHKeygen(args, input: input, timeout: timeout)
-        let elapsed = Date().timeIntervalSince(start) * 1000.0
-        print("[TIME][EncryptedRoundTrip] \(label) finished in \(String(format: "%.2f", elapsed)) ms (timeout=\(Int(timeout*1000)) ms)")
-        return result
-    }
-
     @Test("Encrypted ECDSA key → SEC1 (encrypted) PEM round-trip preserves public key")
     func testEncryptedECDSASEC1PEMRoundTrip() throws {
         try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
@@ -424,24 +410,16 @@ struct FormatConversionRoundTripIntegrationTests {
             let (parsed, _, _) = try makeEncryptedECDSAKey(tempDir: tempDir, passphrase: passphrase)
 
             // Produce encrypted SEC1 (EC PRIVATE KEY) PEM
-            let encryptedPEMString = try measure("KeyConverter.toPEM (encrypted SEC1)") {
-                try KeyConverter.toPEM(key: parsed, passphrase: passphrase)
-            }
+            let encryptedPEMString = try KeyConverter.toPEM(key: parsed, passphrase: passphrase)
             let pemPath = tempDir.appendingPathComponent("encrypted_ecdsa.sec1.pem")
-            try measure("write encrypted SEC1 PEM to disk") {
-                try IntegrationTestSupporter.write(encryptedPEMString, to: pemPath)
-            }
+            try IntegrationTestSupporter.write(encryptedPEMString, to: pemPath)
 
             // ssh-keygen should decrypt it
-            let pemPubResult = try measure("ssh-keygen -y decrypt encrypted SEC1 PEM (askpass)") {
-                try IntegrationTestSupporter.runSSHKeygenAskPass(["-y", "-f", pemPath.path], passphrase: passphrase, timeout: 5.0)
-            }
+            let pemPubResult = try IntegrationTestSupporter.runSSHKeygenAskPass(["-y", "-f", pemPath.path], passphrase: passphrase, timeout: 5.0)
             #expect(pemPubResult.succeeded, "ssh-keygen should decrypt encrypted SEC1 PEM")
 
             // Verify we can parse the encrypted SEC1 PEM ourselves (now implemented)
-            let reparsed = try measure("KeyManager.readPrivateKey (encrypted SEC1 PEM reparsed)") {
-                try KeyManager.readPrivateKey(from: pemPath.path, passphrase: passphrase)
-            }
+            let reparsed = try KeyManager.readPrivateKey(from: pemPath.path, passphrase: passphrase)
             #expect(reparsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " ") ==
                     parsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " "),
                     "Internal SEC1 reparse should preserve algorithm + base64 public key data")
@@ -455,49 +433,19 @@ struct FormatConversionRoundTripIntegrationTests {
             let (parsed, _, _) = try makeEncryptedECDSAKey(tempDir: tempDir, passphrase: passphrase)
 
             // Produce encrypted PKCS#8 PEM
-            let encryptedPKCS8Data = try measure("KeyConverter.toPKCS8 (encrypted PKCS#8)") {
-                try KeyConverter.toPKCS8(key: parsed, passphrase: passphrase)
-            }
+            let encryptedPKCS8Data = try KeyConverter.toPKCS8(key: parsed, passphrase: passphrase)
             let pkcs8String = String(data: encryptedPKCS8Data, encoding: .utf8)!
             let pkcs8Path = tempDir.appendingPathComponent("encrypted_ecdsa.pkcs8.pem")
-            try measure("write encrypted PKCS#8 PEM to disk") {
-                try IntegrationTestSupporter.write(pkcs8String, to: pkcs8Path)
-            }
+            try IntegrationTestSupporter.write(pkcs8String, to: pkcs8Path)
 
-            let pkcs8PubResult = try measure("ssh-keygen -y decrypt encrypted PKCS#8 PEM (askpass)") {
-                try IntegrationTestSupporter.runSSHKeygenAskPass(["-y", "-f", pkcs8Path.path], passphrase: passphrase, timeout: 5.0)
-            }
+            let pkcs8PubResult = try IntegrationTestSupporter.runSSHKeygenAskPass(["-y", "-f", pkcs8Path.path], passphrase: passphrase, timeout: 5.0)
             #expect(pkcs8PubResult.succeeded, "ssh-keygen should decrypt encrypted PKCS#8 PEM")
 
-            let reparsed = try measure("KeyManager.readPrivateKey (encrypted PKCS#8 PEM reparsed)") {
-                try KeyManager.readPrivateKey(from: pkcs8Path.path, passphrase: passphrase)
-            }
+            let reparsed = try KeyManager.readPrivateKey(from: pkcs8Path.path, passphrase: passphrase)
             #expect(reparsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " ") ==
                     parsed.publicKeyString().split(separator: " ").prefix(2).joined(separator: " "),
                     "Internal PKCS#8 encrypted reparse should preserve algorithm + base64 public key data")
         }
     }
 
-    // MARK: - Timing Helper
-    @discardableResult
-    private func measure<T>(_ label: String, _ block: () throws -> T) rethrows -> T {
-        #if DEBUG
-        let start = DispatchTime.now()
-        let result = try block()
-        let end = DispatchTime.now()
-        let nanos = end.uptimeNanoseconds - start.uptimeNanoseconds
-        let ms = Double(nanos) / 1_000_000.0
-        print("[TIME][EncryptedRoundTrip] \(label): \(String(format: "%.3f", ms)) ms")
-        return result
-        #else
-        // Always measure even in release to help CI diagnostics.
-        let start = DispatchTime.now()
-        let result = try block()
-        let end = DispatchTime.now()
-        let nanos = end.uptimeNanoseconds - start.uptimeNanoseconds
-        let ms = Double(nanos) / 1_000_000.0
-        print("[TIME][EncryptedRoundTrip] \(label): \(String(format: "%.3f", ms)) ms")
-        return result
-        #endif
-    }
 }
