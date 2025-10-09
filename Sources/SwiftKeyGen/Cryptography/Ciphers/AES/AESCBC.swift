@@ -80,8 +80,8 @@ struct AESCBC {
             for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
             let plainBlock = AESBlock(raw: blockBuf)
             let xored = plainBlock ^ previous
-            // Use InlineArray-based encrypt to avoid transient Data lifetimes in error paths
-            let cipherInline = try aes.encryptBlock(xored.raw())
+            // Use non-throwing InlineArray-based encrypt to avoid try_apply in hot path
+            let cipherInline = aes.encryptBlockExact(xored.raw())
             // Write cipher block to output
             let ci = cipherInline.span
             for i in 0..<16 { outSpan[offset + i] = ci[i] }

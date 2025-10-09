@@ -84,7 +84,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p artifacts
-          cp -R .build/debug artifacts/build-debug
+          cp -R .build/release artifacts/build-release
         shell: bash
 
       - name: Upload Build Artifacts

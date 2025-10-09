@@ -65,6 +65,29 @@ struct AESEngine {
         return out
     }
 
+    /// Encrypt a single 16-byte block without throwing (input is exactly 16 bytes by type)
+    /// Useful in tight loops to avoid try_apply error paths that can trigger compiler issues.
+    @inline(__always)
+    func encryptBlockExact(_ input: InlineArray<16, UInt8>) -> InlineArray<16, UInt8> {
+        var state = AESState(repeating: 0)
+        for c in 0..<4 { for r in 0..<4 { state[Self.idx(r,c)] = input[c * 4 + r] } }
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: 0)
+        if rounds > 1 {
+            for round in 1..<rounds {
+                Self.subBytes(&state)
+                Self.shiftRows(&state)
+                Self.mixColumns(&state)
+                Self.addRoundKey(&state, expandedKey: expandedKey, round: round)
+            }
+        }
+        Self.subBytes(&state)
+        Self.shiftRows(&state)
+        Self.addRoundKey(&state, expandedKey: expandedKey, round: rounds)
+        var out = InlineArray<16, UInt8>(repeating: 0)
+        for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = state[Self.idx(r,c)] } }
+        return out
+    }
+
     /// Decrypt a single 16-byte block (flattened state)
     func decryptBlock(_ input: Data) throws -> Data {
         guard input.count == 16 else { throw SSHKeyError.invalidKeyData }
