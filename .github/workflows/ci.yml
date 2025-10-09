@@ -56,17 +56,57 @@ jobs:
             echo "$TOOLCHAIN" >> "$GITHUB_PATH"
             swift --version
 
-      - name: Install Swift 6.2 (Windows)
+      - name: Install prerequisites (Windows)
         if: runner.os == 'Windows'
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '6.2'
-          winget install --id Swift.Toolchain -e --version $version --accept-source-agreements --accept-package-agreements
-          $toolchain = Get-ChildItem 'C:\Library\Developer\Toolchains' | Where-Object { $_.Name -like "*${version}*" } | Select-Object -First 1
-          if (-not $toolchain) { Write-Error 'Swift toolchain not found after install.' }
-          "$($toolchain.FullName)\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Install required Visual Studio components only if MSVC tools aren't already available
+          if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing Visual Studio 2022 components required by Swift..."
+            winget install --id Microsoft.VisualStudio.2022.Community --exact --force --accept-source-agreements --accept-package-agreements --custom "--add Microsoft.VisualStudio.Component.Windows11SDK.22000 --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          } else {
+            Write-Host "MSVC tools detected; skipping Visual Studio installation."
+          }
+
+      - name: Install Swift 6.2 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $versionsToTry = @('6.2','6.2.0')
+          $installed = $false
+          foreach ($v in $versionsToTry) {
+            try {
+              winget install --id Swift.Toolchain -e --version $v --accept-source-agreements --accept-package-agreements
+              $installed = $true
+              $swiftVersion = $v
+              break
+            } catch {
+              Write-Host "Failed to install Swift.Toolchain version $v, trying next..."
+            }
+          }
+          if (-not $installed) { throw "Unable to install Swift.Toolchain 6.2.x via winget." }
+
+          $toolchainRoot = 'C:\\Library\\Developer\\Toolchains'
+          if (Test-Path $toolchainRoot) {
+            $candidates = Get-ChildItem $toolchainRoot | Sort-Object LastWriteTime -Descending
+            $selected = $null
+            foreach ($c in $candidates) {
+              if ($c.Name -match '6\\.2') { $selected = $c; break }
+            }
+            if (-not $selected) { $selected = $candidates | Select-Object -First 1 }
+            if (-not $selected) { throw "Swift toolchain directory not found in $toolchainRoot" }
+            "$(($selected.FullName))\\usr\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            throw "Toolchain root $toolchainRoot not found after installation."
+          }
           swift --version
+
+      - name: Configure Git (Windows NTFS quirk)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: git config --global core.protectNTFS false
 
       - name: Print Swift Version
         run: swift --version
