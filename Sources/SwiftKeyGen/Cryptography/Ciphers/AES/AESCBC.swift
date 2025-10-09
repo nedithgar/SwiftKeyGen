@@ -28,13 +28,6 @@ private struct AESBlock {
     init(raw: InlineArray<16, UInt8>) { self.storage = raw }
     /// Expose the raw 16-byte block for engine operations without extra copies
     func raw() -> InlineArray<16, UInt8> { storage }
-    func toData() -> Data {
-        var d = Data(count: 16)
-        var outSpan = d.mutableSpan
-        let src = storage.span
-        for i in 0..<16 { outSpan[i] = src[i] }
-        return d
-    }
     static func ^ (lhs: AESBlock, rhs: AESBlock) -> AESBlock {
         var out = InlineArray<16, UInt8>(repeating: 0)
         var span = out.mutableSpan
@@ -121,11 +114,10 @@ struct AESCBC {
             var bbSpan = blockBuf.mutableSpan
             for i in 0..<16 { bbSpan[i] = inSpan[offset + i] }
             let cipherBlock = AESBlock(raw: blockBuf)
-            let decryptedData = try aes.decryptBlock(cipherBlock.toData())
+            let decryptedData = try aes.decryptBlock(cipherBlock.raw().toData())
             let decrypted = AESBlock(data: decryptedData, offset: 0)
             let plain = decrypted ^ previous
-            let plainData = plain.toData()
-            let pSpan = plainData.span
+            let pSpan = plain.raw().span
             for i in 0..<16 { outSpan[offset + i] = pSpan[i] }
             previous = cipherBlock
         }
