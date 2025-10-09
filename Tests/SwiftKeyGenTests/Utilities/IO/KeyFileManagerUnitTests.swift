@@ -171,4 +171,73 @@ struct KeyFileManagerUnitTests {
         let parsed = try OpenSSHPrivateKey.parse(data: privData, passphrase: passphrase)
         #expect(parsed.keyType == .ed25519)
     }
+
+    // MARK: - Folded in from former FileManagerTests (unencrypted + custom public path scenarios)
+
+    @Test("generateKeyPairFiles (unencrypted) writes files, comment, permissions")
+    func testGenerateUnencryptedKeyPairFiles() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+        let privPath = tmpDir.appendingPathComponent("plain_ed25519_test").path
+        let pubPath = privPath + ".pub"
+
+        // Clean slate
+        try? FileManager.default.removeItem(atPath: privPath)
+        try? FileManager.default.removeItem(atPath: pubPath)
+        defer {
+            try? FileManager.default.removeItem(atPath: privPath)
+            try? FileManager.default.removeItem(atPath: pubPath)
+        }
+
+        // Act
+        try KeyFileManager.generateKeyPairFiles(
+            type: .ed25519,
+            privatePath: privPath,
+            comment: "test@swift"
+        )
+
+        // Assert existence
+        #expect(FileManager.default.fileExists(atPath: privPath))
+        #expect(FileManager.default.fileExists(atPath: pubPath))
+
+        // Public key content assertions
+        let pubData = try Data(contentsOf: URL(fileURLWithPath: pubPath))
+        let pubString = String(data: pubData, encoding: .utf8) ?? ""
+        #expect(pubString.hasPrefix("ssh-ed25519"))
+        #expect(pubString.contains("test@swift"))
+
+        // Permissions (POSIX only)
+        #if !os(Windows)
+        let privAttrs = try FileManager.default.attributesOfItem(atPath: privPath)
+        let pubAttrs = try FileManager.default.attributesOfItem(atPath: pubPath)
+        if let privPerm = privAttrs[.posixPermissions] as? NSNumber {
+            #expect(privPerm.int16Value == 0o600)
+        }
+        if let pubPerm = pubAttrs[.posixPermissions] as? NSNumber {
+            #expect(pubPerm.int16Value == 0o644)
+        }
+        #endif
+    }
+
+    @Test("generateKeyPairFiles with custom publicPath does not create default .pub")
+    func testGenerateKeyPairFilesCustomPublicPath() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+        let privPath = tmpDir.appendingPathComponent("id_ed25519_custom").path
+        let customPubPath = tmpDir.appendingPathComponent("custom_public_test.pub").path
+
+        try? FileManager.default.removeItem(atPath: privPath)
+        try? FileManager.default.removeItem(atPath: customPubPath)
+        defer {
+            try? FileManager.default.removeItem(atPath: privPath)
+            try? FileManager.default.removeItem(atPath: customPubPath)
+        }
+
+        try KeyFileManager.generateKeyPairFiles(
+            type: .ed25519,
+            privatePath: privPath,
+            publicPath: customPubPath
+        )
+
+        #expect(FileManager.default.fileExists(atPath: customPubPath))
+        #expect(!FileManager.default.fileExists(atPath: privPath + ".pub"))
+    }
 }
