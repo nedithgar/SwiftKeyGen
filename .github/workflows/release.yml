@@ -105,16 +105,27 @@ jobs:
           VERSION="${{ steps.extract.outputs.version }}"
           DATE=$(date -u +%Y-%m-%d)
           TAG="v$VERSION"
-          # Determine previous tag (already computed in earlier step by reusing API again if necessary)
+          
+          # Determine previous tag
           PREV_TAG=$(git tag --list 'v*' --sort=-creatordate | head -n1 || true)
           if [[ "$PREV_TAG" == "$TAG" ]]; then
-            PREV_TAG="" # ignore same tag
+            PREV_TAG="" # Ignore same tag
           fi
-          if [[ -f CHANGELOG.md ]]; then
-            if grep -q "^## $VERSION" CHANGELOG.md; then
-              echo "Changelog already contains section for $VERSION; skipping update."; echo "updated=false" >> $GITHUB_OUTPUT; echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT; exit 0
-            fi
+
+          # Ensure changelog file exists and is formatted
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "CHANGELOG.md not found, creating a new one."
+            echo "# Changelog" > CHANGELOG.md
           fi
+
+          # Check for existing section for this version
+          if grep -q "^## $VERSION" CHANGELOG.md; then
+            echo "Changelog already contains section for $VERSION; skipping update." 
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Collect commits between previous tag (if exists) and HEAD
           if git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
             RANGE="$PREV_TAG..HEAD"
@@ -122,54 +133,57 @@ jobs:
             FIRST=$(git rev-list --max-parents=0 HEAD)
             RANGE="$FIRST..HEAD"
           fi
+          
+          # Extract commits and filter out those marked [skip release]
           COMMITS=$(git log --no-merges --pretty=format:'- %s' $RANGE | grep -v '\[skip release\]' || true)
           if [[ -z "$COMMITS" ]]; then
             COMMITS='- Internal maintenance'
           fi
-          # Only update the default branch (e.g., main). Skip on PRs and other refs.
-          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
-            echo "Not on main (ref=${{ github.ref }}); skipping changelog update.";
-            echo "updated=false" >> $GITHUB_OUTPUT;
-            echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT;
-            exit 0;
+
+          # Format new changelog section
+          NEW_CONTENT="## $VERSION - $DATE\n$COMMITS\n"
+
+          # Prepend or append to changelog
+          if [[ "$PREV_TAG" != "" ]]; then
+            NEW_CONTENT+=$(cat CHANGELOG.md)
           fi
-          # Create or prepend changelog
-          if [[ -f CHANGELOG.md ]]; then
-            NEW_CONTENT=$( { echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; cat CHANGELOG.md; } )
-          else
-            NEW_CONTENT=$( { echo "# Changelog"; echo; echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; } )
-          fi
+
           # Ensure jq is available for JSON handling
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update -y >/dev/null 2>&1 || true
             sudo apt-get install -y jq >/dev/null 2>&1 || true
           fi
+
           # Prepare API parameters
           OWNER_REPO="${GITHUB_REPOSITORY}"
           FILE_PATH="CHANGELOG.md"
           REF_NAME="${{ github.ref_name }}"
           API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
+
           # Get existing file sha on branch
           EXISTING_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
           SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
+
           # Base64 encode content without line wraps
-          if base64 --help 2>&1 | grep -q "-w"; then
-            B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
-          else
-            B64=$(printf "%s" "$NEW_CONTENT" | base64)
-          fi
-          PAYLOAD=$(jq -n --arg msg "chore: update CHANGELOG for v$VERSION" --arg content "$B64" --arg branch "$REF_NAME" --arg sha "$SHA" '{message:$msg, content:$content, branch:$branch} + ( $sha|length>0 ? {sha:$sha} : {} )')
-          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
+          B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
+
+          # Prepare payload for GitHub API
+          PAYLOAD=$(jq -n --arg msg "chore: update CHANGELOG for v$VERSION" --arg content "$B64" --arg branch "$REF_NAME" --arg sha "$SHA" \
+            '{message:$msg, content:$content, branch:$branch} + ( $sha|length>0 ? {sha:$sha} : {} )')
+
+          # Update file using GitHub API
+          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
+          
           HEAD_SHA=$(echo "$RESP" | jq -r '.commit.sha // empty')
           if [[ -z "$HEAD_SHA" ]]; then
             echo "Failed to update CHANGELOG via API" >&2
             echo "$RESP" >&2
             exit 1
           fi
+
           echo "updated=true" >> $GITHUB_OUTPUT
           echo "head_after_changelog=$HEAD_SHA" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build Release Binaries (${{ matrix.os }})
