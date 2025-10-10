@@ -99,6 +99,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Resolve auth token safely (prefer GITHUB_TOKEN env, fallback to GH_TOKEN)
+          TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+          if [[ -z "$TOKEN" ]]; then
+            echo "No GitHub token available in environment (GITHUB_TOKEN/GH_TOKEN)." >&2
+            exit 1
+          fi
           VERSION="${{ steps.extract.outputs.version }}"
           DATE=$(date -u +%Y-%m-%d)
           TAG="v$VERSION"
@@ -158,18 +164,23 @@ jobs:
           API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
 
           # Get existing file sha on branch
-          EXISTING_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
+          EXISTING_JSON=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
           SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
 
           # Base64 encode content without line wraps
           B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
 
-          # Prepare payload for GitHub API
-          PAYLOAD=$(jq -n --arg msg "chore: update CHANGELOG for v$VERSION" --arg content "$B64" --arg branch "$REF_NAME" --arg sha "$SHA" \
-            '{message:$msg, content:$content, branch:$branch} + ( $sha|length>0 ? {sha:$sha} : {} )')
+          # Prepare payload for GitHub API (avoid shell quoting pitfalls in jq filter)
+          PAYLOAD=$(jq -n \
+            --arg msg "chore: update CHANGELOG for v$VERSION" \
+            --arg content "$B64" \
+            --arg branch "$REF_NAME" \
+            --arg sha "$SHA" \
+            '({message:$msg, content:$content, branch:$branch}) as $base
+             | if ($sha|length) > 0 then $base + {sha:$sha} else $base end')
 
           # Update file using GitHub API
-          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
           
           HEAD_SHA=$(echo "$RESP" | jq -r '.commit.sha // empty')
