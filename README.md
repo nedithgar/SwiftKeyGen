@@ -1,5 +1,10 @@
 # SwiftKeyGen
 
+[![CI](https://github.com/nedithgar/SwiftKeyGen/actions/workflows/ci.yml/badge.svg)](https://github.com/nedithgar/SwiftKeyGen/actions/workflows/ci.yml)
+[![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift&logoColor=white)](https://www.swift.org)
+[![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20macCatalyst%20%7C%20visionOS-blue)](Package.swift)
+[![Linux](https://img.shields.io/badge/Linux-experimental-lightgrey?logo=linux&logoColor=black)](#platform-support)
+
 A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms.
 
 > [!WARNING]
