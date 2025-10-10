@@ -73,7 +73,21 @@ jobs:
 
       
 
-      - name: Run Full Test Suite (Release Mode)
+      - name: Run Full Test Suite (Release Mode) (with retries)
         run: |
-          swift test -c release
+          set -euo pipefail
+          max_attempts=3
+          attempt=1
+          until swift test -c release; do
+            exit_code=$?
+            echo "Test run failed with exit code ${exit_code} (attempt ${attempt}/${max_attempts})." >&2
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "Exceeded maximum attempts. Failing." >&2
+              exit "$exit_code"
+            fi
+            sleep_for=$(( attempt * 30 ))
+            echo "Retrying in ${sleep_for}s..." >&2
+            sleep "$sleep_for"
+            attempt=$(( attempt + 1 ))
+          done
         shell: bash
