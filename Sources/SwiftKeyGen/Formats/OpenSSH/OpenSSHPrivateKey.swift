@@ -191,11 +191,8 @@ public struct OpenSSHPrivateKey {
         var encryptedData = encrypted.encode()
         let currentLength = encryptedData.count
         let remainder = currentLength % blockSize
-        // OpenSSH-style padding: always pad to the block size using ascending
-        // byte values (1,2,3,...) even when already aligned. This mirrors
-        // PKCS#7 semantics (full block padding) used by upstream.
-        let paddingLength = (remainder == 0) ? blockSize : (blockSize - remainder)
-        if paddingLength > 0 {
+        if remainder != 0 {
+            let paddingLength = blockSize - remainder
             for i in 1...paddingLength {
                 encryptedData.append(UInt8(i))
             }
