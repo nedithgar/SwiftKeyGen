@@ -34,7 +34,11 @@ let package = Package(
             ]),
         .testTarget(
             name: "SwiftKeyGenTests",
-            dependencies: ["SwiftKeyGen"]
+            dependencies: ["SwiftKeyGen"],
+            exclude: [
+                // Exclude documentation-only file to avoid SwiftPM unhandled file warnings
+                "Integration/IntegrationTestTODO.md"
+            ]
         ),
         .executableTarget(
             name: "SwiftKeyGenCLI",
