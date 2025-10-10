@@ -202,36 +202,6 @@ jobs:
       - name: List Artifacts
         run: ls -alR
 
-      - name: Extract Changelog Section
-        id: changelog
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ needs.preflight.outputs.version }}"
-          if [[ -f CHANGELOG.md ]]; then
-            echo "Extracting changelog for $VERSION"
-            # Extract the section that starts with '## <version>' and goes until next '## '
-            # Preserve the '## <version>' header line
-            awk -v ver="$VERSION" '
-              BEGIN{in=0}
-              /^## /{
-                if(in){exit}
-                # Match version number immediately after ##, allowing optional space/dash/date after
-                if($0 ~ ("^## " ver "($|[[:space:]]|-)")) { in=1; print; next }
-              }
-              in{ print }
-            ' CHANGELOG.md > release_body.md || true
-            # If found, also include a minimal prolog header for context in the release body
-            if [[ ! -s release_body.md ]]; then
-              echo "No dedicated section for ${VERSION}." > release_body.md
-              echo "\nChanges:" >> release_body.md
-              echo "\n- Internal maintenance" >> release_body.md
-            fi
-          else
-            echo "CHANGELOG.md not found. Auto-generated release." > release_body.md
-          fi
-          echo "--- Release Notes Preview ---"; cat release_body.md
-
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
@@ -241,7 +211,7 @@ jobs:
           draft: false
           prerelease: false
           target_commitish: ${{ github.sha }}
-          body_path: release_body.md
+          generate_release_notes: true
           files: |
             **/swiftkeygen-*.tar.gz
             **/swiftkeygen-*.tar.gz.sha256
@@ -249,28 +219,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-changelog:
-    name: Update CHANGELOG post-release
+    name: Update CHANGELOG with release notes
     runs-on: ubuntu-latest
     needs: [preflight, create-release]
     if: needs.preflight.outputs.release_exists == 'false'
     steps:
-      - name: Checkout (full history)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch tags
-        run: |
-          git fetch --tags --force --prune
-
-      - name: Update CHANGELOG.md for released version
+      - name: Update CHANGELOG.md using generated release notes
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Resolve auth token safely (prefer GITHUB_TOKEN env, fallback to GH_TOKEN)
+
           TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
           if [[ -z "$TOKEN" ]]; then
             echo "No GitHub token available in environment (GITHUB_TOKEN/GH_TOKEN)." >&2
@@ -280,55 +241,7 @@ jobs:
           VERSION="${{ needs.preflight.outputs.version }}"
           TAG="${{ needs.preflight.outputs.tag }}"
           DATE=$(date -u +%Y-%m-%d)
-
-          # Ensure changelog file exists and is formatted
-          if [[ ! -f CHANGELOG.md ]]; then
-            echo "CHANGELOG.md not found, creating a new one."
-            {
-              echo "# Changelog"
-              echo
-            } > CHANGELOG.md
-          else
-            # Ensure it has a top-level header once
-            if ! grep -q "^# Changelog" CHANGELOG.md; then
-              TMP=$(mktemp)
-              printf "# Changelog\n\n%s" "$(cat CHANGELOG.md)" > "$TMP"
-              mv "$TMP" CHANGELOG.md
-            fi
-          fi
-
-          # Skip if section already exists (matches e.g. '## 1.2.3 - 2025-10-10')
-          if grep -Eq "^## ${VERSION}( | -)" CHANGELOG.md; then
-            echo "Changelog already contains section for $VERSION; skipping update."
-            exit 0
-          fi
-
-          # Discover previous tag (excluding the current one)
-          PREV_TAG=$(git tag --list 'v*' --sort=-creatordate | grep -v "^$TAG$" | head -n1 || true)
-
-          # Build range for commits up to the release tag
-          if [[ -n "$PREV_TAG" ]] && git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
-            RANGE="$PREV_TAG..$TAG"
-          else
-            FIRST=$(git rev-list --max-parents=0 "$TAG" | tail -n1)
-            RANGE="$FIRST..$TAG"
-          fi
-
-          # Extract commits and filter out those marked [skip release]
-          COMMITS=$(git log --no-merges --pretty=format:'- %s' $RANGE | grep -v '\[skip release\]' || true)
-          if [[ -z "$COMMITS" ]]; then
-            COMMITS='- Internal maintenance'
-          fi
-
-          # Read existing content
-          EXISTING=$(cat CHANGELOG.md)
-
-          # Remove any duplicate header that might be re-prepended
-          EXISTING_NO_HEADER=$(echo "$EXISTING" | sed '1{/^# Changelog$/d;}' )
-
-          # Format new changelog section and prepend under header
-          NEW_SECTION="## $VERSION - $DATE\n$COMMITS\n\n"
-          NEW_CONTENT="# Changelog\n\n${NEW_SECTION}${EXISTING_NO_HEADER}"
+          REF_NAME="${{ github.ref_name }}"
 
           # Ensure jq is available for JSON handling
           if ! command -v jq >/dev/null 2>&1; then
@@ -336,34 +249,60 @@ jobs:
             sudo apt-get install -y jq >/dev/null 2>&1 || true
           fi
 
-          # Prepare API parameters
-          OWNER_REPO="${GITHUB_REPOSITORY}"
-          FILE_PATH="CHANGELOG.md"
-          REF_NAME="${{ github.ref_name }}"
-          API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
+          # Fetch the created release by tag and extract the auto-generated body
+          REL_API="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
+          REL_JSON=$(curl -sS -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "$REL_API")
+          BODY=$(echo "$REL_JSON" | jq -r '.body // empty')
+          if [[ -z "$BODY" ]]; then
+            echo "Release body is empty; nothing to append to CHANGELOG. Skipping."
+            exit 0
+          fi
 
-          # Get existing file sha on branch
+          # Get existing CHANGELOG.md (if any) from the branch
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/CHANGELOG.md"
           EXISTING_JSON=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
           SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
+          CONTENT_B64=$(echo "$EXISTING_JSON" | jq -r '.content // empty')
+          ENCODING=$(echo "$EXISTING_JSON" | jq -r '.encoding // empty')
+
+          if [[ -n "$CONTENT_B64" && "$ENCODING" == "base64" ]]; then
+            EXISTING=$(echo "$CONTENT_B64" | tr -d '\n' | base64 -d)
+          else
+            EXISTING=""
+          fi
+
+          # Skip if section already exists
+          if grep -Eq "^## ${VERSION}( | -)" <<< "$EXISTING"; then
+            echo "CHANGELOG already contains section for $VERSION; skipping update."
+            exit 0
+          fi
+
+          # Normalize to ensure a single top-level header
+          if grep -q "^# Changelog" <<< "$EXISTING"; then
+            EXISTING_NO_HEADER=$(echo "$EXISTING" | sed '1{/^# Changelog$/d;}' | sed '1{/^$/d;}')
+          else
+            EXISTING_NO_HEADER="$EXISTING"
+          fi
+
+          NEW_SECTION="## $VERSION - $DATE\n\n$BODY\n\n"
+          NEW_CONTENT="# Changelog\n\n${NEW_SECTION}${EXISTING_NO_HEADER}"
 
           # Base64 encode content without line wraps (portable across GNU/BSD)
           if base64 --help 2>&1 | grep -q "-w"; then
             B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
           else
-            # BSD base64 wraps lines by default; strip newlines afterward
             B64=$(printf "%s" "$NEW_CONTENT" | base64 | tr -d '\n')
           fi
 
-          # Prepare payload for GitHub API (avoid shell quoting pitfalls in jq filter)
+          # Prepare payload for GitHub API
           PAYLOAD=$(jq -n \
-            --arg msg "chore: update CHANGELOG for v$VERSION" \
+            --arg msg "chore: update CHANGELOG with generated release notes for v$VERSION" \
             --arg content "$B64" \
             --arg branch "$REF_NAME" \
             --arg sha "$SHA" \
             '({message:$msg, content:$content, branch:$branch}) as $base
              | if ($sha|length) > 0 then $base + {sha:$sha} else $base end')
 
-          # Update file using GitHub API
           RESP=$(curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
 
@@ -373,8 +312,8 @@ jobs:
             echo "$RESP" >&2
             exit 1
           fi
-
           echo "CHANGELOG updated at commit $HEAD_SHA"
+
 
   release-exists-note:
     name: Release Already Exists (Skip)
