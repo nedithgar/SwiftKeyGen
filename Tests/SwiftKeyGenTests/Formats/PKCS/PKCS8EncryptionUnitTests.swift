@@ -64,7 +64,7 @@ struct PKCS8EncryptionUnitTests {
             #expect(maybeUnpadded != plain)
         } else {
             // Unpadding failed as expected
-            #expect(true)
+            #expect(Bool(true))
         }
     }
 
