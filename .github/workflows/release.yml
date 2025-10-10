@@ -284,8 +284,8 @@ jobs:
             EXISTING_NO_HEADER="$EXISTING"
           fi
 
-          NEW_SECTION="## $VERSION - $DATE\n\n$BODY\n\n"
-          NEW_CONTENT="# Changelog\n\n${NEW_SECTION}${EXISTING_NO_HEADER}"
+          # Build the new content with real newlines (avoid literal \n sequences)
+          NEW_CONTENT=$(printf "# Changelog\n\n## %s - %s\n\n%s\n\n%s\n" "$VERSION" "$DATE" "$BODY" "$EXISTING_NO_HEADER")
 
           # Base64 encode content without line wraps (portable across GNU/BSD)
           if base64 --help 2>&1 | grep -q "-w"; then
