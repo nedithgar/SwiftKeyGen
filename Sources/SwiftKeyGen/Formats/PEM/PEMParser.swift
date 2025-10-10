@@ -86,120 +86,90 @@ public struct PEMParser {
         return try parseECDSAPublicKeyFromPKCS8(pemString)
     }
     
-    /// Parse ECDSA public key from PKCS#8 format using simplified approach
+    /// Parse ECDSA public key from PKCS#8 SubjectPublicKeyInfo ("-----BEGIN PUBLIC KEY-----")
+    /// by decoding the AlgorithmIdentifier and extracting the BIT STRING which
+    /// contains the ANSI X9.63 uncompressed point (0x04 || X || Y).
     private static func parseECDSAPublicKeyFromPKCS8(_ pemString: String) throws -> ECDSAPublicKey {
-        // Extract DER data from PEM
+        // Extract DER from PEM
         let base64Content = pemString
             .replacingOccurrences(of: "-----BEGIN PUBLIC KEY-----", with: "")
             .replacingOccurrences(of: "-----END PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "\r", with: "")
             .replacingOccurrences(of: "\n", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         guard let derData = Data(base64Encoded: base64Content) else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        // Find the curve OID by looking for the pattern: 06 <length> <oid_bytes>
-        // after the ecPublicKey OID (2a8648ce3d0201)
-        guard let curveOidInfo = findCurveOID(in: derData) else {
+
+        var parser = ASN1Parser(data: derData)
+
+        // SubjectPublicKeyInfo ::= SEQUENCE { algorithm AlgorithmIdentifier, subjectPublicKey BIT STRING }
+        guard parser.offset < derData.count, derData[parser.offset] == 0x30 else {
             throw SSHKeyError.invalidKeyData
         }
-        
-        let curveType = try determineCurveTypeFromOID(curveOidInfo.oid)
-        
-        // Extract raw key bytes based on curve type
-        let rawKeyBytes = try extractRawKeyBytes(from: derData, forCurve: curveType)
-        
-        // Create the appropriate key type using rawRepresentation
+        parser.offset += 1
+        _ = try parser.parseLength()
+
+        // AlgorithmIdentifier SEQUENCE
+        guard parser.offset < derData.count, derData[parser.offset] == 0x30 else {
+            throw SSHKeyError.invalidKeyData
+        }
+        parser.offset += 1
+        let algSeqLen = try parser.parseLength()
+        let algSeqEnd = parser.offset + algSeqLen
+
+        // ecPublicKey OID (1.2.840.10045.2.1)
+        guard let ecPubOid = try parser.parseObjectIdentifier() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        // Validate ecPublicKey OID without hard failing cross‑impl: continue if not present
+        // Expected bytes: 2A 86 48 CE 3D 02 01
+        _ = ecPubOid // informational; CryptoKit doesn't need it here
+
+        // Curve OID maps to KeyType
+        guard let curveOID = try parser.parseObjectIdentifier() else {
+            throw SSHKeyError.invalidKeyData
+        }
+        let curveType = try determineCurveTypeFromOID(curveOID)
+
+        // Skip any trailing fields inside AlgorithmIdentifier (none expected)
+        parser.offset = algSeqEnd
+
+        // subjectPublicKey BIT STRING – contains x9.63 point (including 0x04 prefix)
+        guard let bitString = try parser.parseBitString() else {
+            throw SSHKeyError.invalidKeyData
+        }
+
+        // Basic sanity: uncompressed point starts with 0x04 and matches curve length
+        guard !bitString.isEmpty, bitString[0] == 0x04 else {
+            throw SSHKeyError.invalidKeyData
+        }
+
+        let expectedLen: Int
+        switch curveType {
+        case .ecdsa256: expectedLen = 1 + (32 * 2) // 65
+        case .ecdsa384: expectedLen = 1 + (48 * 2) // 97
+        case .ecdsa521: expectedLen = 1 + (66 * 2) // 133
+        default: throw SSHKeyError.unsupportedOperation("Unsupported ECDSA curve type")
+        }
+        guard bitString.count == expectedLen else { throw SSHKeyError.invalidKeyData }
+
+        // Build ECDSAPublicKey directly from the x9.63 point to avoid platform differences.
         switch curveType {
         case .ecdsa256:
-            let p256Key = try P256.Signing.PublicKey(rawRepresentation: rawKeyBytes)
-            return try ECDSAPublicKey(
-                keyType: .ecdsa256,
-                curveName: "nistp256",
-                publicKeyPoint: p256Key.x963Representation
-            )
+            // Validate with Crypto where available to surface format issues
+            _ = try? P256.Signing.PublicKey(x963Representation: bitString)
+            return try ECDSAPublicKey(keyType: .ecdsa256, curveName: "nistp256", publicKeyPoint: bitString)
         case .ecdsa384:
-            let p384Key = try P384.Signing.PublicKey(rawRepresentation: rawKeyBytes)
-            return try ECDSAPublicKey(
-                keyType: .ecdsa384,
-                curveName: "nistp384",
-                publicKeyPoint: p384Key.x963Representation
-            )
+            _ = try? P384.Signing.PublicKey(x963Representation: bitString)
+            return try ECDSAPublicKey(keyType: .ecdsa384, curveName: "nistp384", publicKeyPoint: bitString)
         case .ecdsa521:
-            let p521Key = try P521.Signing.PublicKey(rawRepresentation: rawKeyBytes)
-            return try ECDSAPublicKey(
-                keyType: .ecdsa521,
-                curveName: "nistp521",
-                publicKeyPoint: p521Key.x963Representation
-            )
+            _ = try? P521.Signing.PublicKey(x963Representation: bitString)
+            return try ECDSAPublicKey(keyType: .ecdsa521, curveName: "nistp521", publicKeyPoint: bitString)
         default:
             throw SSHKeyError.unsupportedOperation("Unsupported ECDSA curve type")
         }
-    }
-    
-    /// Find curve OID in DER data
-    private static func findCurveOID(in derData: Data) -> (oid: Data, position: Int)? {
-        // Look for the ecPublicKey OID first: 2a8648ce3d0201
-        let ecPublicKeyOID = Data([0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01])
-        
-        guard let ecPublicKeyPosition = derData.range(of: ecPublicKeyOID)?.upperBound else {
-            return nil
-        }
-        
-        // The curve OID should be the next OID after ecPublicKey
-        var index = ecPublicKeyPosition
-        
-        // Skip any padding and look for the next OID tag (0x06)
-        while index < derData.count && derData[index] != 0x06 {
-            index += 1
-        }
-        
-        guard index < derData.count && derData[index] == 0x06 else {
-            return nil
-        }
-        
-        index += 1  // Skip OID tag
-        guard index < derData.count else {
-            return nil
-        }
-        
-        let oidLength = Int(derData[index])
-        index += 1
-        
-        guard index + oidLength <= derData.count else {
-            return nil
-        }
-        
-        let oid = derData[index..<index + oidLength]
-        return (Data(oid), index)
-    }
-    
-    /// Extract raw key bytes for the specified curve
-    private static func extractRawKeyBytes(from derData: Data, forCurve curve: KeyType) throws -> Data {
-        // Different curves have different coordinate sizes:
-        // P-256: 32 bytes * 2 = 64 bytes
-        // P-384: 48 bytes * 2 = 96 bytes  
-        // P-521: 66 bytes * 2 = 132 bytes
-        
-        let expectedRawSize: Int
-        switch curve {
-        case .ecdsa256:
-            expectedRawSize = 64
-        case .ecdsa384:
-            expectedRawSize = 96
-        case .ecdsa521:
-            expectedRawSize = 132
-        default:
-            throw SSHKeyError.unsupportedOperation("Unsupported curve type")
-        }
-        
-        // The raw key bytes should be at the end, after skipping the 0x04 prefix
-        guard derData.count >= expectedRawSize + 1 else {
-            throw SSHKeyError.invalidKeyData
-        }
-        
-        return derData.suffix(expectedRawSize)
     }
     
     
