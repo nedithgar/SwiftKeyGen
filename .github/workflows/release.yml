@@ -16,8 +16,6 @@ jobs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
       release_exists: ${{ steps.check_release.outputs.release_exists }}
-      head_after_changelog: ${{ steps.changelog_update.outputs.head_after_changelog }}
-      changelog_updated: ${{ steps.changelog_update.outputs.updated }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,111 +90,6 @@ jobs:
             exit 1
           fi
           echo "Version is not a downgrade."
-
-      - name: Update CHANGELOG.md (insert new section if missing)
-        id: changelog_update
-        if: steps.check_release.outputs.release_exists == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Resolve auth token safely (prefer GITHUB_TOKEN env, fallback to GH_TOKEN)
-          TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-          if [[ -z "$TOKEN" ]]; then
-            echo "No GitHub token available in environment (GITHUB_TOKEN/GH_TOKEN)." >&2
-            exit 1
-          fi
-          VERSION="${{ steps.extract.outputs.version }}"
-          DATE=$(date -u +%Y-%m-%d)
-          TAG="v$VERSION"
-          
-          # Determine previous tag
-          PREV_TAG=$(git tag --list 'v*' --sort=-creatordate | head -n1 || true)
-          if [[ "$PREV_TAG" == "$TAG" ]]; then
-            PREV_TAG="" # Ignore same tag
-          fi
-
-          # Ensure changelog file exists and is formatted
-          if [[ ! -f CHANGELOG.md ]]; then
-            echo "CHANGELOG.md not found, creating a new one."
-            echo "# Changelog" > CHANGELOG.md
-          fi
-
-          # Check for existing section for this version
-          if grep -q "^## $VERSION" CHANGELOG.md; then
-            echo "Changelog already contains section for $VERSION; skipping update." 
-            echo "updated=false" >> $GITHUB_OUTPUT
-            echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Collect commits between previous tag (if exists) and HEAD
-          if git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
-            RANGE="$PREV_TAG..HEAD"
-          else
-            FIRST=$(git rev-list --max-parents=0 HEAD)
-            RANGE="$FIRST..HEAD"
-          fi
-          
-          # Extract commits and filter out those marked [skip release]
-          COMMITS=$(git log --no-merges --pretty=format:'- %s' $RANGE | grep -v '\[skip release\]' || true)
-          if [[ -z "$COMMITS" ]]; then
-            COMMITS='- Internal maintenance'
-          fi
-
-          # Format new changelog section
-          NEW_CONTENT="## $VERSION - $DATE\n$COMMITS\n"
-
-          # Prepend or append to changelog
-          if [[ "$PREV_TAG" != "" ]]; then
-            NEW_CONTENT+=$(cat CHANGELOG.md)
-          fi
-
-          # Ensure jq is available for JSON handling
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -y >/dev/null 2>&1 || true
-            sudo apt-get install -y jq >/dev/null 2>&1 || true
-          fi
-
-          # Prepare API parameters
-          OWNER_REPO="${GITHUB_REPOSITORY}"
-          FILE_PATH="CHANGELOG.md"
-          REF_NAME="${{ github.ref_name }}"
-          API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
-
-          # Get existing file sha on branch
-          EXISTING_JSON=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
-          SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
-
-          # Base64 encode content without line wraps
-          B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
-
-          # Prepare payload for GitHub API (avoid shell quoting pitfalls in jq filter)
-          PAYLOAD=$(jq -n \
-            --arg msg "chore: update CHANGELOG for v$VERSION" \
-            --arg content "$B64" \
-            --arg branch "$REF_NAME" \
-            --arg sha "$SHA" \
-            '({message:$msg, content:$content, branch:$branch}) as $base
-             | if ($sha|length) > 0 then $base + {sha:$sha} else $base end')
-
-          # Update file using GitHub API
-          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
-          
-          HEAD_SHA=$(echo "$RESP" | jq -r '.commit.sha // empty')
-          if [[ -z "$HEAD_SHA" ]]; then
-            echo "Failed to update CHANGELOG via API" >&2
-            echo "$RESP" >&2
-            exit 1
-          fi
-
-          echo "updated=true" >> $GITHUB_OUTPUT
-          echo "head_after_changelog=$HEAD_SHA" >> $GITHUB_OUTPUT
-        env:
-          # Provide token as environment variable for API calls; github.token is the recommended default
-          GITHUB_TOKEN: ${{ github.token }}
-          # Secondary fallback if needed by other steps
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build Release Binaries (${{ matrix.os }})
@@ -300,12 +193,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch Updated Commit (if changelog updated)
-        if: needs.preflight.outputs.changelog_updated == 'true'
-        run: |
-          git fetch origin ${GITHUB_REF_NAME} --depth=1
-          git checkout ${{ needs.preflight.outputs.head_after_changelog }}
-
       - name: Gather Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -340,13 +227,124 @@ jobs:
           name: SwiftKeyGen ${{ needs.preflight.outputs.tag }}
           draft: false
           prerelease: false
-          target_commitish: ${{ needs.preflight.outputs.head_after_changelog || github.sha }}
+          target_commitish: ${{ github.sha }}
           body_path: release_body.md
           files: |
             **/swiftkeygen-*.tar.gz
             **/swiftkeygen-*.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-changelog:
+    name: Update CHANGELOG post-release
+    runs-on: ubuntu-latest
+    needs: [preflight, create-release]
+    if: needs.preflight.outputs.release_exists == 'false'
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: |
+          git fetch --tags --force --prune
+
+      - name: Update CHANGELOG.md for released version
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Resolve auth token safely (prefer GITHUB_TOKEN env, fallback to GH_TOKEN)
+          TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+          if [[ -z "$TOKEN" ]]; then
+            echo "No GitHub token available in environment (GITHUB_TOKEN/GH_TOKEN)." >&2
+            exit 1
+          fi
+
+          VERSION="${{ needs.preflight.outputs.version }}"
+          TAG="${{ needs.preflight.outputs.tag }}"
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Ensure changelog file exists and is formatted
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "CHANGELOG.md not found, creating a new one."
+            echo "# Changelog" > CHANGELOG.md
+          fi
+
+          # Skip if section already exists
+          if grep -q "^## $VERSION" CHANGELOG.md; then
+            echo "Changelog already contains section for $VERSION; skipping update."
+            exit 0
+          fi
+
+          # Discover previous tag (excluding the current one)
+          PREV_TAG=$(git tag --list 'v*' --sort=-creatordate | grep -v "^$TAG$" | head -n1 || true)
+
+          # Build range for commits up to the release tag
+          if [[ -n "$PREV_TAG" ]] && git rev-parse -q --verify "$PREV_TAG" >/dev/null 2>&1; then
+            RANGE="$PREV_TAG..$TAG"
+          else
+            FIRST=$(git rev-list --max-parents=0 "$TAG" | tail -n1)
+            RANGE="$FIRST..$TAG"
+          fi
+
+          # Extract commits and filter out those marked [skip release]
+          COMMITS=$(git log --no-merges --pretty=format:'- %s' $RANGE | grep -v '\[skip release\]' || true)
+          if [[ -z "$COMMITS" ]]; then
+            COMMITS='- Internal maintenance'
+          fi
+
+          # Format new changelog section
+          NEW_CONTENT="## $VERSION - $DATE\n$COMMITS\n"
+
+          # If previous tag exists, prepend to existing changelog content
+          if [[ -f CHANGELOG.md && -n "$PREV_TAG" ]]; then
+            NEW_CONTENT+=$(cat CHANGELOG.md)
+          fi
+
+          # Ensure jq is available for JSON handling
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y >/dev/null 2>&1 || true
+            sudo apt-get install -y jq >/dev/null 2>&1 || true
+          fi
+
+          # Prepare API parameters
+          OWNER_REPO="${GITHUB_REPOSITORY}"
+          FILE_PATH="CHANGELOG.md"
+          REF_NAME="${{ github.ref_name }}"
+          API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
+
+          # Get existing file sha on branch
+          EXISTING_JSON=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
+          SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
+
+          # Base64 encode content without line wraps
+          B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
+
+          # Prepare payload for GitHub API (avoid shell quoting pitfalls in jq filter)
+          PAYLOAD=$(jq -n \
+            --arg msg "chore: update CHANGELOG for v$VERSION" \
+            --arg content "$B64" \
+            --arg branch "$REF_NAME" \
+            --arg sha "$SHA" \
+            '({message:$msg, content:$content, branch:$branch}) as $base
+             | if ($sha|length) > 0 then $base + {sha:$sha} else $base end')
+
+          # Update file using GitHub API
+          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
+
+          HEAD_SHA=$(echo "$RESP" | jq -r '.commit.sha // empty')
+          if [[ -z "$HEAD_SHA" ]]; then
+            echo "Failed to update CHANGELOG via API" >&2
+            echo "$RESP" >&2
+            exit 1
+          fi
+
+          echo "CHANGELOG updated at commit $HEAD_SHA"
 
   release-exists-note:
     name: Release Already Exists (Skip)
