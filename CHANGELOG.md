@@ -1,0 +1,15 @@
+# Changelog\n\n## 0.1.0 - 2025-10-10\n\n## What's Changed
+* Refactor and enhance SSH key handling and integration tests by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/1
+* Add performance tests and policy for RSA key generation by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/2
+* Cleanup and refactor documentation and tests for clarity and performance improvements by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/3
+* Add comprehensive unit tests for cryptographic functionalities by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/4
+* Add version command and CI workflows by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/5
+* Refactor AES encryption methods for performance and clarity by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/8
+* Refactor PBKDF2 implementation and enhance CI for Ubuntu by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/9
+* Refactor Windows CI workflow and installation steps by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/10
+* Refactor unit tests and fix pointer handling in Data extension by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/11
+* Refactor ECDSA key parsing and update CI Swift installation by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/12
+* Remove Windows CI build proces by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/13
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/commits/v0.1.0\n\n
