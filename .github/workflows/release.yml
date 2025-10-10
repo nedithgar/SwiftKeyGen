@@ -181,6 +181,11 @@ jobs:
 
           echo "updated=true" >> $GITHUB_OUTPUT
           echo "head_after_changelog=$HEAD_SHA" >> $GITHUB_OUTPUT
+        env:
+          # Provide token as environment variable for API calls; github.token is the recommended default
+          GITHUB_TOKEN: ${{ github.token }}
+          # Secondary fallback if needed by other steps
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build Release Binaries (${{ matrix.os }})
