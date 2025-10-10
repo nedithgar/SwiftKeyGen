@@ -210,9 +210,22 @@ jobs:
           VERSION="${{ needs.preflight.outputs.version }}"
           if [[ -f CHANGELOG.md ]]; then
             echo "Extracting changelog for $VERSION"
-            awk -v ver="$VERSION" 'BEGIN{in=0} /^## /{ if(in){exit} if($0 ~ ver){in=1; next} } in{print}' CHANGELOG.md > release_body.md || true
+            # Extract the section that starts with '## <version>' and goes until next '## '
+            # Preserve the '## <version>' header line
+            awk -v ver="$VERSION" '
+              BEGIN{in=0}
+              /^## /{
+                if(in){exit}
+                # Match version number immediately after ##, allowing optional space/dash/date after
+                if($0 ~ ("^## " ver "($|[[:space:]]|-)")) { in=1; print; next }
+              }
+              in{ print }
+            ' CHANGELOG.md > release_body.md || true
+            # If found, also include a minimal prolog header for context in the release body
             if [[ ! -s release_body.md ]]; then
-              echo "No dedicated section for $VERSION; generating generic notes." > release_body.md
+              echo "No dedicated section for ${VERSION}." > release_body.md
+              echo "\nChanges:" >> release_body.md
+              echo "\n- Internal maintenance" >> release_body.md
             fi
           else
             echo "CHANGELOG.md not found. Auto-generated release." > release_body.md
@@ -271,11 +284,21 @@ jobs:
           # Ensure changelog file exists and is formatted
           if [[ ! -f CHANGELOG.md ]]; then
             echo "CHANGELOG.md not found, creating a new one."
-            echo "# Changelog" > CHANGELOG.md
+            {
+              echo "# Changelog"
+              echo
+            } > CHANGELOG.md
+          else
+            # Ensure it has a top-level header once
+            if ! grep -q "^# Changelog" CHANGELOG.md; then
+              TMP=$(mktemp)
+              printf "# Changelog\n\n%s" "$(cat CHANGELOG.md)" > "$TMP"
+              mv "$TMP" CHANGELOG.md
+            fi
           fi
 
-          # Skip if section already exists
-          if grep -q "^## $VERSION" CHANGELOG.md; then
+          # Skip if section already exists (matches e.g. '## 1.2.3 - 2025-10-10')
+          if grep -Eq "^## ${VERSION}( | -)" CHANGELOG.md; then
             echo "Changelog already contains section for $VERSION; skipping update."
             exit 0
           fi
@@ -297,13 +320,15 @@ jobs:
             COMMITS='- Internal maintenance'
           fi
 
-          # Format new changelog section
-          NEW_CONTENT="## $VERSION - $DATE\n$COMMITS\n"
+          # Read existing content
+          EXISTING=$(cat CHANGELOG.md)
 
-          # If previous tag exists, prepend to existing changelog content
-          if [[ -f CHANGELOG.md && -n "$PREV_TAG" ]]; then
-            NEW_CONTENT+=$(cat CHANGELOG.md)
-          fi
+          # Remove any duplicate header that might be re-prepended
+          EXISTING_NO_HEADER=$(echo "$EXISTING" | sed '1{/^# Changelog$/d;}' )
+
+          # Format new changelog section and prepend under header
+          NEW_SECTION="## $VERSION - $DATE\n$COMMITS\n\n"
+          NEW_CONTENT="# Changelog\n\n${NEW_SECTION}${EXISTING_NO_HEADER}"
 
           # Ensure jq is available for JSON handling
           if ! command -v jq >/dev/null 2>&1; then
@@ -321,8 +346,13 @@ jobs:
           EXISTING_JSON=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
           SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
 
-          # Base64 encode content without line wraps
-          B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
+          # Base64 encode content without line wraps (portable across GNU/BSD)
+          if base64 --help 2>&1 | grep -q "-w"; then
+            B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
+          else
+            # BSD base64 wraps lines by default; strip newlines afterward
+            B64=$(printf "%s" "$NEW_CONTENT" | base64 | tr -d '\n')
+          fi
 
           # Prepare payload for GitHub API (avoid shell quoting pitfalls in jq filter)
           PAYLOAD=$(jq -n \
