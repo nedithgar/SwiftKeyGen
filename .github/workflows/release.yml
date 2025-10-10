@@ -126,22 +126,48 @@ jobs:
           if [[ -z "$COMMITS" ]]; then
             COMMITS='- Internal maintenance'
           fi
+          # Only update the default branch (e.g., main). Skip on PRs and other refs.
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "Not on main (ref=${{ github.ref }}); skipping changelog update.";
+            echo "updated=false" >> $GITHUB_OUTPUT;
+            echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT;
+            exit 0;
+          fi
           # Create or prepend changelog
           if [[ -f CHANGELOG.md ]]; then
-            { echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; cat CHANGELOG.md; } > CHANGELOG.new && mv CHANGELOG.new CHANGELOG.md
+            NEW_CONTENT=$( { echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; cat CHANGELOG.md; } )
           else
-            { echo "# Changelog"; echo; echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; } > CHANGELOG.md
+            NEW_CONTENT=$( { echo "# Changelog"; echo; echo "## $VERSION - $DATE"; echo "$COMMITS"; echo; } )
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add CHANGELOG.md
-          git commit -m "chore: update CHANGELOG for v$VERSION" || echo "Nothing to commit"
-          # Do not push to avoid mismatch if running on PR; only push on main branch
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            git push origin HEAD:${{ github.ref_name }}
+          # Ensure jq is available for JSON handling
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y >/dev/null 2>&1 || true
+            sudo apt-get install -y jq >/dev/null 2>&1 || true
+          fi
+          # Prepare API parameters
+          OWNER_REPO="${GITHUB_REPOSITORY}"
+          FILE_PATH="CHANGELOG.md"
+          REF_NAME="${{ github.ref_name }}"
+          API="https://api.github.com/repos/${OWNER_REPO}/contents/${FILE_PATH}"
+          # Get existing file sha on branch
+          EXISTING_JSON=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "${API}?ref=${REF_NAME}" || true)
+          SHA=$(echo "$EXISTING_JSON" | jq -r '.sha // empty')
+          # Base64 encode content without line wraps
+          if base64 --help 2>&1 | grep -q "-w"; then
+            B64=$(printf "%s" "$NEW_CONTENT" | base64 -w 0)
+          else
+            B64=$(printf "%s" "$NEW_CONTENT" | base64)
+          fi
+          PAYLOAD=$(jq -n --arg msg "chore: update CHANGELOG for v$VERSION" --arg content "$B64" --arg branch "$REF_NAME" --arg sha "$SHA" '{message:$msg, content:$content, branch:$branch} + ( $sha|length>0 ? {sha:$sha} : {} )')
+          RESP=$(curl -sS -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API" -d "$PAYLOAD")
+          HEAD_SHA=$(echo "$RESP" | jq -r '.commit.sha // empty')
+          if [[ -z "$HEAD_SHA" ]]; then
+            echo "Failed to update CHANGELOG via API" >&2
+            echo "$RESP" >&2
+            exit 1
           fi
           echo "updated=true" >> $GITHUB_OUTPUT
-          echo "head_after_changelog=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "head_after_changelog=$HEAD_SHA" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
