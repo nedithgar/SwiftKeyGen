@@ -163,6 +163,7 @@ jobs:
         run: swift package resolve
 
       - name: Build (Release)
+        if: runner.os != 'Windows'
         run: swift build -c release
 
       # On Windows, explicitly build test bundles so we can run with --skip-build reliably
