@@ -206,7 +206,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        os: [ubuntu-latest, macos-26]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -217,18 +217,26 @@ jobs:
         run: |
           set -euxo pipefail
           SWIFT_VERSION=6.2
-          for DIST in ubuntu24.04 ubuntu22.04; do
-            TARBALL="swift-${SWIFT_VERSION}-RELEASE-${DIST}.tar.gz"
-            BASE_URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/${DIST}/swift-${SWIFT_VERSION}-RELEASE"
-            URL="${BASE_URL}/${TARBALL}"
-            echo "Attempting download: $URL"
-            if curl -fSOL "$URL"; then
-              tar -xzf "$TARBALL"
-              sudo mv "swift-${SWIFT_VERSION}-RELEASE-${DIST}" /opt/swift-${SWIFT_VERSION}
-              echo "/opt/swift-${SWIFT_VERSION}/usr/bin" >> "$GITHUB_PATH"
-              break
-            fi
-          done
+
+          # If the required Swift version is already available, skip installation.
+          if swift --version 2>/dev/null | grep -q "Swift version ${SWIFT_VERSION}"; then
+            echo "Swift ${SWIFT_VERSION} already installed on runner."
+          else
+            # Install Swiftly (official Swift.org installer/manager) and use it to install Swift ${SWIFT_VERSION}
+            ARCH="$(uname -m)"
+            SWIFTLY_TARBALL="swiftly-${ARCH}.tar.gz"
+            curl -fSLo "${SWIFTLY_TARBALL}" "https://download.swift.org/swiftly/linux/${SWIFTLY_TARBALL}"
+            tar zxf "${SWIFTLY_TARBALL}"
+            ./swiftly init --quiet-shell-followup
+            # Load environment so 'swiftly' is available in this step
+            . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+            # Install exact Swift version
+            swiftly install "${SWIFT_VERSION}"
+            # Persist Swiftly bin path for subsequent steps
+            echo "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/bin" >> "$GITHUB_PATH"
+            hash -r
+          fi
+
           swift --version
 
       - name: Install Swift 6.2 (macOS)
@@ -245,17 +253,11 @@ jobs:
           echo "$TOOLCHAIN" >> "$GITHUB_PATH"
           swift --version
 
-      - name: Install Swift 6.2 (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = '6.2'
-          winget install --id Swift.Toolchain -e --version $version --accept-source-agreements --accept-package-agreements
-          $toolchain = Get-ChildItem 'C:\Library\Developer\Toolchains' | Where-Object { $_.Name -like "*${version}*" } | Select-Object -First 1
-          if (-not $toolchain) { Write-Error 'Swift toolchain not found after install.' }
-          "$($toolchain.FullName)\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          swift --version
+      - name: Print Swift Version
+        run: swift --version
+
+      - name: Resolve Dependencies
+        run: swift package resolve
 
       - name: Build (Release)
         run: swift build -c release
@@ -266,9 +268,6 @@ jobs:
         run: |
           mkdir -p dist
           BIN_PATH=".build/release/swiftkeygen"
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            BIN_PATH=".build\\release\\swiftkeygen.exe"
-          fi
           cp "$BIN_PATH" "dist/"
           cp LICENSE dist/ || true
           ARCHIVE_NAME="swiftkeygen-${{ needs.preflight.outputs.version }}-${{ runner.os }}.tar.gz"
@@ -308,7 +307,10 @@ jobs:
           git checkout ${{ needs.preflight.outputs.head_after_changelog }}
 
       - name: Gather Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
+        with:
+          pattern: swiftkeygen-*.tar.gz*
+          merge-multiple: true
 
       - name: List Artifacts
         run: ls -alR
