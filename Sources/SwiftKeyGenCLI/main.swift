@@ -247,11 +247,15 @@ struct SwiftKeyGenCLI {
             }
             
             // Map --cipher to typed enum if provided
-            let selectedCipher: OpenSSHPrivateKey.EncryptionCipher? = cipher.flatMap { OpenSSHPrivateKey.EncryptionCipher(rawValue: $0) }
-            if let c = cipher, selectedCipher == nil {
-                print("Error: Unsupported cipher: \(c)")
-                print("Supported ciphers: \(OpenSSHPrivateKey.EncryptionCipher.allCases.map { $0.rawValue }.joined(separator: ", "))")
-                exit(1)
+            var selectedCipher: OpenSSHPrivateKey.EncryptionCipher? = nil
+            if let c = cipher {
+                // Validate against known ciphers for a friendly error
+                if !OpenSSHPrivateKey.EncryptionCipher.known.contains(where: { $0.rawValue == c }) {
+                    print("Error: Unsupported cipher: \(c)")
+                    print("Supported ciphers: \(OpenSSHPrivateKey.EncryptionCipher.known.map { $0.rawValue }.joined(separator: ", "))")
+                    exit(1)
+                }
+                selectedCipher = OpenSSHPrivateKey.EncryptionCipher(rawValue: c)
             }
 
             // Write private key with passphrase

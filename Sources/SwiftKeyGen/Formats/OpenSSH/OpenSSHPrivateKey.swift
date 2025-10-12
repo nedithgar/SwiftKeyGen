@@ -51,37 +51,54 @@ import BigInt
 ///   the exported constants) are documented; internal helpers intentionally
 ///   remain undocumented to keep focus on the stable surface area.
 public struct OpenSSHPrivateKey {
-    /// Type-safe list of selectable encryption ciphers for OpenSSH private keys.
+    // TODO: Wait for SE-0487: Extensible Enums
+    /// A type-safe wrapper for OpenSSH encryption cipher names used for
+    /// protecting private keys.
     ///
-    /// This mirrors the set supported by the internal cipher implementations
-    /// (AES-CTR/CBC, AES-GCM, 3DES-CBC, ChaCha20-Poly1305). The `.none` cipher
-    /// is intentionally not exposed for selection here because serialization
-    /// automatically uses `none` when no passphrase is provided.
-    public enum EncryptionCipher: String, CaseIterable {
-        case aes128ctr = "aes128-ctr"
-        case aes192ctr = "aes192-ctr"
-        case aes256ctr = "aes256-ctr"
-
-        case aes128cbc = "aes128-cbc"
-        case aes192cbc = "aes192-cbc"
-        case aes256cbc = "aes256-cbc"
-
-        case aes128gcm = "aes128-gcm@openssh.com"
-        case aes256gcm = "aes256-gcm@openssh.com"
-
-        case des3cbc = "3des-cbc"
-
-        case chacha20poly1305 = "chacha20-poly1305@openssh.com"
-
-        /// Library default cipher used when a passphrase is provided
-        /// and no explicit cipher is specified.
-        public static var `default`: EncryptionCipher {
-            // Map the existing default cipher string to the enum; fall back to .aes256ctr
-            return EncryptionCipher(rawValue: Cipher.defaultCipher) ?? .aes256ctr
-        }
+    /// - Important: This is a `RawRepresentable` string-backed type instead of
+    ///   an `enum` to allow forward- and backward-compatibility as OpenSSH
+    ///   evolves. Known ciphers are provided as static constants, and arbitrary
+    ///   cipher names can be created via `init(rawValue:)`.
+    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable {
+        public let rawValue: String
+        public init(rawValue: String) { self.rawValue = rawValue }
+        public init(stringLiteral value: String) { self.rawValue = value }
 
         /// OpenSSH wire-format name.
         public var name: String { rawValue }
+
+        // Known cipher constants (stable API surface)
+        public static let aes128ctr = EncryptionCipher(rawValue: "aes128-ctr")
+        public static let aes192ctr = EncryptionCipher(rawValue: "aes192-ctr")
+        public static let aes256ctr = EncryptionCipher(rawValue: "aes256-ctr")
+
+        public static let aes128cbc = EncryptionCipher(rawValue: "aes128-cbc")
+        public static let aes192cbc = EncryptionCipher(rawValue: "aes192-cbc")
+        public static let aes256cbc = EncryptionCipher(rawValue: "aes256-cbc")
+
+        public static let aes128gcm = EncryptionCipher(rawValue: "aes128-gcm@openssh.com")
+        public static let aes256gcm = EncryptionCipher(rawValue: "aes256-gcm@openssh.com")
+
+        public static let des3cbc = EncryptionCipher(rawValue: "3des-cbc")
+
+        public static let chacha20poly1305 = EncryptionCipher(rawValue: "chacha20-poly1305@openssh.com")
+
+        /// Library default cipher used when a passphrase is provided and no explicit
+        /// cipher is specified.
+        public static var `default`: EncryptionCipher {
+            EncryptionCipher(rawValue: Cipher.defaultCipher)
+        }
+
+        /// The set of ciphers known to this library version.
+        public static var known: [EncryptionCipher] {
+            [
+                .aes128ctr, .aes192ctr, .aes256ctr,
+                .aes128cbc, .aes192cbc, .aes256cbc,
+                .aes128gcm, .aes256gcm,
+                .des3cbc,
+                .chacha20poly1305,
+            ]
+        }
     }
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"

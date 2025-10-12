@@ -232,7 +232,7 @@ try KeyManager.updateComment(
 
 ### Programmatic OpenSSH Serialization
 
-SwiftKeyGen exposes a high-level API to serialize private keys into the OpenSSH proprietary format (openssh-key-v1). When a non-empty passphrase is provided, you can select an authenticated/encryption cipher via a type-safe enum.
+SwiftKeyGen exposes a high-level API to serialize private keys into the OpenSSH proprietary format (openssh-key-v1). When a non-empty passphrase is provided, you can select an authenticated/encryption cipher via a type-safe `EncryptionCipher` wrapper.
 
 ```swift
 import SwiftKeyGen
@@ -248,7 +248,7 @@ let encryptedDefault = try OpenSSHPrivateKey.serialize(
     passphrase: "secret"
 )
 
-// Encrypted with an explicit cipher (type-safe enum)
+// Encrypted with an explicit cipher (typed EncryptionCipher)
 let encryptedGCM = try OpenSSHPrivateKey.serialize(
     key: key,
     passphrase: "secret",
@@ -272,7 +272,7 @@ Supported ciphers (OpenSSH names):
 Notes:
 
 - To produce an unencrypted key, pass `nil` or an empty string for `passphrase`; the format will set cipher to `none` automatically.
-- The `swiftkeygen` CLI still accepts `-Z/--cipher` as a string (e.g., `aes256-ctr`) and validates it against the same set, mapping it to the enum internally.
+- The `swiftkeygen` CLI still accepts `-Z/--cipher` as a string (e.g., `aes256-ctr`) and validates it against the same set, mapping it to `EncryptionCipher` internally.
 
 ### Key Format Conversion
 
