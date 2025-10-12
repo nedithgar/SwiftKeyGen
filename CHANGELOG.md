@@ -2,6 +2,9 @@
 
 ## 0.1.1 - 2025-10-12
 
+## What's Changed
+* Make KeyFormat and KeyType conform to Codable by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/commit/29c0cbca50c3077a86b491b98b6129ca52dc5b99
+
 **Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.0...v0.1.1
 
 ## 0.1.0 - 2025-10-10
