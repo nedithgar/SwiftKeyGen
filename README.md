@@ -230,6 +230,50 @@ try KeyManager.updateComment(
 )
 ```
 
+### Programmatic OpenSSH Serialization
+
+SwiftKeyGen exposes a high-level API to serialize private keys into the OpenSSH proprietary format (openssh-key-v1). When a non-empty passphrase is provided, you can select an authenticated/encryption cipher via a type-safe enum.
+
+```swift
+import SwiftKeyGen
+
+let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "me@example.com")
+
+// Unencrypted (cipher = "none")
+let unencrypted = try OpenSSHPrivateKey.serialize(key: key)
+
+// Encrypted with default cipher (currently aes256-ctr)
+let encryptedDefault = try OpenSSHPrivateKey.serialize(
+    key: key,
+    passphrase: "secret"
+)
+
+// Encrypted with an explicit cipher (type-safe enum)
+let encryptedGCM = try OpenSSHPrivateKey.serialize(
+    key: key,
+    passphrase: "secret",
+    cipher: .aes256gcm
+)
+```
+
+Supported ciphers (OpenSSH names):
+
+- `.aes128ctr` ("aes128-ctr")
+- `.aes192ctr` ("aes192-ctr")
+- `.aes256ctr` ("aes256-ctr")
+- `.aes128cbc` ("aes128-cbc")
+- `.aes192cbc` ("aes192-cbc")
+- `.aes256cbc` ("aes256-cbc")
+- `.aes128gcm` ("aes128-gcm@openssh.com")
+- `.aes256gcm` ("aes256-gcm@openssh.com")
+- `.des3cbc` ("3des-cbc")
+- `.chacha20poly1305` ("chacha20-poly1305@openssh.com")
+
+Notes:
+
+- To produce an unencrypted key, pass `nil` or an empty string for `passphrase`; the format will set cipher to `none` automatically.
+- The `swiftkeygen` CLI still accepts `-Z/--cipher` as a string (e.g., `aes256-ctr`) and validates it against the same set, mapping it to the enum internally.
+
 ### Key Format Conversion
 
 ```swift
