@@ -218,6 +218,8 @@ public struct CertificateVerifier {
         case .ecdsa256, .ecdsa384, .ecdsa521:
             _ = try decoder.decodeString() // curve name
             _ = try decoder.decodeData() // public key point
+        default:
+            throw SSHKeyError.unsupportedKeyType
         }
         
         // Skip serial (8 bytes)

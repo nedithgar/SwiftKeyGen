@@ -165,6 +165,8 @@ public class CertifiedKey {
             self.certifiedKeyType = "ecdsa-sha2-nistp384-cert-v01@openssh.com"
         case .ecdsa521:
             self.certifiedKeyType = "ecdsa-sha2-nistp521-cert-v01@openssh.com"
+        default:
+            self.certifiedKeyType = key.keyType.rawValue + "-cert-v01@openssh.com"
         }
     }
     

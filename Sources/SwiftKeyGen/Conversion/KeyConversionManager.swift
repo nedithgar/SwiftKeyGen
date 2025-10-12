@@ -253,6 +253,8 @@ public struct KeyConversionManager {
             default:
                 throw SSHKeyError.unsupportedKeyType
             }
+        default:
+            throw SSHKeyError.unsupportedKeyType
         }
     }
     

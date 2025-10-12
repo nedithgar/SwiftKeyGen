@@ -191,6 +191,8 @@ public struct RandomArt {
             return 384
         case .ecdsa521:
             return 521
+        default:
+            return 0
         }
     }
 }

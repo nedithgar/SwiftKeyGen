@@ -326,9 +326,7 @@ public struct KeyManager {
         var pubKeyDecoder = SSHDecoder(data: publicKeyData)
         let keyTypeString = try pubKeyDecoder.decodeString()
         
-        guard let keyType = KeyType(rawValue: keyTypeString) else {
-            throw SSHKeyError.unsupportedKeyType
-        }
+        let keyType = KeyType(rawValue: keyTypeString)
         
         return KeyInfo(
             keyType: keyType,
