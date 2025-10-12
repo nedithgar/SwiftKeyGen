@@ -15,6 +15,16 @@ public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByString
     public init(rawValue: String) { self.rawValue = rawValue }
     public init(stringLiteral value: String) { self.rawValue = value }
 
+    internal enum BackingKeyType: String {
+        case rsa = "ssh-rsa"
+        case ed25519 = "ssh-ed25519"
+        case ecdsa256 = "ecdsa-sha2-nistp256"
+        case ecdsa384 = "ecdsa-sha2-nistp384"
+        case ecdsa521 = "ecdsa-sha2-nistp521"
+    }
+
+    internal var knownBacking: BackingKeyType? { BackingKeyType(rawValue: rawValue) }
+
     // Known algorithm constants (stable API surface)
     public static let rsa: KeyType = "ssh-rsa"
     public static let ed25519: KeyType = "ssh-ed25519"
@@ -97,12 +107,12 @@ public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByString
     // Codable as a single string value for backward compatibility with the
     // previous RawRepresentable enum implementation.
     public init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        self.rawValue = try c.decode(String.self)
+        let singleValueContainer = try decoder.singleValueContainer()
+        self.rawValue = try singleValueContainer.decode(String.self)
     }
 
     public func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        try c.encode(rawValue)
+        var singleValueContainer = encoder.singleValueContainer()
+        try singleValueContainer.encode(rawValue)
     }
 }

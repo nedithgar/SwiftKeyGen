@@ -51,7 +51,7 @@ import BigInt
 ///   the exported constants) are documented; internal helpers intentionally
 ///   remain undocumented to keep focus on the stable surface area.
 public struct OpenSSHPrivateKey {
-    // TODO: Wait for SE-0487: Extensible Enums
+    // TODO: Wait for SE-0487: Nonexhaustive Enums
     /// A type-safe wrapper for OpenSSH encryption cipher names used for
     /// protecting private keys.
     ///
