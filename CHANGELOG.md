@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 - 2025-10-12
+
+## What's Changed
+* Add support for importing RSA private keys and enhance OpenSSH serialization by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/14
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.1...v0.1.2
+
 ## 0.1.1 - 2025-10-12
 
 ## What's Changed
