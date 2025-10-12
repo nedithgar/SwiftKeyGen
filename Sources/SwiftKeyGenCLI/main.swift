@@ -246,12 +246,20 @@ struct SwiftKeyGenCLI {
                 exit(1)
             }
             
+            // Map --cipher to typed enum if provided
+            let selectedCipher: OpenSSHPrivateKey.EncryptionCipher? = cipher.flatMap { OpenSSHPrivateKey.EncryptionCipher(rawValue: $0) }
+            if let c = cipher, selectedCipher == nil {
+                print("Error: Unsupported cipher: \(c)")
+                print("Supported ciphers: \(OpenSSHPrivateKey.EncryptionCipher.allCases.map { $0.rawValue }.joined(separator: ", "))")
+                exit(1)
+            }
+
             // Write private key with passphrase
             let privateKeyData = try OpenSSHPrivateKey.serialize(
                 key: key,
                 passphrase: passphrase,
                 comment: key.comment,
-                cipher: cipher
+                cipher: selectedCipher
             )
             
             try privateKeyData.write(to: URL(fileURLWithPath: output))

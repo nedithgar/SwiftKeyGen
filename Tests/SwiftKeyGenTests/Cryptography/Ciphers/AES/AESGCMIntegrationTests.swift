@@ -10,7 +10,7 @@ struct AESGCMIntegrationTests {
         let key = try Ed25519KeyGenerator.generate(comment: "test@aesgcm")
         
         // Test with both AES-GCM ciphers
-        let ciphers = ["aes128-gcm@openssh.com", "aes256-gcm@openssh.com"]
+        let ciphers: [OpenSSHPrivateKey.EncryptionCipher] = [.aes128gcm, .aes256gcm]
         
         for cipher in ciphers {
             // Serialize with passphrase

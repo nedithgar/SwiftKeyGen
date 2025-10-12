@@ -51,6 +51,38 @@ import BigInt
 ///   the exported constants) are documented; internal helpers intentionally
 ///   remain undocumented to keep focus on the stable surface area.
 public struct OpenSSHPrivateKey {
+    /// Type-safe list of selectable encryption ciphers for OpenSSH private keys.
+    ///
+    /// This mirrors the set supported by the internal cipher implementations
+    /// (AES-CTR/CBC, AES-GCM, 3DES-CBC, ChaCha20-Poly1305). The `.none` cipher
+    /// is intentionally not exposed for selection here because serialization
+    /// automatically uses `none` when no passphrase is provided.
+    public enum EncryptionCipher: String, CaseIterable {
+        case aes128ctr = "aes128-ctr"
+        case aes192ctr = "aes192-ctr"
+        case aes256ctr = "aes256-ctr"
+
+        case aes128cbc = "aes128-cbc"
+        case aes192cbc = "aes192-cbc"
+        case aes256cbc = "aes256-cbc"
+
+        case aes128gcm = "aes128-gcm@openssh.com"
+        case aes256gcm = "aes256-gcm@openssh.com"
+
+        case des3cbc = "3des-cbc"
+
+        case chacha20poly1305 = "chacha20-poly1305@openssh.com"
+
+        /// Library default cipher used when a passphrase is provided
+        /// and no explicit cipher is specified.
+        public static var `default`: EncryptionCipher {
+            // Map the existing default cipher string to the enum; fall back to .aes256ctr
+            return EncryptionCipher(rawValue: Cipher.defaultCipher) ?? .aes256ctr
+        }
+
+        /// OpenSSH wire-format name.
+        public var name: String { rawValue }
+    }
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
     private static let MARK_END = "-----END OPENSSH PRIVATE KEY-----"
@@ -100,18 +132,27 @@ public struct OpenSSHPrivateKey {
     ///   recognized; `SSHKeyError.unsupportedKeyType` if the key algorithm is
     ///   not supported; `SSHKeyError.invalidKeyData` for internal encoding
     ///   inconsistencies; or errors surfaced by the underlying PBKDF / cipher.
+    /// Type-safe cipher variant.
+    ///
+    /// - Parameters:
+    ///   - key: Private key to serialize.
+    ///   - passphrase: Optional passphrase that enables encryption when non-empty.
+    ///   - comment: Optional comment to embed; defaults to the key's existing comment.
+    ///   - cipher: Optional encryption cipher to use when passphrase is present. If not supplied,
+    ///             the library default is used. Ignored when `passphrase` is `nil` or empty.
+    ///   - rounds: Bcrypt PBKDF iteration count when passphrase protection is active.
     public static func serialize(
         key: any SSHKey,
         passphrase: String? = nil,
         comment: String? = nil,
-        cipher: String? = nil,
+        cipher: EncryptionCipher? = nil,
         rounds: Int = DEFAULT_ROUNDS
     ) throws -> Data {
         let cipherName: String
         let kdfName: String
         
         if let passphrase = passphrase, !passphrase.isEmpty {
-            cipherName = cipher ?? DEFAULT_CIPHER
+            cipherName = (cipher ?? .default).rawValue
             kdfName = KDFNAME
         } else {
             cipherName = "none"
@@ -238,6 +279,9 @@ public struct OpenSSHPrivateKey {
         
         return result
     }
+
+    // No string-based overload by design: callers should use the type-safe
+    // `EncryptionCipher` enum. The CLI maps user strings to this enum.
     
     private static func serializePrivateKeyData(key: any SSHKey, to encoder: inout SSHEncoder) throws {
         // Encode key type
