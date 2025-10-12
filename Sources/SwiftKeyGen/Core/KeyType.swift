@@ -1,7 +1,7 @@
 import Foundation
 
 /// Supported SSH key algorithms.
-public enum KeyType: String, CaseIterable {
+public enum KeyType: String, CaseIterable, Codable {
     case rsa = "ssh-rsa"
     case ed25519 = "ssh-ed25519"
     case ecdsa256 = "ecdsa-sha2-nistp256"

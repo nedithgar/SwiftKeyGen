@@ -6,7 +6,7 @@ import _CryptoExtras
 ///
 /// Use with ``KeyConverter`` to select the output format when
 /// converting or exporting keys.
-public enum KeyFormat {
+public enum KeyFormat: Codable {
     /// OpenSSH private key file format as produced by `ssh-keygen`.
     ///
     /// - Note: When exporting with ``KeyConverter/exportKey(_:formats:basePath:passphrase:)``,
