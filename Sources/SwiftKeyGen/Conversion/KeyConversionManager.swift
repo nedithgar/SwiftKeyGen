@@ -138,6 +138,8 @@ public struct KeyConversionManager {
             } else {
                 throw SSHKeyError.invalidFormat
             }
+        default:
+            throw SSHKeyError.unsupportedOperation("Unsupported or unknown input format: \(sourceFormat.rawValue)")
         }
         
         // Create a temporary public key for conversion
@@ -155,6 +157,8 @@ public struct KeyConversionManager {
             
         case .pem, .pkcs8:
             throw SSHKeyError.unsupportedOperation("PEM/PKCS8 export requires private key")
+        default:
+            throw SSHKeyError.unsupportedOperation("Unsupported or unknown target format: \(options.toFormat.rawValue)")
         }
         
         // Write output
@@ -290,6 +294,9 @@ public struct KeyConversionManager {
                 case .rfc4716: outputExt = "rfc"
                 case .pem: outputExt = "pem"
                 case .pkcs8: outputExt = "p8"
+                default:
+                    // Unknown/new formats: use the raw value as extension
+                    outputExt = options.toFormat.rawValue
                 }
                 
                 fileOptions.output = inputURL.deletingLastPathComponent()

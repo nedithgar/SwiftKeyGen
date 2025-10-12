@@ -1,36 +1,65 @@
 import Foundation
 import Crypto
 import _CryptoExtras
-
-/// A key serialization format supported by SwiftKeyGen conversions.
+// TODO: Wait for SE-0487: Nonexhaustive Enums
+/// A flexible identifier for key serialization formats supported by SwiftKeyGen.
 ///
-/// Use with ``KeyConverter`` to select the output format when
-/// converting or exporting keys.
-public enum KeyFormat: Codable {
-    /// OpenSSH private key file format as produced by `ssh-keygen`.
+/// `KeyFormat` models logical formats used throughout the library (for example,
+/// "openssh", "pem", "pkcs8", or "rfc4716"). Instead of using a closed `enum`,
+/// it is a string‑backed `struct` that conforms to `RawRepresentable` and
+/// `ExpressibleByStringLiteral`. This mirrors the design used by ``KeyType`` and
+/// keeps the public API stable while allowing forward‑compatibility with new or
+/// project‑specific formats without requiring a library update.
+public struct KeyFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable {
+    /// The canonical string identifier backing this value.
+    public let rawValue: String
+
+    /// Creates a new `KeyFormat` from a raw format string.
+    /// - Parameter rawValue: The format identifier (e.g., "openssh").
+    /// - Note: The value is not validated here; unknown identifiers are allowed
+    ///   to support forward‑compatibility.
+    public init(rawValue: String) { self.rawValue = rawValue }
+
+    /// Creates a new `KeyFormat` from a string literal.
+    public init(stringLiteral value: String) { self.rawValue = value }
+
+    // Keep a small internal backing enum for convenient checks when needed.
+    internal enum BackingKeyFormat: String { case openssh, pem, pkcs8, rfc4716 }
+    internal var knownBacking: BackingKeyFormat? { BackingKeyFormat(rawValue: rawValue) }
+
+    // Known format constants (stable API surface)
+    /// OpenSSH key format (private or public as context dictates).
     ///
     /// - Note: When exporting with ``KeyConverter/exportKey(_:formats:basePath:passphrase:)``,
     ///   this format writes exactly to `basePath` (no additional extension).
-    case openssh
-    /// PEM-encoded private key.
+    public static let openssh: KeyFormat = "openssh"
+    /// PEM‑encoded key containers.
     ///
-    /// - Discussion: For RSA and Ed25519, the contents are a PKCS#8
-    ///   `PRIVATE KEY` document. For ECDSA, this uses the SEC1/RFC5915
+    /// - Discussion: For RSA and Ed25519, the contents may be a PKCS#8
+    ///   `PRIVATE KEY` document. For ECDSA, this can use the SEC1/RFC5915
     ///   `EC PRIVATE KEY` structure to match `ssh-keygen` output.
-    /// - SeeAlso: ``KeyConverter/toPEM(key:passphrase:)``
-    case pem
-    /// PKCS#8 private key serialized as a PEM document.
-    ///
-    /// - Note: ``KeyConverter/toPKCS8(key:passphrase:)`` returns UTF‑8
-    ///   PEM data, not DER bytes. Exported files typically use the
-    ///   `.p8` extension in this project.
-    case pkcs8
+    public static let pem: KeyFormat = "pem"
+    /// PKCS#8 key serialized as a PEM document (UTF‑8 text, not DER bytes).
+    public static let pkcs8: KeyFormat = "pkcs8"
     /// RFC 4716 (SSH2) public key file format.
-    ///
-    /// - Discussion: This is a public key format. The output contains
-    ///   a `Comment:` header and base64 body wrapped at 70 characters.
-    /// - SeeAlso: ``KeyConverter/toRFC4716(key:)``
-    case rfc4716
+    public static let rfc4716: KeyFormat = "rfc4716"
+
+    /// The set of formats known to this library version.
+    public static var known: [KeyFormat] { [.openssh, .pem, .pkcs8, .rfc4716] }
+    /// CaseIterable conformance (known only).
+    public static var allCases: [KeyFormat] { known }
+
+    // Codable as a single string value for backward compatibility with the
+    // previous enum implementation.
+    public init(from decoder: Decoder) throws {
+        let singleValueContainer = try decoder.singleValueContainer()
+        self.rawValue = try singleValueContainer.decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var singleValueContainer = encoder.singleValueContainer()
+        try singleValueContainer.encode(rawValue)
+    }
 }
 
 /// Stateless helpers for converting keys between formats.
@@ -258,6 +287,8 @@ public struct KeyConverter {
                 path = basePath + ".rfc"
                 let rfc4716String = try toRFC4716(key: key)
                 data = Data(rfc4716String.utf8)
+            default:
+                throw SSHKeyError.unsupportedOperation("Unsupported or unknown export format: \(format.rawValue)")
             }
             
             try data.write(to: URL(fileURLWithPath: path))
