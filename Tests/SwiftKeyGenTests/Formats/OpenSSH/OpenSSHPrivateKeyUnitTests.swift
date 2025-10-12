@@ -92,7 +92,7 @@ struct OpenSSHPrivateKeyUnitTests {
     @Test("AEAD ciphers write length excluding tag")
     func testAEADCipherLengthAccounting() throws {
         let key = try Ed25519KeyGenerator.generate(comment: "aead@test")
-        let cipher = "aes256-gcm@openssh.com"
+        let cipher: OpenSSHPrivateKey.EncryptionCipher = .aes256gcm
         let serialized = try OpenSSHPrivateKey.serialize(
             key: key,
             passphrase: "secret",
@@ -111,7 +111,7 @@ struct OpenSSHPrivateKeyUnitTests {
         _ = try dec.decodeData()   // publicKeyData
         let encLen = try dec.decodeUInt32()
 
-        #expect(cipherName == cipher)
+        #expect(cipherName == cipher.rawValue)
         let authLen = Cipher.cipherByName(cipherName)!.authLen
         // Remaining should be ciphertext length + tag
         #expect(dec.remaining == Int(encLen) + authLen)
@@ -418,7 +418,7 @@ struct OpenSSHPrivateKeyUnitTests {
             key: key,
             passphrase: "testpass",
             comment: key.comment,
-            cipher: "aes128-cbc"
+            cipher: .aes128cbc
         )
         
         let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
@@ -434,7 +434,7 @@ struct OpenSSHPrivateKeyUnitTests {
             key: key,
             passphrase: "testpass",
             comment: key.comment,
-            cipher: "3des-cbc"
+            cipher: .des3cbc
         )
         
         let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
@@ -450,7 +450,7 @@ struct OpenSSHPrivateKeyUnitTests {
             key: key,
             passphrase: "testpass",
             comment: key.comment,
-            cipher: "chacha20-poly1305@openssh.com"
+            cipher: .chacha20poly1305
         )
         
         let parsed = try OpenSSHPrivateKey.parse(data: serialized, passphrase: "testpass")
@@ -458,4 +458,3 @@ struct OpenSSHPrivateKeyUnitTests {
         #expect(parsed.publicKeyString() == key.publicKeyString())
     }
 }
-

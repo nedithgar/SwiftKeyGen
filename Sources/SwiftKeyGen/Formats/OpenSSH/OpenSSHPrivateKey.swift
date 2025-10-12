@@ -51,6 +51,55 @@ import BigInt
 ///   the exported constants) are documented; internal helpers intentionally
 ///   remain undocumented to keep focus on the stable surface area.
 public struct OpenSSHPrivateKey {
+    // TODO: Wait for SE-0487: Extensible Enums
+    /// A type-safe wrapper for OpenSSH encryption cipher names used for
+    /// protecting private keys.
+    ///
+    /// - Important: This is a `RawRepresentable` string-backed type instead of
+    ///   an `enum` to allow forward- and backward-compatibility as OpenSSH
+    ///   evolves. Known ciphers are provided as static constants, and arbitrary
+    ///   cipher names can be created via `init(rawValue:)`.
+    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable {
+        public let rawValue: String
+        public init(rawValue: String) { self.rawValue = rawValue }
+        public init(stringLiteral value: String) { self.rawValue = value }
+
+        /// OpenSSH wire-format name.
+        public var name: String { rawValue }
+
+        // Known cipher constants (stable API surface)
+        public static let aes128ctr = EncryptionCipher(rawValue: "aes128-ctr")
+        public static let aes192ctr = EncryptionCipher(rawValue: "aes192-ctr")
+        public static let aes256ctr = EncryptionCipher(rawValue: "aes256-ctr")
+
+        public static let aes128cbc = EncryptionCipher(rawValue: "aes128-cbc")
+        public static let aes192cbc = EncryptionCipher(rawValue: "aes192-cbc")
+        public static let aes256cbc = EncryptionCipher(rawValue: "aes256-cbc")
+
+        public static let aes128gcm = EncryptionCipher(rawValue: "aes128-gcm@openssh.com")
+        public static let aes256gcm = EncryptionCipher(rawValue: "aes256-gcm@openssh.com")
+
+        public static let des3cbc = EncryptionCipher(rawValue: "3des-cbc")
+
+        public static let chacha20poly1305 = EncryptionCipher(rawValue: "chacha20-poly1305@openssh.com")
+
+        /// Library default cipher used when a passphrase is provided and no explicit
+        /// cipher is specified.
+        public static var `default`: EncryptionCipher {
+            EncryptionCipher(rawValue: Cipher.defaultCipher)
+        }
+
+        /// The set of ciphers known to this library version.
+        public static var known: [EncryptionCipher] {
+            [
+                .aes128ctr, .aes192ctr, .aes256ctr,
+                .aes128cbc, .aes192cbc, .aes256cbc,
+                .aes128gcm, .aes256gcm,
+                .des3cbc,
+                .chacha20poly1305,
+            ]
+        }
+    }
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
     private static let MARK_END = "-----END OPENSSH PRIVATE KEY-----"
@@ -67,51 +116,64 @@ public struct OpenSSHPrivateKey {
     public static let DEFAULT_ROUNDS = 24
     private static let KDFNAME = "bcrypt"
     
-    /// Serializes a private key into the OpenSSH `openssh-key-v1` PEM wrapped
-    /// format.
+    /// Serialize a private key into an OpenSSH `openssh-key-v1` PEM document.
     ///
-    /// When a non‑empty `passphrase` is provided the output is encrypted using
-    /// the specified (or default) cipher and a bcrypt PBKDF (`kdfname = bcrypt`).
-    /// The derived key material is split into encryption key + IV according to
-    /// the cipher's requirements. Two random 32‑bit "check" values are encoded
-    /// twice inside the encrypted payload to allow detection of an incorrect
-    /// passphrase without exposing plaintext key material.
+    /// This produces a complete, PEM‑wrapped private key in OpenSSH’s proprietary
+    /// format (matching `ssh-keygen`). When a non‑empty `passphrase` is provided,
+    /// the private block is encrypted using a bcrypt‑based KDF (`kdfname = "bcrypt"`)
+    /// and the selected cipher. Two random 32‑bit check values are encoded twice
+    /// inside the encrypted payload to detect incorrect passphrases without
+    /// exposing plaintext key material.
     ///
-    /// Padding is appended using ascending byte values (1,2,3,...) to the
-    /// cipher block size (or ChaCha20-Poly1305's implicit block size rules) in
-    /// order to match OpenSSH's canonical encoding and enable strict padding
-    /// verification during parse.
+    /// Padding bytes with ascending values (1, 2, 3, …) are appended to the
+    /// cipher’s block size (or per‑cipher rules) to match OpenSSH’s canonical
+    /// encoding and enable strict padding verification during parsing.
     ///
     /// - Parameters:
     ///   - key: The private key to serialize (Ed25519, RSA, or ECDSA variant).
     ///   - passphrase: Optional passphrase; when non‑empty enables encryption.
-    ///   - comment: Optional comment stored alongside the private key; when
-    ///     omitted the key's intrinsic `comment` (if any) is used.
-    ///   - cipher: Optional cipher name (e.g. "aes256-ctr"). If `nil`, the
-    ///     library default is used when `passphrase` is present; ignored when
-    ///     no passphrase is supplied (cipher forced to "none").
-    ///   - rounds: Bcrypt PBKDF iteration count (work factor) used only when
-    ///     passphrase protection is active.
+    ///   - comment: Optional comment to embed. Defaults to the key’s `comment` when omitted.
+    ///   - cipher: Optional encryption algorithm to use when `passphrase` is provided.
+    ///             If `nil`, ``OpenSSHPrivateKey/EncryptionCipher/default`` is used. When
+    ///             `passphrase` is `nil` or empty, encryption is disabled and the cipher is
+    ///             forced to `"none"` (ignored).
+    ///   - rounds: Work factor for the bcrypt PBKDF when encryption is active. Defaults to
+    ///             ``OpenSSHPrivateKey/DEFAULT_ROUNDS`` (OpenSSH default).
     ///
-    /// - Returns: A `Data` buffer containing a complete PEM with BEGIN/END
-    ///   markers and 64‑character wrapped Base64 body.
+    /// - Returns: A `Data` buffer containing the full PEM (BEGIN/END markers and Base64 body).
     ///
-    /// - Throws: `SSHKeyError.unsupportedCipher` if the requested cipher is not
-    ///   recognized; `SSHKeyError.unsupportedKeyType` if the key algorithm is
-    ///   not supported; `SSHKeyError.invalidKeyData` for internal encoding
-    ///   inconsistencies; or errors surfaced by the underlying PBKDF / cipher.
+    /// - Throws: ``SSHKeyError/unsupportedCipher(_:)`` if the cipher is unsupported,
+    ///           ``SSHKeyError/unsupportedKeyType`` for unsupported key algorithms,
+    ///           ``SSHKeyError/invalidKeyData`` for internal inconsistencies, or errors from the
+    ///           underlying KDF/cipher implementations.
+    ///
+    /// - Example: Unencrypted
+    /// ```swift
+    /// let key = try SwiftKeyGen.generateKey(type: .ed25519)
+    /// let pem = try OpenSSHPrivateKey.serialize(key: key)
+    /// ```
+    ///
+    /// - Example: Encrypted with explicit cipher
+    /// ```swift
+    /// let key = try SwiftKeyGen.generateKey(type: .ed25519)
+    /// let pem = try OpenSSHPrivateKey.serialize(
+    ///     key: key,
+    ///     passphrase: "secret",
+    ///     cipher: .aes256gcm
+    /// )
+    /// ```
     public static func serialize(
         key: any SSHKey,
         passphrase: String? = nil,
         comment: String? = nil,
-        cipher: String? = nil,
+        cipher: EncryptionCipher? = nil,
         rounds: Int = DEFAULT_ROUNDS
     ) throws -> Data {
         let cipherName: String
         let kdfName: String
         
         if let passphrase = passphrase, !passphrase.isEmpty {
-            cipherName = cipher ?? DEFAULT_CIPHER
+            cipherName = (cipher ?? .default).rawValue
             kdfName = KDFNAME
         } else {
             cipherName = "none"
@@ -238,6 +300,9 @@ public struct OpenSSHPrivateKey {
         
         return result
     }
+
+    // No string-based overload by design: callers should use the type-safe
+    // `EncryptionCipher` enum. The CLI maps user strings to this enum.
     
     private static func serializePrivateKeyData(key: any SSHKey, to encoder: inout SSHEncoder) throws {
         // Encode key type

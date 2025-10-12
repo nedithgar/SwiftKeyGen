@@ -27,6 +27,7 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 - ✅ Import/export keys from stdin/stdout
 - ✅ Import ECDSA private keys from SEC1 (EC PRIVATE KEY) PEM (unencrypted & legacy encrypted)
 - ✅ Import ECDSA private keys from encrypted PKCS#8 (PBES2: AES-128/256-CBC, HMAC-SHA1/SHA256)
+- ✅ Import RSA private keys from legacy encrypted PKCS#1 PEM (Proc-Type/DEK-Info)
 - ✅ Multiple fingerprint algorithms (SHA256, SHA512, MD5)
 - ✅ Fingerprint randomart visualization
 - ✅ Key parsing and validation
@@ -229,6 +230,50 @@ try KeyManager.updateComment(
 )
 ```
 
+### Programmatic OpenSSH Serialization
+
+SwiftKeyGen exposes a high-level API to serialize private keys into the OpenSSH proprietary format (openssh-key-v1). When a non-empty passphrase is provided, you can select an authenticated/encryption cipher via a type-safe `EncryptionCipher` wrapper.
+
+```swift
+import SwiftKeyGen
+
+let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "me@example.com")
+
+// Unencrypted (cipher = "none")
+let unencrypted = try OpenSSHPrivateKey.serialize(key: key)
+
+// Encrypted with default cipher (currently aes256-ctr)
+let encryptedDefault = try OpenSSHPrivateKey.serialize(
+    key: key,
+    passphrase: "secret"
+)
+
+// Encrypted with an explicit cipher (typed EncryptionCipher)
+let encryptedGCM = try OpenSSHPrivateKey.serialize(
+    key: key,
+    passphrase: "secret",
+    cipher: .aes256gcm
+)
+```
+
+Supported ciphers (OpenSSH names):
+
+- `.aes128ctr` ("aes128-ctr")
+- `.aes192ctr` ("aes192-ctr")
+- `.aes256ctr` ("aes256-ctr")
+- `.aes128cbc` ("aes128-cbc")
+- `.aes192cbc` ("aes192-cbc")
+- `.aes256cbc` ("aes256-cbc")
+- `.aes128gcm` ("aes128-gcm@openssh.com")
+- `.aes256gcm` ("aes256-gcm@openssh.com")
+- `.des3cbc` ("3des-cbc")
+- `.chacha20poly1305` ("chacha20-poly1305@openssh.com")
+
+Notes:
+
+- To produce an unencrypted key, pass `nil` or an empty string for `passphrase`; the format will set cipher to `none` automatically.
+- The `swiftkeygen` CLI still accepts `-Z/--cipher` as a string (e.g., `aes256-ctr`) and validates it against the same set, mapping it to `EncryptionCipher` internally.
+
 ### Key Format Conversion
 
 ```swift
@@ -312,7 +357,7 @@ MIICXAIBAAKBgQCqGKukO1De7zhZj6+H0qtjTkVxwTCpvKe4eCZ0FPqri0cb2JZf
 let rsaPrivateKey = try PEMParser.parseRSAPrivateKey(rsaPrivatePEM)
 print(rsaPrivateKey.publicKeyString()) // Extract public key
 
-// Parse ECDSA private key from PEM format - SUPPORTED (unencrypted & encrypted legacy OpenSSL)!
+// Parse ECDSA private key from PEM format - SUPPORTED (unencrypted & legacy OpenSSL-encrypted)!
 let ecdsaPrivatePEM = """
 -----BEGIN EC PRIVATE KEY-----
 MHcCAQEEIIGLlamZU9Z83D3g8VsmdqKhu5u47L4RjSXNe3zxQNXPoAoGCCqGSM49
@@ -323,8 +368,11 @@ MHcCAQEEIIGLlamZU9Z83D3g8VsmdqKhu5u47L4RjSXNe3zxQNXPoAoGCCqGSM49
 let ecdsaPrivateKey = try PEMParser.parseECDSAPrivateKey(ecdsaPrivatePEM)
 print(ecdsaPrivateKey.publicKeyString()) // Extract public key
 
-// Ed25519 private key OpenSSH format fully supported. Generic PKCS#8 / legacy PEM
-// import is supported for unencrypted keys; encrypted legacy PEM may be limited.
+// Ed25519 private key OpenSSH format fully supported.
+// PEM import:
+// - Unencrypted PKCS#8 (PRIVATE KEY): supported
+// - Legacy OpenSSL-encrypted PEM (Proc-Type/DEK-Info): supported
+// - Encrypted PKCS#8 (ENCRYPTED PRIVATE KEY): not currently supported
 let ed25519Private = try PEMParser.parseEd25519PrivateKey(ed25519PEM)
 
 // Parse ECDSA public key from PKCS8 format

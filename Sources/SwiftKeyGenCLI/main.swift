@@ -3,7 +3,7 @@ import SwiftKeyGen
 
 struct SwiftKeyGenCLI {
     // Update this value when publishing a new release (match the git tag)
-    private static let version = "0.1.1"
+    private static let version = "0.1.2"
 
     static func main() {
         let arguments = CommandLine.arguments
@@ -246,12 +246,24 @@ struct SwiftKeyGenCLI {
                 exit(1)
             }
             
+            // Map --cipher to typed enum if provided
+            var selectedCipher: OpenSSHPrivateKey.EncryptionCipher? = nil
+            if let c = cipher {
+                // Validate against known ciphers for a friendly error
+                if !OpenSSHPrivateKey.EncryptionCipher.known.contains(where: { $0.rawValue == c }) {
+                    print("Error: Unsupported cipher: \(c)")
+                    print("Supported ciphers: \(OpenSSHPrivateKey.EncryptionCipher.known.map { $0.rawValue }.joined(separator: ", "))")
+                    exit(1)
+                }
+                selectedCipher = OpenSSHPrivateKey.EncryptionCipher(rawValue: c)
+            }
+
             // Write private key with passphrase
             let privateKeyData = try OpenSSHPrivateKey.serialize(
                 key: key,
                 passphrase: passphrase,
                 comment: key.comment,
-                cipher: cipher
+                cipher: selectedCipher
             )
             
             try privateKeyData.write(to: URL(fileURLWithPath: output))
