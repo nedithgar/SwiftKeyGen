@@ -200,6 +200,9 @@ public struct CertificateAuthority {
                 guard providedAlgorithm == "ecdsa-sha2-nistp521" else {
                     throw SSHKeyError.incompatibleSignatureAlgorithm
                 }
+            default:
+                // Unknown CA key type – cannot validate compatibility
+                throw SSHKeyError.unsupportedKeyType
             }
             finalSignatureAlgorithm = providedAlgorithm
         } else {
@@ -215,6 +218,8 @@ public struct CertificateAuthority {
                 finalSignatureAlgorithm = "ecdsa-sha2-nistp384"
             case .ecdsa521:
                 finalSignatureAlgorithm = "ecdsa-sha2-nistp521"
+            default:
+                throw SSHKeyError.unsupportedKeyType
             }
         }
         certifiedKey.certificate.signatureType = finalSignatureAlgorithm
@@ -280,6 +285,8 @@ public struct CertificateAuthority {
             let publicKeyPoint = try decoder.decodeData()
             encoder.encodeString(curveName)
             encoder.encodeData(publicKeyPoint)
+        default:
+            throw SSHKeyError.unsupportedKeyType
         }
         
         // Add certificate fields

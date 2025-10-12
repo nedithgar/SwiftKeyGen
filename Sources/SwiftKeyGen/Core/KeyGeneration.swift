@@ -53,6 +53,8 @@ public struct SwiftKeyGen {
         case .ecdsa521:
             let privateKey = P521.Signing.PrivateKey()
             return ECDSAKey(p521Key: privateKey, comment: comment)
+        default:
+            throw SSHKeyError.unsupportedKeyType
         }
     }
     

@@ -91,10 +91,16 @@ public struct KnownHostsEntry {
         let hostPattern = components[0]
         let keyTypeString = components[1]
         let keyData = components[2]
-        
-        guard let keyType = KeyType(rawValue: keyTypeString) else {
+
+        // Only accept key types this library knows how to handle.
+        // Forward-compatibility for new algorithms is supported via KeyType in general,
+        // but for known_hosts we currently reject unknown algorithms to avoid storing
+        // entries we cannot verify elsewhere.
+        let candidateType = KeyType(rawValue: keyTypeString)
+        guard KeyType.known.contains(candidateType) else {
             return nil
         }
+        let keyType = candidateType
         
         guard let publicKey = Data(base64Encoded: keyData) else {
             return nil

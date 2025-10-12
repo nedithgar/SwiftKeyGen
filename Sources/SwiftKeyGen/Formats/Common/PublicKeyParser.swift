@@ -156,6 +156,9 @@ public struct PublicKeyParser {
             guard publicKeyBytes.count == expectedKeySize else {
                 throw SSHKeyError.invalidKeyData
             }
+        default:
+            // Unknown key types are not validated here.
+            throw SSHKeyError.unsupportedKeyType
         }
 
         // Ensure no extra data
