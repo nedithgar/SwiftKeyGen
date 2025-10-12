@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - 2025-10-12
+
+## What's Changed
+* Enhance SSH key support and error handling by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/15
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.2...v0.1.3
+
 ## 0.1.2 - 2025-10-12
 
 ## What's Changed
