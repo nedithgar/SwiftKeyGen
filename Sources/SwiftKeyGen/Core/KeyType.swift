@@ -35,4 +35,19 @@ public enum KeyType: String, CaseIterable, Codable {
             return "ECDSA"
         }
     }
+
+    public var humanReadableName: String {
+        switch self {
+        case .rsa:
+            return "RSA"
+        case .ed25519:
+            return "Ed25519"
+        case .ecdsa256:
+            return "ECDSA P-256"
+        case .ecdsa384:
+            return "ECDSA P-384"
+        case .ecdsa521:
+            return "ECDSA P-521"
+        }
+    }
 }
