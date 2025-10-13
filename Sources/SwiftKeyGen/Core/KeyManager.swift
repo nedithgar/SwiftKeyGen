@@ -354,24 +354,31 @@ public struct KeyManager {
             if line.contains("-----END OPENSSH PRIVATE KEY-----") {
                 break
             }
-            if inKey && !line.isEmpty {
-                base64Lines.append(line)
+            if inKey {
+                // Collect non-empty lines and trim stray whitespace/CRs to be tolerant
+                // of platform-specific line endings.
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    base64Lines.append(trimmed)
+                }
             }
         }
         
         let base64String = base64Lines.joined()
-        guard let keyData = Data(base64Encoded: base64String) else {
+        // Be permissive when decoding Base64 to ignore any incidental whitespace
+        // that may slip through on different platforms.
+        guard let keyData = Data(base64Encoded: base64String, options: .ignoreUnknownCharacters) else {
             throw SSHKeyError.invalidFormat
         }
         
         // Read and verify magic header - it's not length-prefixed
-        let magicLength = "openssh-key-v1\0".count
+        let expectedMagic = Data("openssh-key-v1\0".utf8)
+        let magicLength = expectedMagic.count
         guard keyData.count >= magicLength else {
             throw SSHKeyError.invalidFormat
         }
         
         let magicData = keyData.subdata(in: 0..<magicLength)
-        let expectedMagic = Data("openssh-key-v1\0".utf8)
         guard magicData == expectedMagic else {
             throw SSHKeyError.invalidFormat
         }
