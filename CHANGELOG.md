@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 - 2025-10-13
+
+## What's Changed
+* Enhance KeyManager with key info retrieval methods and update version to 0.1.4 by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/16
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.3...v0.1.4
+
 ## 0.1.3 - 2025-10-12
 
 ## What's Changed
