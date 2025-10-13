@@ -59,11 +59,25 @@ import Foundation
 ///   neutral values for unknown algorithms to avoid guessing.
 /// - TODO: Update once SE-0487 (Nonexhaustive Enums) is widely available and
 ///   evaluated for this use case.
-public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable {
+///
+/// ### Identifiable
+///
+/// ``KeyType`` conforms to ``Identifiable``. Its ``KeyType/id`` is the same as
+/// ``KeyType/rawValue`` (the OpenSSH algorithm string). This makes it convenient
+/// to use `KeyType` values in SwiftUI lists or other collections that require
+/// a stable and unique identity. The identity remains stable across encoding
+/// and decoding operations because the raw value round‑trips verbatim.
+public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable, Identifiable {
     /// The OpenSSH algorithm identifier backing this value.
     ///
     /// Examples: "ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256".
     public let rawValue: String
+    /// A stable identifier for this key type.
+    ///
+    /// This is equal to ``rawValue`` (for example, "ssh-ed25519", "ssh-rsa").
+    /// It provides a unique, stable identity suitable for SwiftUI `List`/`ForEach`
+    /// and other collection contexts.
+    public var id: String { rawValue }
     
     /// Creates a new `KeyType` from a raw OpenSSH algorithm string.
     ///

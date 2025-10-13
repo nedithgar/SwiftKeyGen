@@ -10,9 +10,29 @@ import _CryptoExtras
 /// `ExpressibleByStringLiteral`. This mirrors the design used by ``KeyType`` and
 /// keeps the public API stable while allowing forward‑compatibility with new or
 /// project‑specific formats without requiring a library update.
-public struct KeyFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable {
+///
+/// - Design: Mirrors ``KeyType`` by using a `RawRepresentable` wrapper so
+///   unknown formats can be represented losslessly via their raw string value.
+/// - Backward compatibility: Static members like ``KeyFormat/openssh`` remain
+///   convenient for switching over known formats, and the single‑value
+///   `Codable` representation preserves existing behavior.
+/// - Forward compatibility: Unknown/future formats are preserved as‑is via
+///   ``rawValue``.
+///
+/// ### Identifiable
+///
+/// ``KeyFormat`` conforms to ``Identifiable``. Its ``KeyFormat/id`` equals
+/// ``KeyFormat/rawValue`` (for example, "pem", "pkcs8"). This enables stable
+/// identity in SwiftUI lists and other collections.
+public struct KeyFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable, Identifiable {
     /// The canonical string identifier backing this value.
     public let rawValue: String
+    /// A stable identifier for this key format.
+    ///
+    /// This is equal to ``rawValue`` (for example, "openssh", "pem"). It
+    /// provides a unique, stable identity suitable for SwiftUI `List`/`ForEach`
+    /// and other collection contexts.
+    public var id: String { rawValue }
 
     /// Creates a new `KeyFormat` from a raw format string.
     /// - Parameter rawValue: The format identifier (e.g., "openssh").
