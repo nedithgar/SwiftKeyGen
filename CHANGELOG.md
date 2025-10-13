@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.5 - 2025-10-13
+
+## What's Changed
+* Add key size retrieval to KeyInfo by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/17
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.4...v0.1.5
+
 ## 0.1.4 - 2025-10-13
 
 ## What's Changed
