@@ -446,6 +446,42 @@ public struct KeyManager {
         /// Raw SSH wire‑format public key data (starts with the key type length + name, followed by algorithm‑specific fields).
         public let publicKeyData: Data
         
+        /// Detected key size in bits.
+        ///
+        /// - For RSA, this decodes the modulus from ``publicKeyData`` and uses the
+        ///   existing RSA helper to compute an exact bit length (no reimplementation).
+        /// - For Ed25519 and ECDSA curves, this returns the canonical bit size.
+        /// - For unknown algorithms, returns `0`.
+        public var bitSize: Int {
+            switch keyType {
+            case .ed25519:
+                return 256
+            case .ecdsa256:
+                return 256
+            case .ecdsa384:
+                return 384
+            case .ecdsa521:
+                return 521
+            case .rsa:
+                // Parse SSH public key blob: string type, mpint e, mpint n
+                var decoder = SSHDecoder(data: publicKeyData)
+                do {
+                    _ = try decoder.decodeString() // skip type
+                    let e = try decoder.decodeData()
+                    let n = try decoder.decodeData()
+                    // Use existing RSA helper (no custom bit-length math)
+                    if let publicKey = try? Insecure.RSA.PublicKey(modulus: n, exponent: e) {
+                        return publicKey.bitSize
+                    }
+                } catch {
+                    // fall through to 0 below
+                }
+                return 0
+            default:
+                return 0
+            }
+        }
+
         /// OpenSSH‑style SHA‑256 fingerprint computed over ``publicKeyData``.
         ///
         /// Mirrors the output of `ssh-keygen -lf <publickey>` (the `SHA256:` base64 format without padding).
