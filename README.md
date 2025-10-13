@@ -156,6 +156,10 @@ let key = try KeyManager.readPrivateKey(
 
 // Get key info without decryption
 let info = try KeyManager.getKeyInfo(keyPath: "~/.ssh/id_ed25519")
+// OR
+let info = try KeyManager.getKeyInfo(fromData: someData)
+// OR
+let info = try KeyManager.getKeyInfo(fromPEM: somePEMString)
 print("Key type: \(info.keyType)")
 print("Encrypted: \(info.isEncrypted)")
 print("Fingerprint: \(info.fingerprint)")

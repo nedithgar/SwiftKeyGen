@@ -1,34 +1,98 @@
 import Foundation
 import Crypto
 
-/// High‑level utility for performing management operations on existing private SSH keys on disk.
+/// High‑level utility for managing existing private SSH keys on disk.
 ///
 /// `KeyManager` focuses on post‑generation lifecycle tasks such as:
-///  - Loading encrypted / unencrypted OpenSSH private keys (`openssh-key-v1`)
-///  - Adding, changing, or removing passphrases (re‑encrypting in place)
-///  - Updating or synchronizing key comments (and the companion `.pub` file when present)
-///  - Lightweight introspection of key metadata *without* decrypting the private portion
-///  - Verifying passphrases provided by a user (constant‑time enough for UX loops)
+/// - Loading encrypted/unencrypted OpenSSH private keys (`openssh-key-v1`)
+/// - Adding, changing, or removing passphrases (re‑encrypting in place)
+/// - Updating or synchronizing key comments (and the companion `.pub` file when present)
+/// - Lightweight introspection of key metadata without decrypting the private portion
+/// - Verifying passphrases provided by a user
 ///
-/// All methods operate on the OpenSSH private key file format. Unsupported or malformed
-/// inputs surface as ``SSHKeyError`` cases. Methods that mutate files attempt to
-/// preserve secure POSIX permissions (`0600` for private keys, `0644` for public keys)
+/// In addition to OpenSSH, the ``readPrivateKey(from:passphrase:)`` helper will
+/// transparently detect and parse a small set of PEM/PKCS#8 formats for convenience:
+/// - Ed25519: unencrypted PKCS#8 (``PRIVATE KEY``)
+/// - ECDSA (P-256/P-384/P-521): unencrypted PKCS#8 (``PRIVATE KEY``) and SEC1 (``EC PRIVATE KEY``),
+///   including legacy OpenSSL encryption headers; PBES2‑encrypted PKCS#8 when a passphrase is supplied
+/// - RSA: PKCS#1 (``RSA PRIVATE KEY``), including legacy OpenSSL encryption headers
+///
+/// Unsupported or malformed inputs surface as ``SSHKeyError`` cases. Methods that mutate files
+/// attempt to preserve secure POSIX permissions (`0600` for private keys, `0644` for public keys)
 /// on Apple platforms.
+///
+/// ### Examples
+///
+/// Load an OpenSSH private key:
+/// ```swift
+/// let key = try KeyManager.readPrivateKey(from: "~/.ssh/id_ed25519")
+/// ```
+///
+/// Change a passphrase (re‑encrypt in place):
+/// ```swift
+/// try KeyManager.changePassphrase(
+///     keyPath: "~/.ssh/id_ed25519",
+///     oldPassphrase: "old",
+///     newPassphrase: "new-strong-pass"
+/// )
+/// ```
+///
+/// Update the comment and keep `<path>.pub` in sync:
+/// ```swift
+/// try KeyManager.updateComment(
+///     keyPath: "~/.ssh/id_ed25519",
+///     passphrase: nil,
+///     newComment: "me@example.com"
+/// )
+/// ```
+///
+/// Inspect metadata without decrypting:
+/// ```swift
+/// let info = try KeyManager.getKeyInfo(keyPath: "~/.ssh/id_ed25519")
+/// print(info.keyType)        // e.g. .ed25519
+/// print(info.isEncrypted)    // true/false
+/// print(info.fingerprint)    // OpenSSH‑style SHA256:... fingerprint
+/// ```
 public struct KeyManager {
     
-    /// Reads and fully decodes an OpenSSH private key from disk.
+    /// Reads and decodes a private key from disk.
     ///
-    /// This will decrypt the key material if it is passphrase‑protected. The returned
-    /// value conforms to ``SSHKey`` (e.g. ``RSAKey``, ``Ed25519Key``, ``ECDSAKey``).
+    /// Primary support targets the OpenSSH proprietary format (`openssh-key-v1`). For convenience,
+    /// this helper also attempts to auto‑detect and parse select PEM/PKCS#8 encodings commonly
+    /// encountered in the wild:
+    /// - Ed25519: unencrypted PKCS#8 (``-----BEGIN PRIVATE KEY-----``)
+    /// - ECDSA (P‑256/P‑384/P‑521): unencrypted PKCS#8 (``PRIVATE KEY``) and SEC1
+    ///   (``EC PRIVATE KEY``) with optional legacy OpenSSL encryption headers; PBES2‑encrypted
+    ///   PKCS#8 when a `passphrase` is provided
+    /// - RSA: PKCS#1 (``RSA PRIVATE KEY``), including legacy OpenSSL encryption headers
     ///
-    /// - Note: The path may include a leading tilde (`~`) which will be expanded.
+    /// If no PEM/PKCS#8 structure is recognized, the data is parsed as OpenSSH.
+    ///
+    /// The returned value conforms to ``SSHKey`` (e.g. ``RSAKey``, ``Ed25519Key``, ``ECDSAKey``).
+    ///
+    /// - Note: The path may include a leading tilde (``~``) which will be expanded.
     ///
     /// - Parameters:
-    ///   - path: Filesystem path to the OpenSSH private key file.
-    ///   - passphrase: Optional passphrase used to decrypt the key if encrypted.
+    ///   - path: Filesystem path to the private key file.
+    ///   - passphrase: Optional passphrase used to decrypt the key if encrypted (OpenSSH or PEM/PKCS#8).
     /// - Returns: A concrete type conforming to ``SSHKey`` representing the private key.
     /// - Throws: ``SSHKeyError.invalidFormat`` if parsing fails, ``SSHKeyError.decryptionFailed``
     ///           if the passphrase is wrong, or other ``SSHKeyError`` cases for unsupported types.
+    ///
+    /// ### Examples
+    ///
+    /// Load a standard OpenSSH private key:
+    /// ```swift
+    /// let key = try KeyManager.readPrivateKey(from: "~/.ssh/id_ed25519")
+    /// ```
+    ///
+    /// Load an encrypted ECDSA (PBES2 PKCS#8) key:
+    /// ```swift
+    /// let ecdsa = try KeyManager.readPrivateKey(
+    ///     from: "~/keys/ecdsa_p256_encrypted.pem",
+    ///     passphrase: "secret"
+    /// )
+    /// ```
     public static func readPrivateKey(
         from path: String,
         passphrase: String? = nil
@@ -119,7 +183,7 @@ public struct KeyManager {
         #endif
     }
     
-    /// Updates the comment embedded in an OpenSSH private key and synchronizes the matching public key file.
+    /// Updates the comment embedded in a private key and synchronizes the matching public key file.
     ///
     /// The private key is decrypted (if necessary), its `comment` field mutated, and the key is
     /// re‑serialized preserving its current encryption state. If a sibling `<path>.pub` file exists,
@@ -239,30 +303,39 @@ public struct KeyManager {
             return false
         }
     }
-    
-    /// Extracts public metadata about a private key without decrypting its private section.
+
+    /// Extracts public metadata about a private key from raw PEM text or OpenSSH data.
     ///
-    /// This performs a partial parse of the OpenSSH `openssh-key-v1` envelope to obtain:
-    ///  - Key algorithm (``KeyType``)
-    ///  - Whether the private portion is encrypted
-    ///  - Cipher name (if encrypted)
-    ///  - Raw SSH wire‑format public key bytes (suitable for fingerprinting)
+    /// This performs a partial parse of an OpenSSH `openssh-key-v1` envelope without
+    /// decrypting the private section and returns a ``KeyInfo`` snapshot suitable for
+    /// display (e.g., fingerprint, algorithm, encryption state).
     ///
-    /// Private key block decryption is intentionally skipped for performance and to allow
-    /// metadata inspection prior to prompting a user for a passphrase.
+    /// - Parameter keyData: Contents of a private key file as `Data`.
+    /// - Returns: Parsed ``KeyInfo`` for the given key material.
+    /// - Throws: ``SSHKeyError.invalidFormat`` for malformed data.
     ///
-    /// - Parameter keyPath: Path to the OpenSSH private key file.
-    /// - Returns: A ``KeyManager/KeyInfo`` structure with parsed metadata.
-    /// - Throws: ``SSHKeyError.invalidFormat`` for malformed data, ``SSHKeyError.unsupportedKeyType``
-    ///           for unknown algorithms, or underlying I/O errors.
-    public static func getKeyInfo(keyPath: String) throws -> KeyInfo {
-        let expandedPath = NSString(string: keyPath).expandingTildeInPath
-        let data = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
-        
-        guard let pemString = String(data: data, encoding: .utf8) else {
+    /// ### Example
+    /// ```swift
+    /// let data = try Data(contentsOf: URL(fileURLWithPath: "~/.ssh/id_ed25519"))
+    /// let info = try KeyManager.getKeyInfo(fromData: data)
+    /// print(info.fingerprint)
+    /// ```
+    public static func getKeyInfo(fromData keyData: Data) throws -> KeyInfo {
+        guard let pemString = String(data: keyData, encoding: .utf8) else {
             throw SSHKeyError.invalidFormat
         }
-        
+        return try getKeyInfo(fromPEM: pemString)
+    }
+
+    /// Extracts public metadata about a private key from a PEM/OpenSSH string.
+    ///
+    /// Only the outer OpenSSH envelope is parsed for metadata; the private section is not
+    /// decrypted. This mirrors the information shown by `ssh-keygen -l -f <key>`.
+    ///
+    /// - Parameter pemString: OpenSSH private key string (full PEM block).
+    /// - Returns: Parsed ``KeyInfo`` for the given key material.
+    /// - Throws: ``SSHKeyError.invalidFormat`` for malformed data.
+    public static func getKeyInfo(fromPEM pemString: String) throws -> KeyInfo {
         // Check if it's an OpenSSH key
         guard pemString.contains("-----BEGIN OPENSSH PRIVATE KEY-----") else {
             throw SSHKeyError.invalidFormat
@@ -334,16 +407,42 @@ public struct KeyManager {
             cipherName: cipherName == "none" ? nil : cipherName,
             publicKeyData: publicKeyData
         )
+
+    }
+    
+    /// Extracts public metadata about a private key without decrypting its private section.
+    ///
+    /// This performs a partial parse of the OpenSSH `openssh-key-v1` envelope to obtain:
+    ///  - Key algorithm (``KeyType``)
+    ///  - Whether the private portion is encrypted
+    ///  - Cipher name (if encrypted)
+    ///  - Raw SSH wire‑format public key bytes (suitable for fingerprinting)
+    ///
+    /// Private key block decryption is intentionally skipped for performance and to allow
+    /// metadata inspection prior to prompting a user for a passphrase.
+    ///
+    /// - Parameter keyPath: Path to the OpenSSH private key file.
+    /// - Returns: A ``KeyManager/KeyInfo`` structure with parsed metadata.
+    /// - Throws: ``SSHKeyError.invalidFormat`` for malformed data, ``SSHKeyError.unsupportedKeyType``
+    ///           for unknown algorithms, or underlying I/O errors.
+    public static func getKeyInfo(keyPath: String) throws -> KeyInfo {
+        let expandedPath = NSString(string: keyPath).expandingTildeInPath
+        let data = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
+
+        return try getKeyInfo(fromData: data)
     }
     
     /// Lightweight metadata describing an OpenSSH private key, produced by ``getKeyInfo(keyPath:)``.
     public struct KeyInfo {
         /// Detected key algorithm (e.g. ``KeyType/ed25519``, ``KeyType/rsa``).
         public let keyType: KeyType
+
         /// Indicates whether the private key blob is encrypted (KDF name not `"none"`).
         public let isEncrypted: Bool
+
         /// Optional cipher name (e.g. `"aes256-ctr"`) when the key is encrypted; `nil` if unencrypted or `"none"`.
         public let cipherName: String?
+
         /// Raw SSH wire‑format public key data (starts with the key type length + name, followed by algorithm‑specific fields).
         public let publicKeyData: Data
         
@@ -351,6 +450,12 @@ public struct KeyManager {
         ///
         /// Mirrors the output of `ssh-keygen -lf <publickey>` (the `SHA256:` base64 format without padding).
         /// Suitable for display, logging, or host key verification contexts.
+        ///
+        /// ### Example
+        /// ```swift
+        /// let info = try KeyManager.getKeyInfo(keyPath: "~/.ssh/id_ed25519")
+        /// print(info.fingerprint) // "SHA256:..."
+        /// ```
         public var fingerprint: String {
             let digest = SHA256.hash(data: publicKeyData)
             let base64 = Data(digest).base64EncodedStringStrippingPadding()

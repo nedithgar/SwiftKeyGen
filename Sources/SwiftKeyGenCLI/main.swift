@@ -3,7 +3,7 @@ import SwiftKeyGen
 
 struct SwiftKeyGenCLI {
     // Update this value when publishing a new release (match the git tag)
-    private static let version = "0.1.3"
+    private static let version = "0.1.4"
 
     static func main() {
         let arguments = CommandLine.arguments
