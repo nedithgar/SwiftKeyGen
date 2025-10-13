@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6 - 2025-10-13
+
+## What's Changed
+* Add Identifiable conformance to KeyFormat and KeyType structs by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/18
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.5...v0.1.6
+
 ## 0.1.5 - 2025-10-13
 
 ## What's Changed
