@@ -13,6 +13,95 @@ struct KeyManagerTests {
         #endif
         return dir
     }
+
+    // MARK: - KeyInfo.bitSize
+
+    @Test("KeyInfo.bitSize for Ed25519 = 256")
+    func testKeyInfoBitSizeEd25519() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        let pair = try SwiftKeyGen.generateKeyPair(type: .ed25519)
+        let keyData = try OpenSSHPrivateKey.serialize(key: pair.privateKey)
+        let path = testDirectory.appendingPathComponent("ed25519_info").path
+        try keyData.write(to: URL(fileURLWithPath: path))
+
+        let info = try KeyManager.getKeyInfo(keyPath: path)
+        #expect(info.keyType == .ed25519)
+        #expect(info.bitSize == 256)
+    }
+
+    @Test("KeyInfo.bitSize for ECDSA curves")
+    func testKeyInfoBitSizeECDSA() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        // P-256
+        do {
+            let p256 = try SwiftKeyGen.generateKeyPair(type: .ecdsa256)
+            let data = try OpenSSHPrivateKey.serialize(key: p256.privateKey)
+            let path = testDirectory.appendingPathComponent("p256_info").path
+            try data.write(to: URL(fileURLWithPath: path))
+            let info = try KeyManager.getKeyInfo(keyPath: path)
+            #expect(info.keyType == .ecdsa256)
+            #expect(info.bitSize == 256)
+        }
+
+        // P-384
+        do {
+            let p384 = try SwiftKeyGen.generateKeyPair(type: .ecdsa384)
+            let data = try OpenSSHPrivateKey.serialize(key: p384.privateKey)
+            let path = testDirectory.appendingPathComponent("p384_info").path
+            try data.write(to: URL(fileURLWithPath: path))
+            let info = try KeyManager.getKeyInfo(keyPath: path)
+            #expect(info.keyType == .ecdsa384)
+            #expect(info.bitSize == 384)
+        }
+
+        // P-521
+        do {
+            let p521 = try SwiftKeyGen.generateKeyPair(type: .ecdsa521)
+            let data = try OpenSSHPrivateKey.serialize(key: p521.privateKey)
+            let path = testDirectory.appendingPathComponent("p521_info").path
+            try data.write(to: URL(fileURLWithPath: path))
+            let info = try KeyManager.getKeyInfo(keyPath: path)
+            #expect(info.keyType == .ecdsa521)
+            #expect(info.bitSize == 521)
+        }
+    }
+
+    @Test("KeyInfo.bitSize for RSA (unencrypted)")
+    func testKeyInfoBitSizeRSAUnencrypted() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        // Use smaller size to keep test fast while exercising exact bit size path
+        let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 1024) as! RSAKey
+        let data = try OpenSSHPrivateKey.serialize(key: rsa)
+        let path = testDirectory.appendingPathComponent("rsa1024_info").path
+        try data.write(to: URL(fileURLWithPath: path))
+
+        let info = try KeyManager.getKeyInfo(keyPath: path)
+        #expect(info.keyType == .rsa)
+        #expect(info.bitSize == 1024)
+    }
+
+    @Test("KeyInfo.bitSize for RSA (encrypted)")
+    func testKeyInfoBitSizeRSAEncrypted() throws {
+        let testDirectory = try makeTestDirectory()
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        let rsa = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048) as! RSAKey
+        let pass = "rsa-secret"
+        let data = try OpenSSHPrivateKey.serialize(key: rsa, passphrase: pass)
+        let path = testDirectory.appendingPathComponent("rsa2048_enc_info").path
+        try data.write(to: URL(fileURLWithPath: path))
+
+        let info = try KeyManager.getKeyInfo(keyPath: path)
+        #expect(info.keyType == .rsa)
+        #expect(info.isEncrypted == true)
+        #expect(info.bitSize == 2048)
+    }
     
     @Test("Parse unencrypted Ed25519 key")
     func testParseUnencryptedEd25519Key() throws {
