@@ -10,9 +10,11 @@ import _CryptoExtras
 /// `ExpressibleByStringLiteral`. This mirrors the design used by ``KeyType`` and
 /// keeps the public API stable while allowing forward‑compatibility with new or
 /// project‑specific formats without requiring a library update.
-public struct KeyFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable {
+public struct KeyFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable, Identifiable {
     /// The canonical string identifier backing this value.
     public let rawValue: String
+    /// Stable identity for Identifiable conformance (the raw format string).
+    public var id: String { rawValue }
 
     /// Creates a new `KeyFormat` from a raw format string.
     /// - Parameter rawValue: The format identifier (e.g., "openssh").

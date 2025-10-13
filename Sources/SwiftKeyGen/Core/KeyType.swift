@@ -59,11 +59,13 @@ import Foundation
 ///   neutral values for unknown algorithms to avoid guessing.
 /// - TODO: Update once SE-0487 (Nonexhaustive Enums) is widely available and
 ///   evaluated for this use case.
-public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable {
+public struct KeyType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, Codable, CaseIterable, Identifiable {
     /// The OpenSSH algorithm identifier backing this value.
     ///
     /// Examples: "ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256".
     public let rawValue: String
+    /// Stable identity for Identifiable conformance (the raw algorithm string).
+    public var id: String { rawValue }
     
     /// Creates a new `KeyType` from a raw OpenSSH algorithm string.
     ///
