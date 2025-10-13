@@ -161,6 +161,7 @@ let info = try KeyManager.getKeyInfo(fromData: someData)
 // OR
 let info = try KeyManager.getKeyInfo(fromPEM: somePEMString)
 print("Key type: \(info.keyType)")
+print("Key size: \(info.bitSize) bits")
 print("Encrypted: \(info.isEncrypted)")
 print("Fingerprint: \(info.fingerprint)")
 
