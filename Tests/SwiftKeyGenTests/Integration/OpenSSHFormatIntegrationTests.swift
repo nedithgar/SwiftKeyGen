@@ -498,4 +498,43 @@ struct OpenSSHFormatIntegrationTests {
             #expect(ourNorm == extractedNorm, "ssh-keygen extracted public key should match ours")
         }
     }
+
+    @Test("Round-trip RSA 2048: ssh-keygen → us → export → ssh-keygen", .tags(.rsa))
+    func testRoundTripRSA() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let originalPath = tempDir.appendingPathComponent("original")
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "rsa",
+                "-b", "2048",
+                "-f", originalPath.path,
+                "-N", "",
+                "-C", "roundtrip-rsa@example.com"
+            ])
+            #expect(genResult.succeeded, "ssh-keygen should generate RSA key")
+
+            let key = try KeyManager.readPrivateKey(from: originalPath.path, passphrase: nil)
+            #expect(key is RSAKey, "Parsed key should be RSAKey")
+
+            let exportPath = tempDir.appendingPathComponent("exported")
+            let exportData = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+            try IntegrationTestSupporter.write(exportData, to: exportPath)
+
+            let extractResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y", "-f", exportPath.path
+            ])
+            #expect(extractResult.succeeded, "ssh-keygen should read our exported RSA key")
+
+            let originalPubPath = tempDir.appendingPathComponent("original.pub")
+            let originalPub = try String(contentsOf: originalPubPath, encoding: .utf8)
+            let ourPub = key.publicKeyString()
+            let extractedPub = extractResult.stdout
+
+            let originalNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(originalPub)
+            let ourNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(ourPub)
+            let extractedNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(extractedPub)
+
+            #expect(originalNorm == ourNorm, "Our parsed public key should match original")
+            #expect(ourNorm == extractedNorm, "ssh-keygen extracted public key should match ours")
+        }
+    }
 }
