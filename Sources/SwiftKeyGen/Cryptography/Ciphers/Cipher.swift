@@ -81,7 +81,7 @@ enum Cipher {
             return try TripleDESCBC.encrypt(data: data, key: key, iv: iv)
             
         case "chacha20-poly1305@openssh.com":
-            return try NewChaCha20Poly1305OpenSSH.encrypt(data: data, key: key, iv: iv)
+            return try ChaCha20Poly1305OpenSSH.encrypt(data: data, key: key, iv: iv)
             
         case "none":
             return data
@@ -116,7 +116,7 @@ enum Cipher {
             return try TripleDESCBC.decrypt(data: data, key: key, iv: iv)
             
         case "chacha20-poly1305@openssh.com":
-            return try NewChaCha20Poly1305OpenSSH.decrypt(data: data, key: key, iv: iv)
+            return try ChaCha20Poly1305OpenSSH.decrypt(data: data, key: key, iv: iv)
             
         case "none":
             return data
@@ -151,4 +151,4 @@ enum Cipher {
 
 // MARK: - Triple DES CBC Implementation is in TripleDES.swift
 
-// MARK: - ChaCha20-Poly1305 Implementation is in NewChaCha20Poly1305OpenSSH.swift
+// MARK: - ChaCha20-Poly1305 Implementation is in ChaCha20Poly1305OpenSSH.swift

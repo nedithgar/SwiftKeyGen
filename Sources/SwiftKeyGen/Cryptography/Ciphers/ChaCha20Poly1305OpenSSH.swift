@@ -5,7 +5,7 @@ import BigInt
 /// This variant uses a 64-byte key split into a main encryption key (first
 /// 32 bytes) and a header key (second 32 bytes). The nonce is an 8-byte packet
 /// sequence encoded in little-endian form. Authentication tags are 16 bytes.
-enum NewChaCha20Poly1305OpenSSH {
+enum ChaCha20Poly1305OpenSSH {
     private static let keyLength = 64
     private static let polyKeyLength = 32
     private static let tagLength = 16
@@ -280,7 +280,7 @@ enum NewChaCha20Poly1305OpenSSH {
 
     private struct Poly1305 {
         static func tag(for message: [UInt8], key: [UInt8]) -> [UInt8] {
-            precondition(key.count == NewChaCha20Poly1305OpenSSH.polyKeyLength)
+            precondition(key.count == ChaCha20Poly1305OpenSSH.polyKeyLength)
 
             var rBytes = Array(key.prefix(16))
             clampR(&rBytes)
