@@ -723,6 +723,52 @@ struct OpenSSHFormatIntegrationTests {
             #expect(ourNormalized == theirNormalized, "Public keys should match")
         }
     }
+
+    @Test("ssh-keygen decrypts our aes256-gcm OpenSSH format Ed25519")
+    func testSSHKeygenDecryptsOurEncryptedEd25519AES256GCM() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "encrypted-our-ed25519-aes256-gcm@example.com") as! Ed25519Key
+            let passphrase = "our-secret-passphrase-ed25519-aes256-gcm"
+
+            let keyPath = tempDir.appendingPathComponent("our_encrypted_key_aes256gcm")
+            let keyData = try OpenSSHPrivateKey.serialize(key: key, passphrase: passphrase, cipher: .aes256gcm)
+            try IntegrationTestSupporter.write(keyData, to: keyPath)
+
+            let result = try IntegrationTestSupporter.runSSHKeygen([
+                "-y", "-f", keyPath.path, "-P", passphrase
+            ])
+
+            #expect(result.succeeded, "ssh-keygen should decrypt our AES-256-GCM OpenSSH format")
+            #expect(result.stdout.contains("ssh-ed25519"), "Output should contain Ed25519 public key")
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(result.stdout)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("ssh-keygen decrypts our chacha20-poly1305 OpenSSH format Ed25519")
+    func testSSHKeygenDecryptsOurEncryptedEd25519ChaCha20Poly1305() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let key = try SwiftKeyGen.generateKey(type: .ed25519, comment: "encrypted-our-ed25519-chacha20@example.com") as! Ed25519Key
+            let passphrase = "our-secret-passphrase-ed25519-chacha20"
+
+            let keyPath = tempDir.appendingPathComponent("our_encrypted_key_chacha20poly1305")
+            let keyData = try OpenSSHPrivateKey.serialize(key: key, passphrase: passphrase, cipher: .chacha20poly1305)
+            try IntegrationTestSupporter.write(keyData, to: keyPath)
+
+            let result = try IntegrationTestSupporter.runSSHKeygen([
+                "-y", "-f", keyPath.path, "-P", passphrase
+            ])
+
+            #expect(result.succeeded, "ssh-keygen should decrypt our ChaCha20-Poly1305 OpenSSH format")
+            #expect(result.stdout.contains("ssh-ed25519"), "Output should contain Ed25519 public key")
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(result.stdout)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
     
     @Test("ssh-keygen decrypts our encrypted OpenSSH format RSA", .tags(.rsa))
     func testSSHKeygenDecryptsOurEncryptedRSA() throws {
