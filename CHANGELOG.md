@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 - 2025-10-14
+
+## What's Changed
+* Add Codable conformance and human-readable names to EncryptionCipher by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/21
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.8...v0.1.9
+
 ## 0.1.8 - 2025-10-14
 
 ## What's Changed
