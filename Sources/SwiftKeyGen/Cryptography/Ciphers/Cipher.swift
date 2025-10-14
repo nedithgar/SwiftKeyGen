@@ -151,4 +151,4 @@ enum Cipher {
 
 // MARK: - Triple DES CBC Implementation is in TripleDES.swift
 
-// MARK: - ChaCha20-Poly1305 Implementation is in ChaCha20Poly1305.swift
+// MARK: - ChaCha20-Poly1305 Implementation is in ChaCha20Poly1305OpenSSH.swift

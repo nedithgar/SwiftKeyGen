@@ -224,6 +224,336 @@ struct OpenSSHFormatIntegrationTests {
             #expect(ourNormalized == theirNormalized, "Public keys should match")
         }
     }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes128-ctr)")
+    func testParseSSHKeygenEd25519EncryptedAES128CTR() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes128ctr")
+            let passphrase = "test-passphrase-ed25519-aes128-ctr"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes128-ctr@example.com",
+                "-o",
+                "-Z", "aes128-ctr"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes128-ctr")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes128ctr.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes192-ctr)")
+    func testParseSSHKeygenEd25519EncryptedAES192CTR() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes192ctr")
+            let passphrase = "test-passphrase-ed25519-aes192-ctr"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes192-ctr@example.com",
+                "-o",
+                "-Z", "aes192-ctr"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes192-ctr")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes192ctr.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes256-ctr)")
+    func testParseSSHKeygenEd25519EncryptedAES256CTR() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes256ctr")
+            let passphrase = "test-passphrase-ed25519-aes256-ctr"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes256-ctr@example.com",
+                "-o",
+                "-Z", "aes256-ctr"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes256-ctr")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes256ctr.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes128-cbc)")
+    func testParseSSHKeygenEd25519EncryptedAES128CBC() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes128cbc")
+            let passphrase = "test-passphrase-ed25519-aes128-cbc"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes128-cbc@example.com",
+                "-o",
+                "-Z", "aes128-cbc"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes128-cbc")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes128cbc.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes192-cbc)")
+    func testParseSSHKeygenEd25519EncryptedAES192CBC() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes192cbc")
+            let passphrase = "test-passphrase-ed25519-aes192-cbc"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes192-cbc@example.com",
+                "-o",
+                "-Z", "aes192-cbc"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes192-cbc")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes192cbc.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes256-cbc)")
+    func testParseSSHKeygenEd25519EncryptedAES256CBC() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes256cbc")
+            let passphrase = "test-passphrase-ed25519-aes256-cbc"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes256-cbc@example.com",
+                "-o",
+                "-Z", "aes256-cbc"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes256-cbc")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes256cbc.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes128-gcm)")
+    func testParseSSHKeygenEd25519EncryptedAES128GCM() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes128gcm")
+            let passphrase = "test-passphrase-ed25519-aes128-gcm"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes128-gcm@example.com",
+                "-o",
+                "-Z", "aes128-gcm@openssh.com"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes128-gcm")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes128gcm.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted aes256-gcm)")
+    func testParseSSHKeygenEd25519EncryptedAES256GCM() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_aes256gcm")
+            let passphrase = "test-passphrase-ed25519-aes256-gcm"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-aes256-gcm@example.com",
+                "-o",
+                "-Z", "aes256-gcm@openssh.com"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with aes256-gcm")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_aes256gcm.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted 3des-cbc)")
+    func testParseSSHKeygenEd25519Encrypted3DESCBC() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_3descbc")
+            let passphrase = "test-passphrase-ed25519-3des-cbc"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-3des-cbc@example.com",
+                "-o",
+                "-Z", "3des-cbc"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with 3des-cbc")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_3descbc.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
+
+    @Test("Parse ssh-keygen Ed25519 key (encrypted chacha20-poly1305)")
+    func testParseSSHKeygenEd25519EncryptedChaCha20Poly1305() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let keyPath = tempDir.appendingPathComponent("id_ed25519_chacha20poly1305")
+            let passphrase = "test-passphrase-ed25519-chacha20"
+
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "ed25519",
+                "-f", keyPath.path,
+                "-N", passphrase,
+                "-C", "encrypted-ed25519-chacha20@example.com",
+                "-o",
+                "-Z", "chacha20-poly1305@openssh.com"
+            ])
+
+            #expect(genResult.succeeded, "ssh-keygen should generate encrypted Ed25519 key with chacha20-poly1305")
+
+            #expect(throws: Error.self) {
+                try KeyManager.readPrivateKey(from: keyPath.path, passphrase: nil)
+            }
+
+            let key = try KeyManager.readPrivateKey(from: keyPath.path, passphrase: passphrase)
+            #expect(key is Ed25519Key, "Parsed key should be Ed25519Key")
+
+            let sshPubPath = tempDir.appendingPathComponent("id_ed25519_chacha20poly1305.pub")
+            let sshPublicKey = try String(contentsOf: sshPubPath, encoding: .utf8)
+
+            let ourNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(key.publicKeyString())
+            let theirNormalized = IntegrationTestSupporter.normalizeOpenSSHPublicKey(sshPublicKey)
+            #expect(ourNormalized == theirNormalized, "Public keys should match")
+        }
+    }
     
     @Test("Parse ssh-keygen RSA key (encrypted)", .tags(.rsa))
     func testParseSSHKeygenRSAEncrypted() throws {
@@ -494,6 +824,45 @@ struct OpenSSHFormatIntegrationTests {
             let ourNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(ourPub)
             let extractedNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(extractedPub)
             
+            #expect(originalNorm == ourNorm, "Our parsed public key should match original")
+            #expect(ourNorm == extractedNorm, "ssh-keygen extracted public key should match ours")
+        }
+    }
+
+    @Test("Round-trip RSA 2048: ssh-keygen → us → export → ssh-keygen", .tags(.rsa))
+    func testRoundTripRSA() throws {
+        try IntegrationTestSupporter.withTemporaryDirectory { tempDir in
+            let originalPath = tempDir.appendingPathComponent("original")
+            let genResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-t", "rsa",
+                "-b", "2048",
+                "-f", originalPath.path,
+                "-N", "",
+                "-C", "roundtrip-rsa@example.com"
+            ])
+            #expect(genResult.succeeded, "ssh-keygen should generate RSA key")
+
+            let key = try KeyManager.readPrivateKey(from: originalPath.path, passphrase: nil)
+            #expect(key is RSAKey, "Parsed key should be RSAKey")
+
+            let exportPath = tempDir.appendingPathComponent("exported")
+            let exportData = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
+            try IntegrationTestSupporter.write(exportData, to: exportPath)
+
+            let extractResult = try IntegrationTestSupporter.runSSHKeygen([
+                "-y", "-f", exportPath.path
+            ])
+            #expect(extractResult.succeeded, "ssh-keygen should read our exported RSA key")
+
+            let originalPubPath = tempDir.appendingPathComponent("original.pub")
+            let originalPub = try String(contentsOf: originalPubPath, encoding: .utf8)
+            let ourPub = key.publicKeyString()
+            let extractedPub = extractResult.stdout
+
+            let originalNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(originalPub)
+            let ourNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(ourPub)
+            let extractedNorm = IntegrationTestSupporter.normalizeOpenSSHPublicKey(extractedPub)
+
             #expect(originalNorm == ourNorm, "Our parsed public key should match original")
             #expect(ourNorm == extractedNorm, "ssh-keygen extracted public key should match ours")
         }
