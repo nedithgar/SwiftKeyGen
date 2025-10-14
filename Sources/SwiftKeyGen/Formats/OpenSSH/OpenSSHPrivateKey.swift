@@ -65,7 +65,7 @@ public struct OpenSSHPrivateKey {
     ///   a deterministic order suitable for UI pickers.
     /// - `Identifiable`: ``id`` is the wire-format cipher name (``rawValue``),
     ///   providing a stable identity for collection diffing.
-    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable, CaseIterable, Identifiable {
+    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable, CaseIterable, Identifiable, Codable {
         /// The OpenSSH wire-format cipher name (e.g., "aes256-gcm@openssh.com").
         public let rawValue: String
 
@@ -122,6 +122,46 @@ public struct OpenSSHPrivateKey {
         ///
         /// Mirrors ``known`` to ensure a single source of truth and stable ordering.
         public static var allCases: [EncryptionCipher] { known }
+
+        /// A human-readable name for display purposes.
+        public var humanReadableName: String {
+            switch self {
+            case .aes128ctr:
+                return "AES-128-CTR"
+            case .aes192ctr:
+                return "AES-192-CTR"
+            case .aes256ctr:
+                return "AES-256-CTR"
+            case .aes128cbc:
+                return "AES-128-CBC"
+            case .aes192cbc:
+                return "AES-192-CBC"
+            case .aes256cbc:
+                return "AES-256-CBC"
+            case .aes128gcm:
+                return "AES-128-GCM"
+            case .aes256gcm:
+                return "AES-256-GCM"
+            case .des3cbc:
+                return "3DES-CBC"
+            case .chacha20poly1305:
+                return "ChaCha20-Poly1305"
+            default:
+                return rawValue
+            }
+        }
+
+        // Codable conformance: encode/decode as a single string value (the wire-format name)
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            self.init(rawValue: value)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(self.rawValue)
+        }
     }
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
