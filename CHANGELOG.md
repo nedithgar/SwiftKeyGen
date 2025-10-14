@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8 - 2025-10-14
+
+## What's Changed
+* Enhance EncryptionCipher with Identifiable and CaseIterable conformance, update version to 0.1.8 by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/20
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.7...v0.1.8
+
 ## 0.1.7 - 2025-10-13
 
 ## What's Changed
