@@ -59,13 +59,31 @@ public struct OpenSSHPrivateKey {
     ///   an `enum` to allow forward- and backward-compatibility as OpenSSH
     ///   evolves. Known ciphers are provided as static constants, and arbitrary
     ///   cipher names can be created via `init(rawValue:)`.
-    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable {
+    ///
+    /// This type also conforms to `CaseIterable` and `Identifiable`:
+    /// - `CaseIterable`: ``allCases`` returns the library’s ``known`` ciphers in
+    ///   a deterministic order suitable for UI pickers.
+    /// - `Identifiable`: ``id`` is the wire-format cipher name (``rawValue``),
+    ///   providing a stable identity for collection diffing.
+    public struct EncryptionCipher: RawRepresentable, Hashable, ExpressibleByStringLiteral, Sendable, CaseIterable, Identifiable {
+        /// The OpenSSH wire-format cipher name (e.g., "aes256-gcm@openssh.com").
         public let rawValue: String
+
+        /// Creates a cipher from its OpenSSH wire-format name.
+        ///
+        /// - Parameter rawValue: The canonical cipher name used on the wire.
         public init(rawValue: String) { self.rawValue = rawValue }
+
+        /// Creates a cipher from a string literal representing its wire-format name.
+        ///
+        /// - Parameter value: The canonical cipher name used on the wire.
         public init(stringLiteral value: String) { self.rawValue = value }
 
         /// OpenSSH wire-format name.
         public var name: String { rawValue }
+
+        /// Stable identifier for `Identifiable` conformance (the cipher name).
+        public var id: String { rawValue }
 
         // Known cipher constants (stable API surface)
         public static let aes128ctr = EncryptionCipher(rawValue: "aes128-ctr")
@@ -99,6 +117,11 @@ public struct OpenSSHPrivateKey {
                 .chacha20poly1305,
             ]
         }
+
+        /// All known cases for `CaseIterable` conformance.
+        ///
+        /// Mirrors ``known`` to ensure a single source of truth and stable ordering.
+        public static var allCases: [EncryptionCipher] { known }
     }
     // OpenSSH private key format constants
     private static let MARK_BEGIN = "-----BEGIN OPENSSH PRIVATE KEY-----"
