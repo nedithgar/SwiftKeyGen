@@ -11,11 +11,11 @@ struct ChaCha20Poly1305UnitTests {
         let iv = Data(count: 8) // Zero IV
         
         // Test encryption
-        let encrypted = try ChaCha20Poly1305OpenSSH.encrypt(data: plaintext, key: key, iv: iv)
+        let encrypted = try NewChaCha20Poly1305OpenSSH.encrypt(data: plaintext, key: key, iv: iv)
         #expect(encrypted.count == plaintext.count + 16)
         
         // Test decryption
-        let decrypted = try ChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
+        let decrypted = try NewChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
         #expect(decrypted == plaintext)
     }
 
@@ -25,10 +25,10 @@ struct ChaCha20Poly1305UnitTests {
         let plaintext = Data()
         let iv = Data(count: 8)
         
-        let encrypted = try ChaCha20Poly1305OpenSSH.encrypt(data: plaintext, key: key, iv: iv)
+        let encrypted = try NewChaCha20Poly1305OpenSSH.encrypt(data: plaintext, key: key, iv: iv)
         #expect(encrypted.count == 16) // Just the tag
         
-        let decrypted = try ChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
+        let decrypted = try NewChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
         #expect(decrypted == plaintext)
     }
 
@@ -38,8 +38,8 @@ struct ChaCha20Poly1305UnitTests {
         let key = Data(repeating: 0x42, count: 64) // 64 bytes for ChaCha20-Poly1305
         let iv = Data() // No IV for OpenSSH ChaCha20-Poly1305
         
-        let encrypted = try ChaCha20Poly1305OpenSSH.encrypt(data: testData, key: key, iv: iv)
-        let decrypted = try ChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
+        let encrypted = try NewChaCha20Poly1305OpenSSH.encrypt(data: testData, key: key, iv: iv)
+        let decrypted = try NewChaCha20Poly1305OpenSSH.decrypt(data: encrypted, key: key, iv: iv)
         
         #expect(testData == decrypted)
     }
@@ -51,10 +51,11 @@ struct ChaCha20Poly1305UnitTests {
             return
         }
 
-        let encrypted = try ChaCha20Poly1305OpenSSH.encrypt(
+        let encrypted = try NewChaCha20Poly1305OpenSSH.encrypt(
             data: vectors.plaintext,
             key: vectors.key,
-            iv: vectors.iv
+            iv: vectors.iv,
+            aadLength: ChaCha20Poly1305Fixtures.aadLength
         )
 
         #expect(encrypted.count == vectors.fullCiphertext.count)
@@ -68,10 +69,11 @@ struct ChaCha20Poly1305UnitTests {
             return
         }
 
-        let decrypted = try ChaCha20Poly1305OpenSSH.decrypt(
+        let decrypted = try NewChaCha20Poly1305OpenSSH.decrypt(
             data: vectors.fullCiphertext,
             key: vectors.key,
-            iv: vectors.iv
+            iv: vectors.iv,
+            aadLength: ChaCha20Poly1305Fixtures.aadLength
         )
 
         #expect(decrypted == vectors.plaintext)
@@ -79,6 +81,7 @@ struct ChaCha20Poly1305UnitTests {
 }
 
 private enum ChaCha20Poly1305Fixtures {
+    static let aadLength = 4
     static let workedExample: Vectors? = {
         let keyParts = [
             "8b bf f6 85",
