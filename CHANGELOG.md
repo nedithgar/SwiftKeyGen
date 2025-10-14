@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.10 - 2025-10-14
+
+## What's Changed
+* Add RSA and Ed25519 key tests, implement ChaCha20-Poly1305 methods by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/22
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.9...v0.1.10
+
 ## 0.1.9 - 2025-10-14
 
 ## What's Changed
