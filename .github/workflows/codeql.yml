@@ -46,7 +46,7 @@ jobs:
         - language: actions
           build-mode: none
         - language: swift
-          build-mode: autobuild
+          build-mode: manual
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
@@ -58,6 +58,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Install Swift 6.2
+      if: matrix.language == 'swift'
+      run: |
+        SWIFT_VERSION="6.2"
+        URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/xcode/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE-osx.pkg"
+        curl -f -o swift.pkg "$URL"
+        sudo installer -pkg swift.pkg -target /
+        TOOLCHAIN_PATH="/Library/Developer/Toolchains/swift-${SWIFT_VERSION}-RELEASE.xctoolchain"
+        echo "$TOOLCHAIN_PATH/usr/bin" >> $GITHUB_PATH
+        BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw "$TOOLCHAIN_PATH/Info.plist")
+        echo "TOOLCHAINS=$BUNDLE_ID" >> $GITHUB_ENV
 
     # Add any setup steps before running the `github/codeql-action/init` action.
     # This includes steps like installing compilers or runtimes (`actions/setup-node`
@@ -88,12 +100,16 @@ jobs:
       if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        echo 'If you are using a "manual" build mode for one or more of the' \
-          'languages you are analyzing, replace this with the commands to build' \
-          'your code, for example:'
-        echo '  make bootstrap'
-        echo '  make release'
-        exit 1
+        if [ "${{ matrix.language }}" = "swift" ]; then
+          swift build
+        else
+          echo 'If you are using a "manual" build mode for one or more of the' \
+            'languages you are analyzing, replace this with the commands to build' \
+            'your code, for example:'
+          echo '  make bootstrap'
+          echo '  make release'
+          exit 1
+        fi
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
