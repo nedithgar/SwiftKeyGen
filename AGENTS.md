@@ -9,7 +9,7 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 - Find Text: `rg` (ripgrep)
 - Find Code Structure: `ast-grep`
   - Default to Swift:
-    - `.swift` files: `ast-grep --lang swift -p '<swift code pattern>'` (Swift is supported via tree-sitter); prefer precise code patterns over broad regex.
+    - `.swift` files: `ast-grep --lang swift -p '<pattern>'` (Swift is supported via tree-sitter); prefer precise code patterns over broad regex.
   - Other languages: adjust corresponding `--lang` for `ast-grep`.
 - Select among matches: pipe to `fzf`
 - JSON: `jq`
