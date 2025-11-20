@@ -27,7 +27,7 @@ jobs:
     #   - https://gh.io/supported-runners-and-hardware-resources
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-26') || 'ubuntu-latest' }}
     permissions:
       # required for all workflows
       security-events: write
@@ -59,17 +59,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install Swift 6.2
+    - name: Install Swift 6.2 (macOS)
       if: matrix.language == 'swift'
+      shell: bash
       run: |
-        SWIFT_VERSION="6.2"
-        URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/xcode/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE-osx.pkg"
-        curl -f -o swift.pkg "$URL"
-        sudo installer -pkg swift.pkg -target /
-        TOOLCHAIN_PATH="/Library/Developer/Toolchains/swift-${SWIFT_VERSION}-RELEASE.xctoolchain"
-        echo "$TOOLCHAIN_PATH/usr/bin" >> $GITHUB_PATH
-        BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw "$TOOLCHAIN_PATH/Info.plist")
-        echo "TOOLCHAINS=$BUNDLE_ID" >> $GITHUB_ENV
+        set -euxo pipefail
+        SWIFT_VERSION=6.2
+        PKG="swift-${SWIFT_VERSION}-RELEASE-osx.pkg"
+        URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/xcode/swift-${SWIFT_VERSION}-RELEASE/${PKG}"
+        curl -fSOL "$URL"
+        sudo installer -pkg "$PKG" -target /
+        TOOLCHAIN="/Library/Developer/Toolchains/swift-${SWIFT_VERSION}-RELEASE.xctoolchain/usr/bin"
+        echo "$TOOLCHAIN" >> "$GITHUB_PATH"
+        swift --version
 
     # Add any setup steps before running the `github/codeql-action/init` action.
     # This includes steps like installing compilers or runtimes (`actions/setup-node`
@@ -101,11 +103,10 @@ jobs:
       shell: bash
       run: |
         if [ "${{ matrix.language }}" = "swift" ]; then
-          TOOLCHAIN="/Library/Developer/Toolchains/swift-6.2-RELEASE.xctoolchain"
-          export TOOLCHAINS=$(plutil -extract CFBundleIdentifier raw "$TOOLCHAIN/Info.plist")
-          echo "Using toolchain: $TOOLCHAINS ($TOOLCHAIN)"
-          "$TOOLCHAIN/usr/bin/swift" --version
-          "$TOOLCHAIN/usr/bin/swift" build --verbose
+          set -euxo pipefail
+          swift --version
+          swift package resolve
+          swift build -c release
         else
           echo 'If you are using a "manual" build mode for one or more of the' \
             'languages you are analyzing, replace this with the commands to build' \
