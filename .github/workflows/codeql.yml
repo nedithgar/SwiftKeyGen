@@ -101,7 +101,11 @@ jobs:
       shell: bash
       run: |
         if [ "${{ matrix.language }}" = "swift" ]; then
-          swift build
+          TOOLCHAIN="/Library/Developer/Toolchains/swift-6.2-RELEASE.xctoolchain"
+          export TOOLCHAINS=$(plutil -extract CFBundleIdentifier raw "$TOOLCHAIN/Info.plist")
+          echo "Using toolchain: $TOOLCHAINS ($TOOLCHAIN)"
+          "$TOOLCHAIN/usr/bin/swift" --version
+          "$TOOLCHAIN/usr/bin/swift" build --verbose
         else
           echo 'If you are using a "manual" build mode for one or more of the' \
             'languages you are analyzing, replace this with the commands to build' \
