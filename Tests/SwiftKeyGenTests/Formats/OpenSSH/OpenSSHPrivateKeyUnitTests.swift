@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-import BigInt
 @testable import SwiftKeyGen
 
 @Suite("OpenSSHPrivateKey Unit Tests", .tags(.unit))
@@ -21,126 +20,6 @@ struct OpenSSHPrivateKeyUnitTests {
 
     // Helper: AUTH_MAGIC used by OpenSSHPrivateKey
     private let authMagic = "openssh-key-v1\u{0}"
-
-    private var platformName: String {
-        #if os(Linux)
-        return "Linux"
-        #elseif os(macOS)
-        return "macOS"
-        #else
-        return "Other"
-        #endif
-    }
-
-    private func digestPrefix(_ data: Data, bytes: Int = 8) -> String {
-        Data(data.sha256Data().prefix(bytes)).hexEncodedString()
-    }
-
-    private func printRSAKeyDiagnostics(label: String, key: RSAKey) {
-        let privateKey = key.privateKey
-        let qInvIsValid = (privateKey.q * privateKey.qInv) % privateKey.p == 1
-        let nMatchesPrimes = privateKey.n == privateKey.p * privateKey.q
-        let dPMatches = privateKey.dP == privateKey.d % (privateKey.p - 1)
-        let dQMatches = privateKey.dQ == privateKey.d % (privateKey.q - 1)
-
-        print(
-            """
-            [RSA round-trip debug] \(label): \
-            nBits=\(privateKey.n.bitWidth), \
-            pBits=\(privateKey.p.bitWidth), \
-            qBits=\(privateKey.q.bitWidth), \
-            e=\(privateKey.e), \
-            dBits=\(privateKey.d.bitWidth), \
-            dPBits=\(privateKey.dP.bitWidth), \
-            dQBits=\(privateKey.dQ.bitWidth), \
-            qInvBits=\(privateKey.qInv.bitWidth), \
-            pGreaterThanQ=\(privateKey.p > privateKey.q), \
-            nMatchesPrimes=\(nMatchesPrimes), \
-            dPMatches=\(dPMatches), \
-            dQMatches=\(dQMatches), \
-            qInvIsValid=\(qInvIsValid), \
-            publicKeyBytes=\(key.publicKeyData().count), \
-            publicKeySHA256Prefix=\(digestPrefix(key.publicKeyData())), \
-            comment=\(key.comment ?? "<nil>")
-            """
-        )
-    }
-
-    private func printOpenSSHEnvelopeDiagnostics(serialized: Data) throws {
-        guard let pem = String(data: serialized, encoding: .utf8) else {
-            print("[RSA round-trip debug] serialized PEM is not UTF-8; bytes=\(serialized.count)")
-            return
-        }
-
-        let payload = base64Payload(from: pem)
-        print(
-            "[RSA round-trip debug] serializedBytes=\(serialized.count), payloadBytes=\(payload.count), payloadSHA256Prefix=\(digestPrefix(payload))"
-        )
-
-        let magicLength = authMagic.utf8.count
-        guard payload.count >= magicLength else {
-            print("[RSA round-trip debug] payload too short for AUTH_MAGIC; payloadBytes=\(payload.count)")
-            return
-        }
-
-        let magicMatches = payload.prefix(magicLength) == Data(authMagic.utf8)
-        print("[RSA round-trip debug] magicMatches=\(magicMatches), magicLength=\(magicLength)")
-
-        guard magicMatches else { return }
-
-        var decoder = SSHDecoder(data: payload.subdata(in: magicLength..<payload.count))
-        let cipherName = try decoder.decodeString()
-        let kdfName = try decoder.decodeString()
-        let kdfData = try decoder.decodeData()
-        let numKeys = try decoder.decodeUInt32()
-        let publicKeyData = try decoder.decodeData()
-        let privateBlockLength = try decoder.decodeUInt32()
-        let privateBlock = try decoder.decodeBytes(count: Int(privateBlockLength))
-
-        print(
-            """
-            [RSA round-trip debug] envelope: \
-            cipher=\(cipherName), \
-            kdf=\(kdfName), \
-            kdfBytes=\(kdfData.count), \
-            numKeys=\(numKeys), \
-            publicKeyBytes=\(publicKeyData.count), \
-            publicKeySHA256Prefix=\(digestPrefix(publicKeyData)), \
-            privateBlockLength=\(privateBlockLength), \
-            privateBlockBytes=\(privateBlock.count), \
-            privateBlockSHA256Prefix=\(digestPrefix(Data(privateBlock))), \
-            trailingBytes=\(decoder.remaining)
-            """
-        )
-    }
-
-    private func printRSASignatureDiagnostics(label: String, signature: Data, message: Data, key: RSAKey) throws {
-        var decoder = SSHDecoder(data: signature)
-        let signatureType = try decoder.decodeString()
-        let signatureBlob = try decoder.decodeData()
-        let keyByteSize = (key.privateKey.bitSize + 7) / 8
-        let recovered = BigUInt(signatureBlob)
-            .power(key.privateKey.e, modulus: key.privateKey.n)
-            .serialize()
-            .leftPadded(to: keyByteSize)
-        let recoveredPrefix = Data(recovered.prefix(12)).hexEncodedString()
-        let separatorIndex = recovered.dropFirst(2).firstIndex(of: 0x00)
-        let separatorOffset = separatorIndex.map { recovered.distance(from: recovered.startIndex, to: $0) } ?? -1
-
-        print(
-            """
-            [RSA round-trip debug] \(label) signature: \
-            signatureBytes=\(signature.count), \
-            signatureType=\(signatureType), \
-            signatureBlobBytes=\(signatureBlob.count), \
-            signatureSHA256Prefix=\(digestPrefix(signatureBlob)), \
-            keyByteSize=\(keyByteSize), \
-            recoveredPrefix=\(recoveredPrefix), \
-            separatorOffset=\(separatorOffset), \
-            messageSHA256Prefix=\(digestPrefix(message))
-            """
-        )
-    }
 
     @Test("serialize (none) writes header, kdf and public block correctly")
     func testSerializeUnencryptedHeaderAndFields() throws {
@@ -510,51 +389,18 @@ struct OpenSSHPrivateKeyUnitTests {
 
     @Test("RSA key round-trip with signing verification", .tags(.rsa))
     func testRSARoundTrip() throws {
-        print("[RSA round-trip debug] starting on platform=\(platformName)")
-
         let key = try SwiftKeyGen.generateKey(type: .rsa, bits: 2048, comment: "test@example.com") as! RSAKey
-        printRSAKeyDiagnostics(label: "original", key: key)
-
         let serialized = try OpenSSHPrivateKey.serialize(key: key, passphrase: nil)
-        try printOpenSSHEnvelopeDiagnostics(serialized: serialized)
-
         let parsed = try OpenSSHPrivateKey.parse(data: serialized) as! RSAKey
-        printRSAKeyDiagnostics(label: "parsed", key: parsed)
 
-        let keyTypeMatches = parsed.keyType == key.keyType
-        let commentMatches = parsed.comment == key.comment
-        let publicKeyMatches = parsed.publicKeyData() == key.publicKeyData()
-        print(
-            "[RSA round-trip debug] roundTripComparisons keyTypeMatches=\(keyTypeMatches), commentMatches=\(commentMatches), publicKeyMatches=\(publicKeyMatches)"
-        )
-
-        #expect(keyTypeMatches)
-        #expect(commentMatches)
-        #expect(publicKeyMatches)
+        #expect(parsed.keyType == key.keyType)
+        #expect(parsed.comment == key.comment)
+        #expect(parsed.publicKeyData() == key.publicKeyData())
 
         let message = Data("Hello, RSA!".utf8)
         let sig = try parsed.sign(data: message)
-        try printRSASignatureDiagnostics(label: "parsed", signature: sig, message: message, key: parsed)
-
-        let parsedVerifiesParsedSignature = try parsed.verify(signature: sig, for: message)
-        let originalVerifiesParsedSignature = try key.verify(signature: sig, for: message)
-        print(
-            "[RSA round-trip debug] parsedSignatureVerification parsed=\(parsedVerifiesParsedSignature), original=\(originalVerifiesParsedSignature)"
-        )
-
-        let originalSig = try key.sign(data: message)
-        try printRSASignatureDiagnostics(label: "original", signature: originalSig, message: message, key: key)
-
-        let originalVerifiesOriginalSignature = try key.verify(signature: originalSig, for: message)
-        let parsedVerifiesOriginalSignature = try parsed.verify(signature: originalSig, for: message)
-        print(
-            "[RSA round-trip debug] originalSignatureVerification original=\(originalVerifiesOriginalSignature), parsed=\(parsedVerifiesOriginalSignature)"
-        )
-
-        #expect(parsedVerifiesParsedSignature)
-        #expect(originalVerifiesParsedSignature)
-        #expect(originalVerifiesOriginalSignature)
-        #expect(parsedVerifiesOriginalSignature)
+        #expect(try parsed.verify(signature: sig, for: message))
+        #expect(try key.verify(signature: sig, for: message))
     }
 
     // MARK: - Cipher Support Tests
