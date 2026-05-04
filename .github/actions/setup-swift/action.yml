@@ -14,6 +14,9 @@ runs:
         if swift --version 2>/dev/null | grep -q "Swift version ${SWIFT_VERSION}"; then
           echo "Swift ${SWIFT_VERSION} already installed on runner."
         else
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
+
           ARCH="$(uname -m)"
           SWIFTLY_TARBALL="swiftly-${ARCH}.tar.gz"
           curl -fSLo "${SWIFTLY_TARBALL}" "https://download.swift.org/swiftly/linux/${SWIFTLY_TARBALL}"
