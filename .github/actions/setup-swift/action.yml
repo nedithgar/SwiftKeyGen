@@ -1,0 +1,37 @@
+name: Setup Swift
+description: Configure Swift 6.2 on GitHub-hosted Linux and macOS runners.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Swift 6.2 on Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -euxo pipefail
+        SWIFT_VERSION=6.2
+
+        if swift --version 2>/dev/null | grep -q "Swift version ${SWIFT_VERSION}"; then
+          echo "Swift ${SWIFT_VERSION} already installed on runner."
+        else
+          ARCH="$(uname -m)"
+          SWIFTLY_TARBALL="swiftly-${ARCH}.tar.gz"
+          curl -fSLo "${SWIFTLY_TARBALL}" "https://download.swift.org/swiftly/linux/${SWIFTLY_TARBALL}"
+          tar zxf "${SWIFTLY_TARBALL}"
+          ./swiftly init --quiet-shell-followup
+          . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+          swiftly install "${SWIFT_VERSION}"
+          echo "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/bin" >> "$GITHUB_PATH"
+          hash -r
+        fi
+
+        swift --version
+
+    - name: Select Xcode toolchain on macOS
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euxo pipefail
+        export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+        echo "DEVELOPER_DIR=${DEVELOPER_DIR}" >> "$GITHUB_ENV"
+        swift --version

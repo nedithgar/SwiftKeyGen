@@ -18,7 +18,7 @@ jobs:
       release_exists: ${{ steps.check_release.outputs.release_exists }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Extract Version from main.swift
         id: extract
@@ -102,52 +102,10 @@ jobs:
         os: [ubuntu-latest, macos-26]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install Swift 6.2 (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          SWIFT_VERSION=6.2
-
-          # If the required Swift version is already available, skip installation.
-          if swift --version 2>/dev/null | grep -q "Swift version ${SWIFT_VERSION}"; then
-            echo "Swift ${SWIFT_VERSION} already installed on runner."
-          else
-            # Install Swiftly (official Swift.org installer/manager) and use it to install Swift ${SWIFT_VERSION}
-            ARCH="$(uname -m)"
-            SWIFTLY_TARBALL="swiftly-${ARCH}.tar.gz"
-            curl -fSLo "${SWIFTLY_TARBALL}" "https://download.swift.org/swiftly/linux/${SWIFTLY_TARBALL}"
-            tar zxf "${SWIFTLY_TARBALL}"
-            ./swiftly init --quiet-shell-followup
-            # Load environment so 'swiftly' is available in this step
-            . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
-            # Install exact Swift version
-            swiftly install "${SWIFT_VERSION}"
-            # Persist Swiftly bin path for subsequent steps
-            echo "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/bin" >> "$GITHUB_PATH"
-            hash -r
-          fi
-
-          swift --version
-
-      - name: Install Swift 6.2 (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          SWIFT_VERSION=6.2
-          PKG="swift-${SWIFT_VERSION}-RELEASE-osx.pkg"
-          URL="https://download.swift.org/swift-${SWIFT_VERSION}-release/xcode/swift-${SWIFT_VERSION}-RELEASE/${PKG}"
-          curl -fSOL "$URL"
-          sudo installer -pkg "$PKG" -target /
-          TOOLCHAIN="/Library/Developer/Toolchains/swift-${SWIFT_VERSION}-RELEASE.xctoolchain/usr/bin"
-          echo "$TOOLCHAIN" >> "$GITHUB_PATH"
-          swift --version
-
-      - name: Print Swift Version
-        run: swift --version
+      - name: Setup Swift
+        uses: ./.github/actions/setup-swift
 
       - name: Resolve Dependencies
         run: swift package resolve
@@ -210,7 +168,7 @@ jobs:
     if: needs.preflight.outputs.release_exists == 'false'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Gather Artifacts
         uses: actions/download-artifact@v4
