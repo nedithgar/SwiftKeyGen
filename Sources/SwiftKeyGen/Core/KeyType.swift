@@ -1,6 +1,5 @@
 import Foundation
 
-// TODO: Wait for SE-0487: Nonexhaustive Enums
 /// A flexible identifier for SSH key algorithms.
 ///
 /// `KeyType` models OpenSSH algorithm identifiers (for example, "ssh-ed25519",
@@ -57,8 +56,9 @@ import Foundation
 /// - SeeAlso: ``KeyGeneration``, ``KeyManager``, ``PublicKeys``
 /// - Warning: Some helpers (for example, ``defaultBits``) intentionally return
 ///   neutral values for unknown algorithms to avoid guessing.
-/// - TODO: Update once SE-0487 (Nonexhaustive Enums) is widely available and
-///   evaluated for this use case.
+/// - Note: Although Swift supports nonexhaustive enums, this remains a
+///   string-backed type so future, vendor-specific, and otherwise unknown
+///   OpenSSH algorithm identifiers can round-trip without loss.
 ///
 /// ### Identifiable
 ///

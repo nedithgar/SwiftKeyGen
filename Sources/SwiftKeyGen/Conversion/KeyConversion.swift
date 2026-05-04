@@ -1,7 +1,7 @@
 import Foundation
 import Crypto
 import _CryptoExtras
-// TODO: Wait for SE-0487: Nonexhaustive Enums
+
 /// A flexible identifier for key serialization formats supported by SwiftKeyGen.
 ///
 /// `KeyFormat` models logical formats used throughout the library (for example,
