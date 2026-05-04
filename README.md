@@ -5,7 +5,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20macCatalyst%20%7C%20visionOS-blue)](Package.swift)
 [![Linux](https://img.shields.io/badge/Linux-experimental-lightgrey?logo=linux&logoColor=black)](#platform-support)
 
-A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms.
+A pure Swift implementation of SSH key generation, compatible with OpenSSH formats. SwiftKeyGen provides a modern, type-safe API for generating and managing SSH keys across Apple platforms, with experimental Linux support.
 
 > [!WARNING]
 > **Experimental software.** This project is provided for **evaluation and research** only and is **not** intended for production use.  
@@ -16,18 +16,19 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 ### Key Generation
 - ✅ **Ed25519** key generation (recommended)
 - ✅ **ECDSA** key generation (P-256, P-384, P-521)
-- ✅ RSA key generation (2048, 3072, 4096 bits)
+- ✅ RSA key generation (1024-16384 bits, multiple of 8; 3072-bit default)
 - ✅ Batch key generation for multiple hosts
 - ✅ Generate all key types for a single identity
 
 ### Key Management
 - ✅ OpenSSH private key format with passphrase encryption
-- ✅ Key format conversion (OpenSSH, PEM, PKCS#8, RFC4716)
-- ✅ Import public keys from PEM/PKCS#8 formats
+- ✅ Key format conversion and export (OpenSSH, PEM, PKCS#8, RFC4716)
+- ✅ Public-key conversion from OpenSSH, RFC4716, RSA PEM, and ECDSA/Ed25519 SubjectPublicKeyInfo `PUBLIC KEY` inputs
 - ✅ Import/export keys from stdin/stdout
 - ✅ Import ECDSA private keys from SEC1 (EC PRIVATE KEY) PEM (unencrypted & legacy encrypted)
 - ✅ Import ECDSA private keys from encrypted PKCS#8 (PBES2: AES-128/256-CBC, HMAC-SHA1/SHA256)
 - ✅ Import RSA private keys from legacy encrypted PKCS#1 PEM (Proc-Type/DEK-Info)
+- ✅ Import Ed25519 private keys from unencrypted PKCS#8 and legacy encrypted PEM
 - ✅ Multiple fingerprint algorithms (SHA256, SHA512, MD5)
 - ✅ Fingerprint randomart visualization
 - ✅ Key parsing and validation
@@ -41,7 +42,7 @@ A pure Swift implementation of SSH key generation, compatible with OpenSSH forma
 - ✅ Full signature verification (Ed25519, RSA, ECDSA)
 - ✅ RSA signatures: ssh-rsa (SHA1), rsa-sha2-256, rsa-sha2-512
 - ✅ ECDSA signatures: P-256 (SHA256), P-384 (SHA384), P-521 (SHA512)
-- ✅ Apple platforms support (see `Package.swift` for minimum versions)
+- ✅ Apple platform v26 support and experimental Linux builds
 
 ## Installation
 
@@ -51,8 +52,17 @@ Add SwiftKeyGen to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/nedithgar/SwiftKeyGen.git", from: "0.1.0")
+    .package(url: "https://github.com/nedithgar/SwiftKeyGen.git", from: "0.1.10")
 ]
+```
+
+Then add `SwiftKeyGen` to the target that uses it:
+
+```swift
+.target(
+    name: "YourTarget",
+    dependencies: ["SwiftKeyGen"]
+)
 ```
 
 ## Usage
@@ -154,12 +164,13 @@ let key = try KeyManager.readPrivateKey(
     passphrase: "my-passphrase" // optional
 )
 
-// Get key info without decryption
-let info = try KeyManager.getKeyInfo(keyPath: "~/.ssh/id_ed25519")
+// Get OpenSSH private-key info without decrypting the private payload
+let pathInfo = try KeyManager.getKeyInfo(keyPath: "~/.ssh/id_ed25519")
 // OR
-let info = try KeyManager.getKeyInfo(fromData: someData)
+let dataInfo = try KeyManager.getKeyInfo(fromData: openSSHPrivateKeyData)
 // OR
-let info = try KeyManager.getKeyInfo(fromPEM: somePEMString)
+let stringInfo = try KeyManager.getKeyInfo(fromPEM: openSSHPrivateKeyString)
+let info = pathInfo
 print("Key type: \(info.keyType)")
 print("Key size: \(info.bitSize) bits")
 print("Encrypted: \(info.isEncrypted)")
@@ -200,8 +211,8 @@ let isValid = KeyManager.verifyPassphrase(
 
 ## Platform Support
 
-- Apple platforms only (see `Package.swift` for current minimums). The package is configured for contemporary SDKs/toolchains (Swift 6.2).
-- Linux support is currently experimental and may require adjustments (some internals use Apple-specific randomness APIs).
+- Apple platform baselines are v26 for macOS, iOS, tvOS, watchOS, Mac Catalyst, and visionOS (see `Package.swift`).
+- Linux support is experimental. CI builds and tests on Ubuntu with Swift 6.2, but the package is primarily configured around contemporary Apple SDKs.
 
 ### Passphrase Protection
 
@@ -336,7 +347,7 @@ let options = KeyConversionManager.ConversionOptions(
 try KeyConversionManager.convertKey(options: options)
 ```
 
-#### PEM/PKCS8 Import Support
+#### PEM/PKCS#8 Import Support
 
 ```swift
 // Parse RSA public key from PEM format
@@ -373,32 +384,32 @@ MHcCAQEEIIGLlamZU9Z83D3g8VsmdqKhu5u47L4RjSXNe3zxQNXPoAoGCCqGSM49
 let ecdsaPrivateKey = try PEMParser.parseECDSAPrivateKey(ecdsaPrivatePEM)
 print(ecdsaPrivateKey.publicKeyString()) // Extract public key
 
-// Ed25519 private key OpenSSH format fully supported.
+// Ed25519 private key OpenSSH format is fully supported through KeyManager/OpenSSHPrivateKey.
 // PEM import:
 // - Unencrypted PKCS#8 (PRIVATE KEY): supported
 // - Legacy OpenSSL-encrypted PEM (Proc-Type/DEK-Info): supported
-// - Encrypted PKCS#8 (ENCRYPTED PRIVATE KEY): not currently supported
+// - PBES2 encrypted PKCS#8 (ENCRYPTED PRIVATE KEY): not currently exposed through PEMParser.parseEd25519PrivateKey
 let ed25519Private = try PEMParser.parseEd25519PrivateKey(ed25519PEM)
 
-// Parse ECDSA public key from PKCS8 format
-let ecdsaPKCS8 = """
+// Parse ECDSA public key from SubjectPublicKeyInfo (PUBLIC KEY) PEM
+let ecdsaSPKI = """
 -----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEW3MgvL1V6nh5Fc3YlVJdQi4XQVQZ
 Y8VlhTwnDlJZw1D6XB5bEoqFmL0y6kLPFPWNNXaR8HHM86Y7A1A1vBHZ2g==
 -----END PUBLIC KEY-----
 """
 
-let ecdsaPublicKey = try PEMParser.parseECDSAPublicKey(ecdsaPKCS8)
+let ecdsaPublicKey = try PEMParser.parseECDSAPublicKey(ecdsaSPKI)
 print(ecdsaPublicKey.publicKeyString()) // OpenSSH format
 
-// Parse Ed25519 public key from PKCS8 format
-let ed25519PKCS8 = """
+// Parse Ed25519 public key from SubjectPublicKeyInfo (PUBLIC KEY) PEM
+let ed25519SPKI = """
 -----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4L7SfV2U=
 -----END PUBLIC KEY-----
 """
 
-let ed25519Key = try PEMParser.parseEd25519PublicKey(ed25519PKCS8)
+let ed25519Key = try PEMParser.parseEd25519PublicKey(ed25519SPKI)
 print(ed25519Key.publicKeyString()) // OpenSSH format
 
 // Automatic format detection and conversion
@@ -469,7 +480,7 @@ let allTypes = try await BatchKeyGenerator.generateAllTypes(
 
 Note:
 - Programmatic conversion to PEM/PKCS#8 requires a private key instance (as shown above).
-- The CLI `convert` command currently performs conversions for public key formats (OpenSSH <-> RFC4716). Converting PEM/PKCS#8 via CLI is not supported because it requires private key material.
+- The CLI `convert` command converts public keys from OpenSSH, RFC4716, RSA PEM, or ECDSA/Ed25519 SubjectPublicKeyInfo `PUBLIC KEY` input to OpenSSH or RFC4716 output. Exporting private keys to PEM/PKCS#8 via CLI is not supported; use `KeyConverter` with a private key instance.
 
 ### SSH Certificate Operations
 

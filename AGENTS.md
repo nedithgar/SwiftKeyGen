@@ -18,17 +18,18 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
 ## Project Overview
 
 ### Technology Stack
-- **Language/Tooling**: Swift 6.2 Package (SPM)
+- **Language/Tooling**: Swift Package Manager package (`swift-tools-version: 6.2`, Swift language mode `.v6`)
+- **Platform Baseline**: Apple platform v26 across macOS, iOS, tvOS, watchOS, Mac Catalyst, and visionOS (see `Package.swift`)
 - **Test Framework**: Swift Testing (new framework, not XCTest)
 - **Primary Targets**: 
   - Library: `SwiftKeyGen`
   - CLI Tool: `swiftkeygen`
-- **External Dependencies**: `swift-crypto`, `BigInt` (see [Package.swift](./Package.swift))
+- **External Dependencies**: `swift-crypto` (`Crypto`, `_CryptoExtras`) and `BigInt` (see [Package.swift](./Package.swift))
 
 ### Core Domains
 - SSH key generation, parsing, conversion, fingerprinting
 - SSH certificates (signing, verification, management)
-- Cryptography primitives (AES, ChaCha, HMAC, BCrypt, KDF)
+- Cryptography primitives (AES-CBC/CTR/GCM, ChaCha20-Poly1305, 3DES, Blowfish, RSA helpers, HMAC/PBKDF2 use via `swift-crypto`, BCrypt KDF)
 - Format support: OpenSSH, PEM, PKCS, ASN.1, DER
 
 ### Key Directory Map
@@ -43,13 +44,15 @@ Purpose: Enable AI coding agents to work productively in this repository with mi
   - `Encoding/` (e.g., `ECDSAEncoding`)
 - `Sources/SwiftKeyGen/Certificates/`: SSH certificate signing, parsing, verification, and models (`Models/SSHCertificate.swift`).
 - `Sources/SwiftKeyGen/Cryptography/`: Cipher + KDF + primitives:
-  - `Ciphers/` (AES, ChaCha20-Poly1305, 3DES)
+  - `Ciphers/AES/` (AES engine plus CBC, CTR, GCM)
+  - `Ciphers/` (`ChaCha20Poly1305OpenSSH`, `TripleDESCBC`, cipher metadata)
   - `KDF/` (`BCrypt`)
-  - `Primitives/` (`Blowfish`, RSA helpers)
+  - `Primitives/` (`Blowfish/`, `RSA/InsecureRSA.swift`)
 - `Sources/SwiftKeyGen/Conversion/`: Format conversion orchestration (`KeyConversionManager`, `KeyConversion`).
 - **`Sources/SwiftKeyGen/Extensions/`**: **Reusable extensions on standard types**. **ALWAYS check here first** to avoid duplicating helpers. Add new cross-cutting extensions here for project-wide reuse.
+- `Sources/SwiftKeyGen/SwiftKeyGen.docc/`: DocC documentation catalog.
 - `Sources/SwiftKeyGenCLI/`: Main CLI logic (argument parsing, stdout formatting).
-- `Tests/SwiftKeyGenTests/`: Organized by domain (e.g., `Keys/`, `Cryptography/`, `FormatConversion/`, `Integration/`, `Utilities/`, `Certificates/`).
+- `Tests/SwiftKeyGenTests/`: Organized by domain (e.g., `Keys/`, `Cryptography/`, `Formats/`, `Conversion/`, legacy `FormatConversion/`, `Integration/`, `Utilities/`, `Certificates/`, `Extensions/`).
 
 ## Build and Test Commands
 
@@ -66,6 +69,9 @@ swift build
 # Recommended: run a specific test or subset by name/regex
 swift test --filter <TestNameOrRegex>
 
+# Useful when excluding a known-heavy regex
+swift test --skip <TestNameOrRegex>
+
 # Not recommended here — full suite is slow and unnecessary
 # swift test
 ```
@@ -74,13 +80,13 @@ swift test --filter <TestNameOrRegex>
 ```bash
 # Main CLI tool
 swift run swiftkeygen <command> [options]
+
+# CLI commands currently implemented: generate, convert, export, version/help
+# generate types: rsa, ed25519, ecdsa (ECDSA maps to P-256)
 ```
 
-### Xcode Project
-```bash
-# Generate only if explicitly needed
-swift package generate-xcodeproj
-```
+### Xcode
+Open `Package.swift` directly in Xcode when needed. Do not rely on `swift package generate-xcodeproj`; modern SwiftPM no longer exposes that subcommand in the installed toolchain.
 
 ## Code Style Guidelines
 
@@ -89,7 +95,7 @@ swift package generate-xcodeproj
 
 - **Types**: `UpperCamelCase` (e.g., `KeyManager`, `RSAKey`, `CertificateAuthority`)
 - **Functions/Methods/Properties**: `lowerCamelCase` (e.g., `generateKeyPair()`, `publicKeyString`, `isValid`)
-- **Enums/Cases**: Type is `UpperCamelCase`, cases are `lowerCamelCase` (e.g., `KeyType.ed25519`, `SSHKeyError.invalidFormat`)
+- **Enums/Cases**: Enum types are `UpperCamelCase`, cases are `lowerCamelCase` (e.g., `SSHKeyError.invalidFormat`). Static constants on string-backed identifier structs also use `lowerCamelCase` (e.g., `KeyType.ed25519`, `KeyFormat.openssh`).
 - **Acronyms**: Treat as words—uppercase when type name (e.g., `RSAKey`, `SSHCertificate`), lowercase in compound names (e.g., `rsaKeySize`, `sshPublicKey`)
 - **Boolean Properties**: Use `is`/`has` prefix (e.g., `isEmpty`, `isValid`, `hasPassphrase`)
 - **Factory Methods**: Start with `make`/`generate`/`create` verb (e.g., `generateKeyPair()`, `makeFingerprint()`)
@@ -104,7 +110,8 @@ swift package generate-xcodeproj
 - **Key Types**: Expose generation, signing, verification, public serialization (OpenSSH string), fingerprinting.
 - **Parsing**: Return structured tuples or dedicated model types; preserve metadata (comments, key IDs, principals).
 - **Certificate Operations**: Respect separation—`CertificateAuthority` (sign), `CertificateManager` (CRUD + convenience), `CertificateVerifier` (validation).
-- **Type Safety**: Use strongly typed enums for key types, formats, hash/fingerprint algorithms; avoid raw strings.
+- **Type Safety**: Use domain types for key types, formats, hash/fingerprint algorithms; avoid passing raw strings through library APIs.
+- **Extensible Identifiers**: `KeyType` and `KeyFormat` are string-backed structs rather than closed enums for forward compatibility. Preserve unknown raw values unless validation is explicitly required.
 - **Immutability**: Prefer immutable structs/value types; mutation only when required (e.g. passphrase changes) via dedicated manager methods.
 - **Extensions First**: Before implementing utility methods on types, **check `Sources/SwiftKeyGen/Extensions/` first**. If the helper doesn't exist, add it there for project-wide reuse rather than scattering utilities across domain-specific files.
 
@@ -115,6 +122,7 @@ swift package generate-xcodeproj
 ### Cryptography Guidelines
 - **Primitives**: Delegate to `swift-crypto` / existing implementations; do NOT introduce new third-party crypto libs.
 - **Randomness**: Do not roll custom randomness; use existing secure generators already abstracted in utilities.
+- **Known Legacy Crypto**: `Insecure.RSA`, `Insecure.SHA1`, and MD5 appear only for OpenSSH interoperability, fingerprints/randomart, or compatibility tests. Do not expand insecure usage for new security-sensitive behavior.
 - **Algorithm Naming**: Maintain consistency with OpenSSH (`ssh-ed25519`, `rsa-sha2-256`, etc.).
 
 ### Performance Considerations
@@ -167,20 +175,16 @@ struct CertificateIntegrationTests {
 
 **Run tests by tag:**
 - **In Xcode**: Test navigator auto‑groups by tags; select a tag to run those tests.
-- **Command line (xcodebuild, Xcode 26.0+)**:
+- **Command line**: Prefer SwiftPM filters for local work. Tag filtering is not available in SwiftPM command-line tools, and `xcodebuild` tag flags vary by installed Xcode version. Verify support with `xcodebuild -help` before relying on tag-specific flags.
   ```bash
-  # Run only tests with unit tag
-  xcodebuild test -scheme SwiftKeyGen -only-testing-tags unit
-
-  # Run all except integration tests
-  xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration
-
-  # Combine multiple tag skips
-  xcodebuild test -scheme SwiftKeyGen -skip-testing-tags integration,performance
+  # Practical local equivalents using SwiftPM regex filters
+  swift test --filter KeyGenerationUnitTests
+  swift test --filter 'SwiftKeyGenTests\\.(KeyGenerationUnitTests|KeyTypeUnitTests)'
+  swift test --skip 'Integration|RSA|BCrypt|Performance'
   ```
 - **SPM (swift test)**: Tag filtering is **not yet supported** in SPM command-line tools (tracked as [swift-testing #591](https://github.com/swiftlang/swift-testing/issues/591)). Current workaround: use `--filter` with regex patterns matching test names
 
-> Local guidance: Because this is a cryptography‑focused project, avoid running `swift test` without filters. Use `swift test --filter <TestNameOrRegex>` to run only the relevant unit/integration tests. In Xcode, prefer running by tag (e.g., only `.unit`, `.critical`, or domain‑specific tags like `.rsa`).
+> Local guidance: Because this is a cryptography‑focused project, avoid running `swift test` without filters. Use `swift test --filter <TestNameOrRegex>` to run only the relevant unit/integration tests. In Xcode, prefer running by tag when the installed Xcode supports it (e.g., only `.unit`, `.critical`, or domain-specific tags like `.rsa`).
 
 ### Slow Policy
 
