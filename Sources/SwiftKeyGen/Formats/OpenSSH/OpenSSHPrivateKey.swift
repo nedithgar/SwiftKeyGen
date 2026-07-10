@@ -207,7 +207,8 @@ public struct OpenSSHPrivateKey {
     /// - Throws: ``SSHKeyError/unsupportedCipher(_:)`` if the cipher is unsupported,
     ///           ``SSHKeyError/unsupportedKeyType`` for unsupported key algorithms,
     ///           ``SSHKeyError/invalidKeyData`` for internal inconsistencies, or errors from the
-    ///           underlying KDF/cipher implementations.
+    ///           underlying KDF/cipher implementations. Throws `CancellationError` if the
+    ///           enclosing Swift task is cancelled during bcrypt key derivation.
     ///
     /// - Example: Unencrypted
     /// ```swift
@@ -511,7 +512,8 @@ public struct OpenSSHPrivateKey {
     ///   if decryption is needed but no passphrase is supplied,
     ///   `SSHKeyError.invalidPassphrase` when check values mismatch after
     ///   decryption, or `SSHKeyError.invalidKeyData` for inconsistent numeric
-    ///   / scalar encodings.
+    ///   / scalar encodings. Throws `CancellationError` if the enclosing Swift
+    ///   task is cancelled during bcrypt key derivation.
     public static func parse(
         data: Data,
         passphrase: String? = nil

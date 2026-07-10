@@ -128,6 +128,53 @@ struct BCryptUnitTests {
         }
     }
 
+    // MARK: - Cancellation
+    @Test("Cancellation interrupts an in-progress bcrypt hash")
+    func cancellationInterruptsBcryptHash() {
+        var checkpointCount = 0
+
+        #expect(throws: CancellationError.self) {
+            _ = try BCryptPBKDF.deriveKey(
+                password: Fixture.defaultPassword,
+                salt: Fixture.eightByteSalt,
+                outputByteCount: 32,
+                rounds: 1
+            ) {
+                checkpointCount += 1
+                if checkpointCount == 10 {
+                    throw CancellationError()
+                }
+            }
+        }
+
+        #expect(checkpointCount == 10)
+    }
+
+    @Test("Derivation observes cancellation from its enclosing Swift task")
+    func observesEnclosingTaskCancellation() async {
+        let task = Task {
+            withUnsafeCurrentTask { currentTask in
+                currentTask?.cancel()
+            }
+
+            return try BCryptPBKDF.deriveKey(
+                password: Fixture.defaultPassword,
+                salt: Fixture.eightByteSalt,
+                outputByteCount: 32,
+                rounds: 1
+            )
+        }
+
+        do {
+            _ = try await task.value
+            Issue.record("Expected derivation to throw CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+    }
+
     // MARK: - Output Characteristics
     @Suite("Output Characteristics")
     struct OutputCharacteristicsTests {

@@ -23,12 +23,15 @@ struct BCryptPBKDF {
     ///   - salt: The salt to use
     ///   - outputByteCount: Number of bytes to generate
     ///   - rounds: Number of rounds to perform
+    ///   - cancellationCheck: Cooperative cancellation checkpoint. Defaults to
+    ///     checking the current Swift task.
     /// - Returns: The derived key
     static func deriveKey(
         password: String,
         salt: Data,
         outputByteCount: Int,
-        rounds: Int
+        rounds: Int,
+        cancellationCheck: () throws -> Void = { try Task.checkCancellation() }
     ) throws -> Data {
         guard let passwordData = password.data(using: .utf8) else {
             throw SSHKeyError.invalidKeyData
@@ -43,6 +46,8 @@ struct BCryptPBKDF {
               salt.count <= (1 << 20) else {
             throw SSHKeyError.invalidKeyData
         }
+
+        try cancellationCheck()
         
         let stride = (outputByteCount + bcryptHashSize - 1) / bcryptHashSize
         let amt = (outputByteCount + stride - 1) / stride
@@ -60,6 +65,8 @@ struct BCryptPBKDF {
         var keyOffset = 0
         
         for count in 1...UInt32((outputByteCount + bcryptHashSize - 1) / bcryptHashSize) {
+            try cancellationCheck()
+
             // Update counter in countsalt (big-endian)
             countsalt[salt.count + 0] = UInt8((count >> 24) & 0xff)
             countsalt[salt.count + 1] = UInt8((count >> 16) & 0xff)
@@ -70,14 +77,22 @@ struct BCryptPBKDF {
             let sha2salt = countsalt.sha512Data()
             
             // Perform bcrypt hash (first round)
-            var tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: sha2salt)
+            var tmpout = try bcryptHash(
+                hashedPassword: sha512HashedPassword,
+                hashedSalt: sha2salt,
+                cancellationCheck: cancellationCheck
+            )
             var out = tmpout // accumulator
             
             // Subsequent rounds: per OpenSSH, sha2salt = SHA512(previous tmpout)
             // then tmpout = bcrypt_hash(sha2pass, sha2salt), and XOR into accumulator.
             for _ in 1..<rounds {
                 let hashedSalt = tmpout.toData().sha512Data()
-                tmpout = try bcryptHash(hashedPassword: sha512HashedPassword, hashedSalt: hashedSalt)
+                tmpout = try bcryptHash(
+                    hashedPassword: sha512HashedPassword,
+                    hashedSalt: hashedSalt,
+                    cancellationCheck: cancellationCheck
+                )
                 for j in 0..<out.count { out[j] ^= tmpout[j] }
             }
             
@@ -92,23 +107,31 @@ struct BCryptPBKDF {
             }
             keyOffset += Int(currentAmt)
         }
-        
+
+        try cancellationCheck()
         return key
     }
 
     /// Performs bcrypt hash operation (returns fixed-size InlineArray buffer)
-    private static func bcryptHash(hashedPassword: Data, hashedSalt: Data) throws -> BCryptBlock {
+    private static func bcryptHash(
+        hashedPassword: Data,
+        hashedSalt: Data,
+        cancellationCheck: () throws -> Void
+    ) throws -> BCryptBlock {
         var state = BlowfishContext()
         // Use pre-initialized static magic ciphertext (no per-call array allocation)
         let ciphertext = Self.magicCiphertext
 
         // Key expansion using spans
+        try cancellationCheck()
         state.initializeState()
         let saltSpan = hashedSalt.span
         let passSpan = hashedPassword.span
         state.expandSaltAndKey(salt: saltSpan, key: passSpan)
         for _ in 0..<64 { // 64 rounds of alternating expansion
+            try cancellationCheck()
             state.expandKey(key: saltSpan)
+            try cancellationCheck()
             state.expandKey(key: passSpan)
         }
 
@@ -130,6 +153,7 @@ struct BCryptPBKDF {
             out[4 * i + 1] = UInt8((cdata[i] >> 8) & 0xff)
             out[4 * i + 0] = UInt8(cdata[i] & 0xff)
         }
+        try cancellationCheck()
         return out
     }
 }
