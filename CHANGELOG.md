@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11 - 2026-07-10
+
+## What's Changed
+* Add integration tests for decrypting Ed25519 keys with AES-256-GCM and ChaCha20-Poly1305 by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/23
+* Enhance OpenSSHPrivateKey unit tests with diagnostics and cleanup by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/24
+* Add cooperative cancellation support for BCrypt and OpenSSH by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/25
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.10...v0.1.11
+
 ## 0.1.10 - 2025-10-14
 
 ## What's Changed
