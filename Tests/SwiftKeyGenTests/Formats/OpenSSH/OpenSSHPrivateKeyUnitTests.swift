@@ -126,6 +126,31 @@ struct OpenSSHPrivateKeyUnitTests {
         }
     }
 
+    @Test("Encrypted parse observes task cancellation")
+    func encryptedParseObservesTaskCancellation() async throws {
+        let passphrase = "cancel-test"
+        let key = try Ed25519KeyGenerator.generate(comment: "cancel@test")
+        let encrypted = try OpenSSHPrivateKey.serialize(
+            key: key,
+            passphrase: passphrase,
+            cipher: .aes128ctr,
+            rounds: 1
+        )
+
+        let parseTask = Task {
+            // Avoid racing task startup against cancellation.
+            while !Task.isCancelled {
+                await Task.yield()
+            }
+            _ = try OpenSSHPrivateKey.parse(data: encrypted, passphrase: passphrase)
+        }
+        parseTask.cancel()
+
+        await #expect(throws: CancellationError.self) {
+            try await parseTask.value
+        }
+    }
+
     @Test("parse invalid PEM -> invalidFormat")
     func testParseInvalidPEMMarkers() throws {
         let bogus = Data("not a key".utf8)
