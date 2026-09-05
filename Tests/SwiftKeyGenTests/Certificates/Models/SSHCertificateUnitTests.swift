@@ -164,9 +164,9 @@ struct SSHCertificateUnitTests {
             principals: [],
             certificateType: .host,
             criticalOptions: [],
-            extensions: [] // host default => none
+            extensions: [] // Explicitly select no extensions.
         )
-        // Ensure we truly have no extensions (user cert would auto-populate)
+        // Explicit empty selections remain empty for either certificate type.
         #expect(cert.certificate.extensions.isEmpty)
         let info = cert.certificateInfo()
         #expect(info.contains("Principals:\n    (none)"))

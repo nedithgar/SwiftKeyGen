@@ -48,9 +48,11 @@ public struct CertificateAuthority {
     ///   “forever” (from 0 to `UInt64.max`).
     /// - If only `validFrom` is provided, `validBefore` remains `UInt64.max`.
     /// - If only `validTo` is provided, `validAfter` remains 0.
-    /// - For `.user` certificates, if `extensions` is empty, standard user
+    /// - For `.user` certificates, if `extensions` is omitted or `nil`, standard user
     ///   permissions are added: `permit-X11-forwarding`, `permit-agent-forwarding`,
     ///   `permit-port-forwarding`, `permit-pty`, and `permit-user-rc`.
+    ///   Explicit `[]` selects no extensions; a nonempty array selects exactly
+    ///   those extensions. Host certificates have no default extensions.
     /// - If `signatureAlgorithm` is not specified, a sensible default is chosen
     ///   for the CA key type (RSA → `rsa-sha2-512`, Ed25519 → `ssh-ed25519`,
     ///   ECDSA P-256/384/521 → `ecdsa-sha2-nistp256/384/521`).
@@ -76,8 +78,11 @@ public struct CertificateAuthority {
     ///     Drives default extension selection.
     ///   - criticalOptions: Critical options to embed in the certificate (e.g.,
     ///     `.forceCommand`, `.sourceAddress`).
-    ///   - extensions: Extensions to include. If empty for `.user`, default user
-    ///     permissions are applied as described above.
+    ///   - extensions: Omitted or `nil` selects the defaults described above;
+    ///     `[]` selects none, and a nonempty array selects only those extensions.
+    ///     Unlike earlier versions, explicit `[]` does not enable user permissions.
+    ///     Critical options remain independent, including force-command and
+    ///     source-address. This selects extensions without emulating CLI `-O clear` flags.
     ///   - signatureAlgorithm: Explicit signature algorithm to use. If omitted, a
     ///     default matching the CA key type is selected.
     /// - Returns: A `CertifiedKey` containing the original key and its attached
@@ -117,7 +122,7 @@ public struct CertificateAuthority {
         validTo: Date? = nil,
         certificateType: SSHCertificateType = .user,
         criticalOptions: [(SSHCertificateOption, String)] = [],
-        extensions: [SSHCertificateExtension] = [],
+        extensions: [SSHCertificateExtension]? = nil,
         signatureAlgorithm: String? = nil
     ) throws -> CertifiedKey {
         // Validate inputs
@@ -152,21 +157,14 @@ public struct CertificateAuthority {
             certifiedKey.certificate.addCriticalOption(option, value: value)
         }
         
-        // Add extensions - default extensions based on certificate type
-        var finalExtensions = extensions
-        if finalExtensions.isEmpty {
-            if certificateType == .user {
-                // Default user certificate extensions
-                finalExtensions = [
-                    .permitX11Forwarding,
-                    .permitAgentForwarding,
-                    .permitPortForwarding,
-                    .permitPty,
-                    .permitUserRc
-                ]
-            }
-            // Host certificates typically have no default extensions
-        }
+        // Resolve defaults only for an omitted selection, before encoding/signing.
+        let finalExtensions = extensions ?? (certificateType == .user ? [
+            .permitX11Forwarding,
+            .permitAgentForwarding,
+            .permitPortForwarding,
+            .permitPty,
+            .permitUserRc
+        ] : [])
         
         for ext in finalExtensions {
             certifiedKey.certificate.addExtension(ext)

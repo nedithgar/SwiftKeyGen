@@ -81,17 +81,13 @@ struct CertificateManagerUnitTests {
             principals: ["testuser"]
         )
 
-        let tempDir = FileManager.default.temporaryDirectory
-        let certPath = tempDir.appendingPathComponent("test-cert.pub").path
-
-        try CertificateManager.saveCertificate(cert, to: certPath, comment: "test certificate")
-
-        let readCert = try CertificateManager.readCertificate(from: certPath)
-
-        #expect(readCert.certificate.keyId == "save-test")
-        #expect(readCert.certificate.principals == ["testuser"])
-
-        try FileManager.default.removeItem(atPath: certPath)
+        try IntegrationTestSupporter.withTemporaryDirectory { directory in
+            let certPath = directory.appendingPathComponent("test-cert.pub").path
+            try CertificateManager.saveCertificate(cert, to: certPath, comment: "test certificate")
+            let readCert = try CertificateManager.readCertificate(from: certPath)
+            #expect(readCert.certificate.keyId == "save-test")
+            #expect(readCert.certificate.principals == ["testuser"])
+        }
     }
 
     @Test("Create user certificate with restrictions")
@@ -119,4 +115,3 @@ struct CertificateManagerUnitTests {
         #expect(result == .valid)
     }
 }
-

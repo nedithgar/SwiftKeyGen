@@ -17,7 +17,13 @@ enum IntegrationTestSupporter {
         let base = FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+        defer {
+            do {
+                try FileManager.default.removeItem(at: dir)
+            } catch {
+                Issue.record(error, "Failed to remove test directory: \(dir.path)")
+            }
+        }
         try body(dir)
         return dir
     }
