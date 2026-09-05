@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.12 - 2026-09-05
+
+## What's Changed
+* Enhance certificate permission handling by @nedithgar in https://github.com/nedithgar/SwiftKeyGen/pull/26
+
+
+**Full Changelog**: https://github.com/nedithgar/SwiftKeyGen/compare/v0.1.11...v0.1.12
+
 ## 0.1.11 - 2026-07-10
 
 ## What's Changed
