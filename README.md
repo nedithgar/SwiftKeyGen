@@ -556,6 +556,31 @@ let hostCert = try CertificateAuthority.signCertificate(
 )
 ```
 
+#### Select Certificate Permissions
+
+Omit `extensions` or pass `nil` for the five standard user permissions: X11,
+agent and port forwarding, PTY, and user rc. Explicit `[]` now means no
+extensions; callers that previously passed `[]` for defaults must migrate to
+omission or `nil`. Host certificates have no defaults but retain explicit extensions.
+
+```swift
+let defaultCert = try CertificateManager.createUserCertificate(
+    publicKey: userKey, caKey: caKey, username: "alice"
+)
+let allOffCert = try CertificateManager.createUserCertificate(
+    publicKey: userKey, caKey: caKey, username: "alice", extensions: []
+)
+let ptyOnlyCert = try CertificateManager.createUserCertificate(
+    publicKey: userKey, caKey: caKey, username: "alice", extensions: [.permitPty]
+)
+```
+
+`CertificateAuthority.signCertificate` accepts the same selections. Empty
+extensions match plain `ssh-keygen -O clear`'s extension set and PTY-only matches
+`-O clear -O permit-pty`, without separately supplied custom extensions. This API
+selects extensions, not all CLI flag side effects: critical options remain
+independent, including force-command, source-address, and verify-required.
+
 #### Add Certificate Restrictions
 
 ```swift

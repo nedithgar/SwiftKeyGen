@@ -250,8 +250,10 @@ public struct CertificateManager {
     /// Create a `.user` certificate with sensible defaults.
     ///
     /// Signs `publicKey` with `caKey` to produce a user certificate with standard
-    /// OpenSSH user extensions when none are provided (X11/agent/port
-    /// forwarding, PTY, user rc). Optional critical options include
+    /// OpenSSH user extensions when `extensions` is omitted or `nil` (X11/agent/port
+    /// forwarding, PTY, user rc). Explicit `[]` selects no extensions, while
+    /// `[.permitPty]` selects only PTY. Critical options are preserved independently.
+    /// Optional critical options include
     /// ``SSHCertificateOption/forceCommand`` and ``SSHCertificateOption/sourceAddress``.
     ///
     /// - Parameters:
@@ -262,6 +264,8 @@ public struct CertificateManager {
     ///   - validityDays: Validity window in days starting now (default `30`).
     ///   - forceCommand: Optional forced command (critical option).
     ///   - sourceAddress: Optional source address list (critical option).
+    ///   - extensions: Omitted or `nil` enables the five standard user permissions;
+    ///     `[]` enables none; a nonempty array enables exactly those extensions.
     /// - Returns: A ``CertifiedKey`` containing the subject key and attached
     ///   certificate.
     /// - Throws: ``SSHKeyError`` for signing/encoding failures.
@@ -272,7 +276,8 @@ public struct CertificateManager {
         username: String,
         validityDays: Int = 30,
         forceCommand: String? = nil,
-        sourceAddress: String? = nil
+        sourceAddress: String? = nil,
+        extensions: [SSHCertificateExtension]? = nil
     ) throws -> CertifiedKey {
         let validFrom = Date()
         let validTo = validFrom.addingTimeInterval(Double(validityDays) * 24 * 60 * 60)
@@ -293,7 +298,8 @@ public struct CertificateManager {
             validFrom: validFrom,
             validTo: validTo,
             certificateType: .user,
-            criticalOptions: criticalOptions
+            criticalOptions: criticalOptions,
+            extensions: extensions
         )
     }
 }
